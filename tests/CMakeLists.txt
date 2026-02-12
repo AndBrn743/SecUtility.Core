@@ -55,3 +55,4 @@ endfunction()
 # Utility tests
 add_secutility_test(CachedFunctionTest CachedFunctionTest.cpp)
 add_secutility_test(RandomTest RandomTest.cpp)
+add_secutility_test(ChecksumTest ChecksumTest.cpp)
