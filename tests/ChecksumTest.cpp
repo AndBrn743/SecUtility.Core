@@ -1,4 +1,6 @@
 #include <SecUtility/Misc/Checksum.hpp>
+#include <SecUtility/Misc/Random.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 #include <sstream>
 #include <type_traits>
@@ -454,5 +456,342 @@ TEST_CASE("Checksum types - Common values")
 
 		CHECK(std::to_underlying(zero32) == 0);
 		CHECK(std::to_underlying(zero64) == 0);
+	}
+}
+
+
+//----------------------------------------------------------------------------------------------------------------------
+// Checksum Algorithm Tests
+//----------------------------------------------------------------------------------------------------------------------
+
+TEST_CASE("SoftwareCrc32 - Known test vectors")
+{
+	SECTION("Empty data")
+	{
+		constexpr Checksum32 crc = SoftwareCrc32(nullptr, 0);
+		STATIC_CHECK(std::to_underlying(crc) == 0);
+	}
+
+	SECTION("Single byte 0x00")
+	{
+		constexpr std::uint8_t data[] = {0x00};
+		constexpr Checksum32 crc = SoftwareCrc32(data, 1);
+		STATIC_CHECK(std::to_underlying(crc) == 0xD202EF8D);
+	}
+
+	SECTION("Single byte 0xFF")
+	{
+		constexpr std::uint8_t data[] = {0xFF};
+		constexpr Checksum32 crc = SoftwareCrc32(data, 1);
+		STATIC_CHECK(std::to_underlying(crc) == 0xFF000000);
+	}
+
+	SECTION("Two bytes 0x00 0x00")
+	{
+		constexpr std::uint8_t data[] = {0x00, 0x00};
+		constexpr Checksum32 crc = SoftwareCrc32(data, 2);
+		STATIC_CHECK(std::to_underlying(crc) == 0x41D912FF);
+	}
+
+	SECTION("Two bytes 0xFF 0xFF")
+	{
+		constexpr std::uint8_t data[] = {0xFF, 0xFF};
+		constexpr Checksum32 crc = SoftwareCrc32(data, 2);
+		STATIC_CHECK(std::to_underlying(crc) == 0xFFFF0000);
+	}
+
+	SECTION("String '123456789'")
+	{
+		constexpr std::uint8_t data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+
+		constexpr Checksum32 crc = SoftwareCrc32(data, 9);
+		STATIC_CHECK(std::to_underlying(crc) == 0xCBF43926);
+	}
+
+	SECTION("String 'hello world'")
+	{
+		constexpr std::uint8_t data[] = "hello world";
+		constexpr Checksum32 crc = SoftwareCrc32(data, 11);
+		STATIC_CHECK(std::to_underlying(crc) == 0x0D4A1185);
+	}
+
+	SECTION("String 'The quick brown fox jumps over the lazy dog'")
+	{
+		constexpr std::uint8_t data[] = "The quick brown fox jumps over the lazy dog";
+		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(crc) == 0x414FA339);
+	}
+
+	SECTION("String 'The quick brown fox jumps over the lazy dog.'")
+	{
+		constexpr std::uint8_t data[] = "The quick brown fox jumps over the lazy dog.";
+		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(crc) == 0x519025E9);
+	}
+
+	SECTION("String 'abcdefghijklmnopqrstuvwxyz'")
+	{
+		constexpr std::uint8_t data[] = "abcdefghijklmnopqrstuvwxyz";
+		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(crc) == 0x4C2750BD);
+	}
+
+	SECTION("String 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'")
+	{
+		constexpr std::uint8_t data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(crc) == 0x1FC2E6D2);
+	}
+
+	SECTION("String 'various CRC algorithms input data'")
+	{
+		constexpr std::uint8_t data[] = "various CRC algorithms input data";
+		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(crc) == 0x9BD366AE);
+	}
+}
+
+
+TEST_CASE("SoftwareCrc32 - Incremental computation")
+{
+	SECTION("Split computation matches whole")
+	{
+		constexpr std::uint8_t data[] = "123456789";
+
+		// Compute all at once
+		constexpr Checksum32 crc1 = SoftwareCrc32(data, 9);
+
+		// Compute incrementally
+		constexpr Checksum32 crc2 = SoftwareCrc32(data, 4);
+		// constexpr Checksum32 crc3 = SoftwareCrc32(data + 4, 5, crc2);
+		constexpr Checksum32 crc3 = SoftwareCrc32(data + 4, 5, Checksum32{crc2 ^ 0xFFFFFFFF});
+
+		STATIC_CHECK(crc1 == crc3);
+	}
+
+	SECTION("Incremental with empty data")
+	{
+		constexpr std::uint8_t data[] = "hello";
+
+		constexpr Checksum32 crc = SoftwareCrc32(data, 5);
+		constexpr Checksum32 crc2 = SoftwareCrc32(data, 0, Checksum32{crc ^ 0xFFFFFFFF});  // Add empty data
+
+		STATIC_CHECK(std::to_underlying(crc) == std::to_underlying(crc2));
+	}
+}
+
+TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
+{
+	SECTION("Empty data")
+	{
+		constexpr Checksum32 s = SoftwareCrc32C(nullptr, 0);
+		STATIC_CHECK(std::to_underlying(s) == 0);
+
+#if SECUTILITY_HAS_HARDWARE_CRC32C
+		const Checksum32 h = HardwareCrc32C(nullptr, 0);
+		CHECK(std::to_underlying(h) == 0);
+#endif
+	}
+
+	SECTION("String '123456789'")
+	{
+		constexpr std::uint8_t data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+
+		constexpr Checksum32 s = SoftwareCrc32C(data, 9);
+		STATIC_CHECK(std::to_underlying(s) == 0xe3069283);
+
+#if SECUTILITY_HAS_HARDWARE_CRC32C
+		const Checksum32 h = HardwareCrc32C(data, 9);
+		CHECK(std::to_underlying(h) == 0xe3069283);
+#endif
+	}
+
+	SECTION("String 'The quick brown fox jumps over the lazy dog'")
+	{
+		constexpr std::uint8_t data[] = "The quick brown fox jumps over the lazy dog";
+
+		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(s) == 0x22620404);
+
+#if SECUTILITY_HAS_HARDWARE_CRC32C
+		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
+		CHECK(std::to_underlying(h) == 0x22620404);
+#endif
+	}
+
+	SECTION("String 'message digest'")
+	{
+		constexpr std::uint8_t data[] = "message digest";
+
+		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(s) == 0x02bd79d0);
+
+#if SECUTILITY_HAS_HARDWARE_CRC32C
+		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
+		CHECK(std::to_underlying(h) == 0x02bd79d0);
+#endif
+	}
+
+	SECTION("String 'abcdefghijklmnopqrstuvwxyz'")
+	{
+		constexpr std::uint8_t data[] = "abcdefghijklmnopqrstuvwxyz";
+
+		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(s) == 0x9ee6ef25);
+
+#if SECUTILITY_HAS_HARDWARE_CRC32C
+		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
+		CHECK(std::to_underlying(h) == 0x9ee6ef25);
+#endif
+	}
+
+	SECTION("String 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'")
+	{
+		constexpr std::uint8_t data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
+		STATIC_CHECK(std::to_underlying(s) == 0xa245d57d);
+
+#if SECUTILITY_HAS_HARDWARE_CRC32C
+		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
+		CHECK(std::to_underlying(h) == 0xa245d57d);
+#endif
+	}
+
+	SECTION("0x00 .. 0x1F")
+	{
+		std::uint8_t data[32] = {};
+		std::iota(std::begin(data), std::end(data), std::uint8_t{0});
+
+		const Checksum32 s = SoftwareCrc32C(data, 32);
+		CHECK(std::to_underlying(s) == 0x46dd794e);
+
+#if SECUTILITY_HAS_HARDWARE_CRC32C
+		const Checksum32 h = HardwareCrc32C(data, 32);
+		CHECK(std::to_underlying(h) == 0x46dd794e);
+#endif
+	}
+
+	SECTION("0x1F .. 0x00")
+	{
+		std::uint8_t data[32] = {};
+		std::iota(std::rbegin(data), std::rend(data), std::uint8_t{0});
+
+		const Checksum32 s = SoftwareCrc32C(data, 32);
+		CHECK(std::to_underlying(s) == 0x113fdb5c);
+
+#if SECUTILITY_HAS_HARDWARE_CRC32C
+		const Checksum32 h = HardwareCrc32C(data, 32);
+		CHECK(std::to_underlying(h) == 0x113fdb5c);
+#endif
+	}
+}
+
+
+TEST_CASE("SoftwareCrc32CC - Incremental computation")
+{
+	SECTION("Split computation matches whole")
+	{
+		constexpr std::uint8_t data[] = "123456789";
+
+		// Compute all at once
+		constexpr Checksum32 crc1 = SoftwareCrc32C(data, 9);
+
+		// Compute incrementally
+		constexpr Checksum32 crc2 = SoftwareCrc32C(data, 4);
+		// constexpr Checksum32 crc3 = SoftwareCrc32C(data + 4, 5, crc2);
+		constexpr Checksum32 crc3 = SoftwareCrc32C(data + 4, 5, Checksum32{crc2 ^ 0xFFFFFFFF});
+
+		STATIC_CHECK(crc1 == crc3);
+	}
+
+	SECTION("Incremental with empty data")
+	{
+		constexpr std::uint8_t data[] = "hello";
+
+		constexpr Checksum32 crc = SoftwareCrc32C(data, 5);
+		constexpr Checksum32 crc2 = SoftwareCrc32C(data, 0, Checksum32{crc ^ 0xFFFFFFFF});  // Add empty data
+
+		STATIC_CHECK(std::to_underlying(crc) == std::to_underlying(crc2));
+	}
+}
+
+
+TEST_CASE("Slicing-by-8 Crc32")
+{
+	std::vector<std::int32_t> data(257);
+	for (auto& d : data)
+	{
+		d = SecUtility::Random::NextInt32();
+	}
+
+	{
+		const auto s = SoftwareCrc32(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
+		                             data.size() * sizeof(std::int32_t) - 1);
+		const auto s8 = SlicedSoftwareCrc32<8>(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
+		                                       data.size() * sizeof(std::int32_t) - 1);
+		CHECK(s == s8);
+	}
+	{
+		const auto s = SoftwareCrc32C(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
+		                              data.size() * sizeof(std::int32_t) - 1);
+		const auto s8 = SlicedSoftwareCrc32C<8>(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
+		                                        data.size() * sizeof(std::int32_t) - 1);
+		CHECK(s == s8);
+	}
+
+	constexpr std::uint8_t verse[] =
+	        "Love is patient, love is kind. It does not envy, it does not boast, it is not proud. It is not rude, it "
+	        "is not self-seeking, it is not easily angered, it keeps no record of wrongs.";
+
+	{
+		constexpr auto s = SoftwareCrc32(verse, sizeof(verse) - 1);
+		constexpr auto s8 = SlicedSoftwareCrc32<8>(verse, sizeof(verse) - 1);
+		STATIC_CHECK(s == s8);
+	}
+	{
+		constexpr auto s = SoftwareCrc32C(verse, sizeof(verse) - 1);
+		constexpr auto s8 = SlicedSoftwareCrc32C<8>(verse, sizeof(verse) - 1);
+		STATIC_CHECK(s == s8);
+	}
+}
+
+
+TEST_CASE("Slicing-by-16 Crc32")
+{
+	std::vector<std::int32_t> data(257);
+	for (auto& d : data)
+	{
+		d = SecUtility::Random::NextInt32();
+	}
+
+	{
+		const auto s = SoftwareCrc32(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
+		                             data.size() * sizeof(std::int32_t) - 1);
+		const auto s8 = SlicedSoftwareCrc32<16>(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
+		                                        data.size() * sizeof(std::int32_t) - 1);
+		CHECK(s == s8);
+	}
+	{
+		const auto s = SoftwareCrc32C(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
+		                              data.size() * sizeof(std::int32_t) - 1);
+		const auto s8 = SlicedSoftwareCrc32C<16>(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
+		                                         data.size() * sizeof(std::int32_t) - 1);
+		CHECK(s == s8);
+	}
+
+	constexpr std::uint8_t verse[] =
+		"Love is patient, love is kind. It does not envy, it does not boast, it is not proud. It is not rude, it "
+		"is not self-seeking, it is not easily angered, it keeps no record of wrongs.";
+
+	{
+		const auto s = SoftwareCrc32(verse, sizeof(verse) - 1);
+		const auto s8 = SlicedSoftwareCrc32<16>(verse, sizeof(verse) - 1);
+		CHECK(s == s8);
+	}
+	{
+		const auto s = SoftwareCrc32C(verse, sizeof(verse) - 1);
+		const auto s8 = SlicedSoftwareCrc32C<16>(verse, sizeof(verse) - 1);
+		CHECK(s == s8);
 	}
 }
