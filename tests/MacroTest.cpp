@@ -38,6 +38,6 @@ TEST_CASE("if consteval macro should work")
 	STATIC_CHECK(g() == 4.2);
 	CHECK(g() == 6.9);
 #else
-	CHECK(true);
+	SKIP("Test requires C++20 or compiler magic");
 #endif
 }

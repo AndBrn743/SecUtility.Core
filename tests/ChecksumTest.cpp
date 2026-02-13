@@ -580,17 +580,12 @@ TEST_CASE("SoftwareCrc32 - Incremental computation")
 	}
 }
 
-TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
+TEST_CASE("SoftwareCrc32C - Known test vectors")
 {
 	SECTION("Empty data")
 	{
 		constexpr Checksum32 s = SoftwareCrc32C(nullptr, 0);
 		STATIC_CHECK(std::to_underlying(s) == 0);
-
-#if SECUTILITY_HAS_HARDWARE_CRC32C
-		const Checksum32 h = HardwareCrc32C(nullptr, 0);
-		CHECK(std::to_underlying(h) == 0);
-#endif
 	}
 
 	SECTION("String '123456789'")
@@ -599,11 +594,6 @@ TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, 9);
 		STATIC_CHECK(std::to_underlying(s) == 0xe3069283);
-
-#if SECUTILITY_HAS_HARDWARE_CRC32C
-		const Checksum32 h = HardwareCrc32C(data, 9);
-		CHECK(std::to_underlying(h) == 0xe3069283);
-#endif
 	}
 
 	SECTION("String 'The quick brown fox jumps over the lazy dog'")
@@ -612,11 +602,6 @@ TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(s) == 0x22620404);
-
-#if SECUTILITY_HAS_HARDWARE_CRC32C
-		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
-		CHECK(std::to_underlying(h) == 0x22620404);
-#endif
 	}
 
 	SECTION("String 'message digest'")
@@ -625,11 +610,6 @@ TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(s) == 0x02bd79d0);
-
-#if SECUTILITY_HAS_HARDWARE_CRC32C
-		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
-		CHECK(std::to_underlying(h) == 0x02bd79d0);
-#endif
 	}
 
 	SECTION("String 'abcdefghijklmnopqrstuvwxyz'")
@@ -638,11 +618,6 @@ TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(s) == 0x9ee6ef25);
-
-#if SECUTILITY_HAS_HARDWARE_CRC32C
-		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
-		CHECK(std::to_underlying(h) == 0x9ee6ef25);
-#endif
 	}
 
 	SECTION("String 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'")
@@ -651,11 +626,6 @@ TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(s) == 0xa245d57d);
-
-#if SECUTILITY_HAS_HARDWARE_CRC32C
-		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
-		CHECK(std::to_underlying(h) == 0xa245d57d);
-#endif
 	}
 
 	SECTION("0x00 .. 0x1F")
@@ -665,11 +635,6 @@ TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
 
 		const Checksum32 s = SoftwareCrc32C(data, 32);
 		CHECK(std::to_underlying(s) == 0x46dd794e);
-
-#if SECUTILITY_HAS_HARDWARE_CRC32C
-		const Checksum32 h = HardwareCrc32C(data, 32);
-		CHECK(std::to_underlying(h) == 0x46dd794e);
-#endif
 	}
 
 	SECTION("0x1F .. 0x00")
@@ -679,12 +644,78 @@ TEST_CASE("SoftwareCrc32C and HardwareCrc32C - Known test vectors")
 
 		const Checksum32 s = SoftwareCrc32C(data, 32);
 		CHECK(std::to_underlying(s) == 0x113fdb5c);
+	}
+}
 
+TEST_CASE("HardwareCrc32C - Known test vectors")
+{
 #if SECUTILITY_HAS_HARDWARE_CRC32C
+	SECTION("Empty data")
+	{
+		const Checksum32 h = HardwareCrc32C(nullptr, 0);
+		CHECK(std::to_underlying(h) == 0);
+	}
+
+	SECTION("String '123456789'")
+	{
+		constexpr std::uint8_t data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+
+		const Checksum32 h = HardwareCrc32C(data, 9);
+		CHECK(std::to_underlying(h) == 0xe3069283);
+	}
+
+	SECTION("String 'The quick brown fox jumps over the lazy dog'")
+	{
+		constexpr std::uint8_t data[] = "The quick brown fox jumps over the lazy dog";
+
+		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
+		CHECK(std::to_underlying(h) == 0x22620404);
+	}
+
+	SECTION("String 'message digest'")
+	{
+		constexpr std::uint8_t data[] = "message digest";
+
+		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
+		CHECK(std::to_underlying(h) == 0x02bd79d0);
+	}
+
+	SECTION("String 'abcdefghijklmnopqrstuvwxyz'")
+	{
+		constexpr std::uint8_t data[] = "abcdefghijklmnopqrstuvwxyz";
+
+		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
+		CHECK(std::to_underlying(h) == 0x9ee6ef25);
+	}
+
+	SECTION("String 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'")
+	{
+		constexpr std::uint8_t data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
+		CHECK(std::to_underlying(h) == 0xa245d57d);
+	}
+
+	SECTION("0x00 .. 0x1F")
+	{
+		std::uint8_t data[32] = {};
+		std::iota(std::begin(data), std::end(data), std::uint8_t{0});
+
+		const Checksum32 h = HardwareCrc32C(data, 32);
+		CHECK(std::to_underlying(h) == 0x46dd794e);
+	}
+
+	SECTION("0x1F .. 0x00")
+	{
+		std::uint8_t data[32] = {};
+		std::iota(std::rbegin(data), std::rend(data), std::uint8_t{0});
+
 		const Checksum32 h = HardwareCrc32C(data, 32);
 		CHECK(std::to_underlying(h) == 0x113fdb5c);
-#endif
 	}
+#else
+	SKIP("Test requires SSE4.2 hardware. One may also need to pass -march=... to compiler");
+#endif
 }
 
 
