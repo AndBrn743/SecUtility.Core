@@ -217,8 +217,6 @@ namespace SecUtility::Checksum
 	                                         std::size_t byteCount,
 	                                         const Checksum32 crc = Checksum32{0xFFFFFFFF})
 	{
-		// static_assert(Endian::Native == Endian::Little, "Where did you find IBM?");
-
 		auto _crc = static_cast<std::uint32_t>(crc);
 
 		while (byteCount >= 8 * DegreeOfUnroll)
@@ -274,8 +272,6 @@ namespace SecUtility::Checksum
 	                                         std::size_t byteCount,
 	                                         const Checksum32 crc = Checksum32{0xFFFFFFFF})
 	{
-		static_assert(Endian::Native == Endian::Little, "Where did you find IBM?");
-
 		auto _crc = static_cast<std::uint32_t>(crc);
 
 		while (byteCount >= 16 * DegreeOfUnroll)
