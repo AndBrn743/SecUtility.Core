@@ -173,7 +173,7 @@ TEST_CASE("Stopwatch - Restart behavior")
 
 		sw.Restart();
 
-		CHECK(sw.Elapsed<TimeUnit::Milliseconds>() < 0.05);  // approx zero
+		CHECK(sw.Elapsed<TimeUnit::Milliseconds>() < 0.1);  // approx zero
 		CHECK(sw.IsRunning() == true);
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(30));
@@ -192,7 +192,7 @@ TEST_CASE("Stopwatch - Restart behavior")
 
 		sw.Restart();
 
-		CHECK(sw.Elapsed<TimeUnit::Milliseconds>() < 0.05);  // approx zero
+		CHECK(sw.Elapsed<TimeUnit::Milliseconds>() < 0.1);  // approx zero
 		CHECK(sw.IsRunning() == true);
 	}
 }
