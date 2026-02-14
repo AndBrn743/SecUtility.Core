@@ -13,6 +13,12 @@
 #include <sstream>
 
 
+#if defined(_WIN32)
+#include <windows.h>
+#include <iostream>
+#endif
+
+
 namespace SecUtility
 {
 	enum class TimeUnit
@@ -298,19 +304,45 @@ namespace SecUtility::Diagnostic::Stopwatch
 	{
 		friend StopwatchBase<CpuStopwatch>;
 
+#if defined(_WIN32)
+		using Timestamp = Int64;
+#else
+		using Timestamp = std::clock_t;
+#endif
+
 	private:
-		static std::clock_t GetTimestamp() noexcept
+		static Timestamp GetTimestamp() noexcept
 		{
+#if defined(_WIN32)
+			FILETIME creation{}, exit{}, kernel{}, user{};
+
+			if (!GetProcessTimes(GetCurrentProcess(), &creation, &exit, &kernel, &user))
+			{
+				std::cerr << "::GetThreadTimes(...) ended with error" << std::endl;
+				std::terminate();
+			}
+
+			ULARGE_INTEGER u{};
+			u.LowPart  = user.dwLowDateTime;
+			u.HighPart = user.dwHighDateTime;
+
+			return static_cast<Timestamp>(u.QuadPart);
+#else
 			return std::clock();
+#endif
 		}
 
 		Int64 GetRawElapsedFromStartUntilNowTicks() const noexcept
 		{
+#if defined(_WIN32)
+			return GetTimestamp() - m_StartTimestamp;
+#else
 			return static_cast<Int64>(GetTimestamp() - m_StartTimestamp) * TicksPerSecond / CLOCKS_PER_SEC;
+#endif
 		}
 
 	private:
-		std::clock_t m_StartTimestamp{};
+		Timestamp m_StartTimestamp{};
 	};
 
 
