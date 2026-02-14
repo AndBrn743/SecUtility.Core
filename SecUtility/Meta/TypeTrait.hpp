@@ -29,12 +29,7 @@ namespace std
 
 	template <typename T>
     inline constexpr bool is_bounded_array_v = is_bounded_array<T>::value;
-}
-#endif
 
-#if !(defined(__cpp_lib_unbounded_array_traits) && __cpp_lib_unbounded_array_traits >= 201902L)
-namespace std
-{
 	template <typename>
 	struct is_unbounded_array : std::false_type
 	{
