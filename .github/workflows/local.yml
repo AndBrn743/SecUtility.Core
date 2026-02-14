@@ -1,0 +1,195 @@
+name: Local CI (act-friendly)
+
+on:
+  workflow_dispatch:
+
+# This workflow is designed to work with act (GitHub Actions emulator) for local testing.
+# It uses system compilers and avoids heavy Docker images to be fast and lightweight.
+#
+# Usage:
+#   act -j local-gcc        # Run GCC job only
+#   act -j local-clang      # Run Clang job only
+#   act                     # Run all jobs
+#
+# Requirements for Arch Linux (or similar):
+#   - Base packages: cmake ninja gcc clang libc++
+#   - For coverage: lcov
+#   - All compilers should be installed system-wide
+
+jobs:
+  local-gcc:
+    name: Local GCC
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Clean build directory
+        run: rm -rf build
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
+            ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel 3
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure
+
+  local-clang-libstdcxx:
+    name: Local Clang (libstdc++)
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Clean build directory
+        run: rm -rf build
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
+            ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel 3
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure
+
+  local-clang-libcxx:
+    name: Local Clang (libc++)
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Clean build directory
+        run: rm -rf build
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_FLAGS=-stdlib=libc++ \
+            ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
+            ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel 3
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure
+        
+  local-clang-libcxx-asan-ubsan:
+    name: Clang (libc++, asan, ubsan)
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Clean build directory
+        run: rm -rf build
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++ -fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG -march=native" \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
+            ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel 3
+
+      - name: Set stack limit
+        run: ulimit -s 1048576
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure
+
+  local-coverage-clang:
+    name: Local Coverage (Clang/LLVM)
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Clean build directory
+        run: rm -rf build
+
+      - name: Configure CMake with LLVM coverage
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_FLAGS="-fprofile-instr-generate -fcoverage-mapping -march=native" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate" \
+            ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
+            ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel 3
+
+      - name: Run tests with profile generation
+        working-directory: build
+        run: |
+          LLVM_PROFILE_FILE="coverage-%p.profraw" ctest --output-on-failure
+
+      - name: Merge raw profiles
+        working-directory: build
+        run: |
+          llvm-profdata merge -sparse $(find . -name "*.profraw") -o coverage.profdata
+
+      - name: Generate coverage report (lcov format for Codecov)
+        working-directory: build
+        run: |
+          llvm-cov export \
+            $(find tests -type f -executable) \
+            -instr-profile=coverage.profdata \
+            -format=lcov > coverage.info
+
+      - name: Show summary in CI logs
+        working-directory: build
+        run: |
+          OBJECTS=$(find tests -type f -executable)
+          ARGS=""
+          for obj in $OBJECTS; do ARGS="$ARGS -object $obj"; done
+          llvm-cov report \
+            -instr-profile=coverage.profdata \
+            $ARGS \
+            -sources ../SecUtility
