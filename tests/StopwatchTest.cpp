@@ -12,6 +12,12 @@
 #include <cmath>
 #include <thread>
 
+#if defined(_WIN32)
+#include <windows.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+#endif
+
 
 using namespace SecUtility;
 using namespace SecUtility::Diagnostic::Stopwatch;
@@ -194,6 +200,10 @@ TEST_CASE("Stopwatch - Restart behavior")
 
 TEST_CASE("Stopwatch - Multiple start/stop cycles")
 {
+#if defined(_WIN32)
+	timeBeginPeriod(1);
+#endif
+
 	SECTION("Accumulates across multiple sessions")
 	{
 		Stopwatch sw;
@@ -235,6 +245,10 @@ TEST_CASE("Stopwatch - Multiple start/stop cycles")
 
 TEST_CASE("Stopwatch - Elapsed formats")
 {
+#if defined(_WIN32)
+	timeBeginPeriod(1);
+#endif
+
 	SECTION("Milliseconds format")
 	{
 		Stopwatch sw;
@@ -285,6 +299,10 @@ TEST_CASE("Stopwatch - Elapsed formats")
 
 TEST_CASE("Stopwatch - Formatted output")
 {
+#if defined(_WIN32)
+	timeBeginPeriod(1);
+#endif
+
 	SECTION("ToString() returns string")
 	{
 		Stopwatch sw;
@@ -365,6 +383,10 @@ TEST_CASE("Stopwatch - ToCString and ToCStringSymbol")
 
 TEST_CASE("Stopwatch - Wall clock timing")
 {
+#if defined(_WIN32)
+	timeBeginPeriod(1);
+#endif
+
 	SECTION("CpuStopwatch ignore sleeps")
 	{
         
@@ -406,6 +428,10 @@ TEST_CASE("Stopwatch - Wall clock timing")
 
 TEST_CASE("Stopwatch - Concurrent stopwatches are independent")
 {
+#if defined(_WIN32)
+	timeBeginPeriod(1);
+#endif
+
 	SECTION("Two stopwatches can run simultaneously")
 	{
 		Stopwatch sw1;
@@ -456,6 +482,10 @@ TEST_CASE("Stopwatch - Concurrent stopwatches are independent")
 
 TEST_CASE("Stopwatch - Edge cases")
 {
+#if defined(_WIN32)
+	timeBeginPeriod(1);
+#endif
+
 	SECTION("Start and stop immediately")
 	{
 		Stopwatch sw;
