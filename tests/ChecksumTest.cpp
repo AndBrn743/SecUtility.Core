@@ -3,6 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <sstream>
+#include <numeric>
 #include <type_traits>
 
 using namespace SecUtility::Checksum;
