@@ -5,6 +5,7 @@
 
 #include <SecUtility/Misc/Enum.hpp>
 #include <SecUtility/Misc/Endian.hpp>
+#include <SecUtility/Misc/Prefetch.hpp>
 #include <SecUtility/Macro/ConstevalIf.hpp>
 #include <SecUtility/Raw/Int.hpp>
 
@@ -227,7 +228,7 @@ namespace SecUtility::Checksum
 			if constexpr (false)
 #endif
 			{
-				__builtin_prefetch(data + 8 * DegreeOfUnroll * 2);
+				Prefetch(data + 8 * DegreeOfUnroll * 2);
 			}
 
 			for (std::size_t i = 0; i < DegreeOfUnroll; ++i)
@@ -282,7 +283,7 @@ namespace SecUtility::Checksum
 			if constexpr (false)
 #endif
 			{
-				__builtin_prefetch(data + 16 * DegreeOfUnroll * 2);
+				Prefetch(data + 16 * DegreeOfUnroll * 2);
 			}
 
 			for (std::size_t i = 0; i < DegreeOfUnroll; ++i)
