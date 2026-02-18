@@ -457,22 +457,22 @@ TEST_CASE("Stopwatch - Concurrent stopwatches are independent")
 		constexpr int count = 10;
 		Stopwatch sw[count];
 
-		for (int i = 0; i < count; ++i)
+		for (auto & i : sw)
 		{
-			sw[i].Start();
+			i.Start();
 		}
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-		for (int i = 0; i < count; ++i)
+		for (auto & i : sw)
 		{
-			sw[i].Stop();
+			i.Stop();
 		}
 
 		// All should measure approximately 50ms
-		for (int i = 0; i < count; ++i)
+		for (auto & i : sw)
 		{
-			const auto ms = sw[i].Elapsed<TimeUnit::Milliseconds>();
+			const auto ms = i.Elapsed<TimeUnit::Milliseconds>();
 			CHECK(ms >= 45.0);
 			CHECK(ms <= 65.0);
 		}
