@@ -21,6 +21,24 @@ TEST_CASE("Exception - Default constructor")
 		Exception ex;
 		CHECK_THAT(ex.what(), Equals("Generic exception"));
 	}
+
+	SECTION("Derived exceptions should have their name as message header")
+	{
+		RuntimeException rt;
+		CHECK_THAT(rt.what(), Equals("RuntimeException"));
+
+		IOException io;
+		CHECK_THAT(io.what(), Equals("IOException"));
+
+		LogicException lg;
+		CHECK_THAT(lg.what(), Equals("LogicException"));
+
+		InvalidArgumentException ag;
+		CHECK_THAT(ag.what(), Equals("InvalidArgumentException"));
+
+		ArgumentNullException nl;
+		CHECK_THAT(nl.what(), Equals("ArgumentNullException"));
+	}
 }
 
 
