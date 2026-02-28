@@ -4,7 +4,9 @@
 #pragma once
 
 #include <exception>
+#include <stdexcept>
 #include <string>
+#include <cstring>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -52,24 +54,35 @@ namespace SecUtility
 			return m_CMessage;
 		}
 
-		Exception(Exception&& other) noexcept : m_Message(std::move(other.m_CMessage)), m_CMessage(m_Message.c_str())
+		Exception(Exception&& other) noexcept : m_Message(std::move(other.m_Message)), m_CMessage(m_Message.what())
 		{
-			m_Message = std::move(other.m_Message);
-			m_CMessage = m_Message.c_str();
+			/* NO CODE */
 		}
 
 		Exception& operator=(Exception&& other) noexcept
 		{
 			m_Message = std::move(other.m_Message);
-			m_CMessage = m_Message.c_str();
+			m_CMessage = m_Message.what();
+			return *this;
+		}
+
+		Exception(const Exception& other) noexcept : m_Message(other.m_Message), m_CMessage(m_Message.what())
+		{
+			/* NO CODE */
+		}
+
+		Exception& operator=(const Exception& other) noexcept
+		{
+			if (this != &other)
+			{
+				m_Message = other.m_Message;
+				m_CMessage = m_Message.what();
+			}
+
 			return *this;
 		}
 
 		~Exception() noexcept override = default;
-
-		// create a pr if you do have a need for copying exception objects
-		Exception(const Exception&) = delete;
-		Exception& operator=(const Exception&) = delete;
 
 
 	protected:
@@ -108,11 +121,13 @@ namespace SecUtility
 				const std::size_t totalSize = (MessageSize(messages) + ...)
 				                              + JoinerSize() * (sizeof...(messages) > 0 ? sizeof...(messages) - 1 : 0);
 
-				m_Message.reserve(totalSize);
+				std::string message{};
+				message.reserve(totalSize);
 
-				AppendAll(std::forward<Messages>(messages)...);
+				AppendAll(message, std::forward<Messages>(messages)...);
 
-				m_CMessage = m_Message.c_str();
+				m_Message = std::runtime_error{std::move(message)};
+				m_CMessage = m_Message.what();
 			}
 			catch (...)
 			{
@@ -139,32 +154,33 @@ namespace SecUtility
 		}
 
 		template <typename T>
-		void AppendOne(T&& msg)
+		void AppendOne(std::string& message, T&& msg)
 		{
 			if constexpr (std::is_convertible_v<T, std::string_view>)
 			{
-				m_Message.append(std::string_view(msg));
+				message.append(std::string_view(msg));
 			}
 			else
 			{
-				m_Message.append(std::to_string(msg));
+				message.append(std::to_string(msg));
 			}
 		}
 
 		template <typename First, typename... Rest>
-		void AppendAll(First&& first, Rest&&... rest)
+		void AppendAll(std::string& message, First&& first, Rest&&... rest)
 		{
-			AppendOne(std::forward<First>(first));
+			AppendOne(message, std::forward<First>(first));
 
 			if constexpr (sizeof...(Rest) > 0)
 			{
-				m_Message.append(Joiner);
-				AppendAll(std::forward<Rest>(rest)...);
+				message.append(Joiner);
+				AppendAll(message, std::forward<Rest>(rest)...);
 			}
 		}
 
 	private:
-		std::string m_Message{};
+		// use std::runtime_error as const ref-counted string. see https://www.youtube.com/watch?v=zGWj7Qo_POY
+		std::runtime_error m_Message{""};
 		const char* m_CMessage = "Generic exception";
 	};
 
