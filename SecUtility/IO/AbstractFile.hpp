@@ -141,14 +141,14 @@ namespace SecUtility::IO
 			{
 				return 0;
 			}
-			std::ifstream f(Name(), std::ios_base::binary | std::ios_base::in);
+			std::ifstream f(Name(), std::ios::binary | std::ios::in);
 			if (!f.is_open())
 			{
 				return 0;
 			}
-			f.seekg(0, std::ios_base::beg);
+			f.seekg(0, std::ios::beg);
 			const std::ifstream::pos_type begin_pos = f.tellg();
-			f.seekg(0, std::ios_base::end);
+			f.seekg(0, std::ios::end);
 			return static_cast<std::size_t>(f.tellg() - begin_pos);
 		}
 
