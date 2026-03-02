@@ -154,7 +154,7 @@ namespace SecUtility
 		}
 
 		template <typename T>
-		void AppendOne(std::string& message, T&& msg)
+		static void AppendOne(std::string& message, T&& msg)
 		{
 			if constexpr (std::is_convertible_v<T, std::string_view>)
 			{
@@ -167,7 +167,7 @@ namespace SecUtility
 		}
 
 		template <typename First, typename... Rest>
-		void AppendAll(std::string& message, First&& first, Rest&&... rest)
+		static void AppendAll(std::string& message, First&& first, Rest&&... rest)
 		{
 			AppendOne(message, std::forward<First>(first));
 
