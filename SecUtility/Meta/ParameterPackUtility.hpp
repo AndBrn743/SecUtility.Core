@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <tuple>
 #include <array>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -85,22 +85,21 @@ namespace SecUtility::ParameterPackUtility
 			static constexpr std::size_t InstanceCount = instance_count_in<TTarget, Ts...>::value;
 			using ResultType = std::array<std::size_t, InstanceCount>;
 
-			template <std::size_t... Is>
-			static constexpr ResultType Calculate(std::index_sequence<Is...>)
+			static constexpr ResultType Calculate()
 			{
 				ResultType result{};
 
 				std::size_t index = 0;
-				std::size_t offset = 0;
+				auto iterator = result.begin();
 
-				((std::is_same_v<TTarget, Ts> ? result[offset] = index, ++index, ++offset : ++index), ...);
+				((std::is_same_v<TTarget, Ts> ? (*iterator = index, ++iterator, ++index) : ++index), ...);
 
 				return result;
 			}
 
 
 		public:
-			static constexpr ResultType value = Calculate(std::make_index_sequence<InstanceCount>{});
+			static constexpr ResultType value = Calculate();
 		};
 
 		template <typename...>
@@ -155,7 +154,7 @@ namespace SecUtility::ParameterPackUtility
 			                           typename Unique<Rest...>::type,
 			                           decltype(std::tuple_cat(std::tuple<First>{}, typename Unique<Rest...>::type{}))>;
 		};
-	} 
+	}
 
 
 	template <std::size_t Index, typename Arg0, typename... Args>
