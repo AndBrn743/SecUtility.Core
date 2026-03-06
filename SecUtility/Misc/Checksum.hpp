@@ -64,7 +64,7 @@ namespace SecUtility::Checksum
 
 	inline std::ostream& operator<<(std::ostream& os, const Checksum32 checksum)
 	{
-		const std::ios_base::fmtflags formatFlags = os.flags();
+		const std::ios::fmtflags formatFlags = os.flags();
 		const char previousFillChar = os.fill();
 
 		os << "0x" << std::hex << std::noshowbase << std::uppercase << std::setfill('0') << std::setw(8)
@@ -107,7 +107,7 @@ namespace SecUtility::Checksum
 
 	inline std::ostream& operator<<(std::ostream& os, const Checksum64 checksum)
 	{
-		const std::ios_base::fmtflags formatFlags = os.flags();
+		const std::ios::fmtflags formatFlags = os.flags();
 		const char previousFillChar = os.fill();
 
 		os << "0x" << std::hex << std::noshowbase << std::uppercase << std::setfill('0') << std::setw(16)
