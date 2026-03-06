@@ -137,6 +137,8 @@ else ()
 endif ()
 target_link_libraries(SecUtility.Core INTERFACE gcem::gcem)
 
+target_compile_definitions(SecUtility.Core INTERFACE __STDCPP_WANT_MATH_SPEC_FUNCS__)
+
 enable_testing()
 add_subdirectory(tests)
 
