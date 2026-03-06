@@ -90,6 +90,53 @@ else ()
 endif ()
 target_link_libraries(SecUtility.Core INTERFACE range-v3::range-v3)
 
+if (WIN32)
+    find_program(PATCH_EXECUTABLE
+            NAMES patch
+            PATHS
+            "C:/Program Files/Git/usr/bin"
+            "C:/Program Files (x86)/Git/usr/bin"
+            "C:/msys64/usr/bin"
+            "D:/Program Files/Git/usr/bin"
+            "D:/Program Files (x86)/Git/usr/bin"
+            "D:/msys64/usr/bin"
+            "E:/Program Files/Git/usr/bin"
+            "E:/Program Files (x86)/Git/usr/bin"
+            "E:/msys64/usr/bin"
+            NO_DEFAULT_PATH)
+else ()
+    find_program(PATCH_EXECUTABLE NAMES patch)
+endif ()
+
+if (TARGET gcem::gcem)
+    message(STATUS "SecUtility will use the gcem target defined by ancestor project")
+else ()
+    find_package(gcem NO_MODULE)
+
+    if (NOT gcem_FOUND)
+        if (NOT DEFINED GCEM_REPO AND NOT DEFINED GCEM_TAG AND NOT DEFINED GCEM_SOURCE)
+            set(GCEM_SOURCE "https://github.com/kthohr/gcem/archive/refs/tags/v1.18.0.tar.gz")
+            message(STATUS "Gcem library will be fetched from `${GCEM_SOURCE}`")
+        endif ()
+
+        set(GcemSourceDir ${CMAKE_BINARY_DIR}/external/gcem-src)
+
+        include(FetchContent)
+        FetchContent_Declare(gcem
+                URL ${GCEM_SOURCE}
+                GIT_REPOSITORY ${GCEM_REPO}
+                GIT_TAG ${GCEM_TAG}
+                SOURCE_DIR ${GcemSourceDir}
+                PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching GCEM..."
+                && cd ${GcemSourceDir}
+                && ${PATCH_EXECUTABLE} --forward --batch --silent  < ${CMAKE_CURRENT_SOURCE_DIR}/patches/gcem/CMakeLists.txt.patch
+                || ${CMAKE_COMMAND} -E echo "GCEM patch skipped")
+        FetchContent_MakeAvailable(gcem)
+        add_library(gcem::gcem ALIAS gcem)
+    endif ()
+endif ()
+target_link_libraries(SecUtility.Core INTERFACE gcem::gcem)
+
 enable_testing()
 add_subdirectory(tests)
 
