@@ -65,31 +65,37 @@ namespace SecUtility::Math
 #undef SEC_EXPORT_MATH_FUNCTION
 
 	template <typename Arg>
-	constexpr SEC_FORCE_INLINE auto Erfc(const Arg arg) noexcept(noexcept(std::erfc(arg))) -> decltype(std::erfc(arg))
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+	constexpr
+#endif
+	        SEC_FORCE_INLINE auto Erfc(const Arg arg) noexcept(noexcept(std::erfc(arg))) -> decltype(std::erfc(arg))
 	{
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		SEC_IF_CONSTEVAL
 		{
 			return 1 - gcem::erf(arg);
 		}
-		else
-		{
-			return std::erfc(arg);
-		}
+#endif
+
+		return std::erfc(arg);
 	}
 
 	template <typename... Args>
-	constexpr SEC_FORCE_INLINE auto LogBeta(Args&&... args) noexcept(
-	        noexcept(std::log(std::beta(std::forward<Args>(args)...))))
-	        -> decltype(std::log(std::beta(std::forward<Args>(args)...)))
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+	constexpr
+#endif
+	        SEC_FORCE_INLINE auto LogBeta(Args&&... args) noexcept(
+	                noexcept(std::log(std::beta(std::forward<Args>(args)...))))
+	                -> decltype(std::log(std::beta(std::forward<Args>(args)...)))
 	{
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		SEC_IF_CONSTEVAL
 		{
 			return gcem::lbeta(std::forward<Args>(args)...);
 		}
-		else
-		{
-			return std::log(std::beta(std::forward<Args>(args)...));
-		}
+#endif
+
+		return std::log(std::beta(std::forward<Args>(args)...));
 	}
 
 	template <typename Scalar>
@@ -371,8 +377,8 @@ namespace SecUtility::Math
 	/// Returns the Gamma function value of arg which is a positive half integer
 	/// </summary>
 	/// <remarks>
-	/// For half integers be 0.5, 1.5, ..., 64.5 and compile-time computed value will be returned,
-	/// otherwise a runtime calculation will be performed
+	/// For half integers be -62.5, -61.5, ..., -0.5, 0.5, 1.5, ..., 63.5 and compile-time computed value will be
+	/// returned, otherwise a runtime calculation will be performed
 	/// </remarks>
 	template <typename Scalar>
 	constexpr SEC_FORCE_INLINE Scalar GammaOfHalfInteger(const Scalar halfInteger) noexcept
