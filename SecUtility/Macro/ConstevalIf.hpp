@@ -24,11 +24,13 @@
 	#define SEC_IF_CONSTEVAL if /*constexpr*/ (__builtin_is_constant_evaluated())
 	#define SEC_IF_NOT_CONSTEVAL if /*constexpr*/ (!__builtin_is_constant_evaluated())
 
-#elif defined(__has_builtin) && __has_builtin(__builtin_is_constant_evaluated)
+#elif defined(__has_builtin)
+#if __has_builtin(__builtin_is_constant_evaluated)
 
 	#define SEC_IF_CONSTEVAL if /*constexpr*/ (__builtin_is_constant_evaluated())
 	#define SEC_IF_NOT_CONSTEVAL if /*constexpr*/ (!__builtin_is_constant_evaluated())
 
+#endif
 #endif
 
 // clang-format on
