@@ -19,6 +19,12 @@ namespace SecUtility::Math::Constant
 	inline constexpr Scalar GoldenRatio = 1.618033988749894848204586834365638118L;
 
 	template <typename Scalar>
+	inline constexpr Scalar SqrtOfPi = 1.772453850905516027298167483341145183L;
+
+	template <typename Scalar>
+	inline constexpr Scalar CbrtOfPi = 1.464591887561523263020142527263790392L;
+
+	template <typename Scalar>
 	inline constexpr std::array<Scalar, 101> Sqrt{
 	        0.000000000000000000000000000000000000L, 1.000000000000000000000000000000000000L,
 	        1.414213562373095048801688724209698079L, 1.732050807568877293527446341505872367L,

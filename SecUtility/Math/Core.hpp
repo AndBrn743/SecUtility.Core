@@ -6,6 +6,7 @@
 
 #include <SecUtility/Macro/ConstevalIf.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
+#include <SecUtility/Math/Constant.hpp>
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 #include <gcem.hpp>
@@ -157,7 +158,7 @@ namespace SecUtility::Math
 	{
 		if (Abs(Im(complex)) < std::numeric_limits<Real>::epsilon())
 		{
-			return Re(complex) < 0 ? 3.14159265358979323846 : 0;
+			return Re(complex) < 0 ? Constant::Pi<Real> : 0;
 		}
 
 		return ATan2(Im(complex), Re(complex));
@@ -187,7 +188,7 @@ namespace SecUtility::Math
 	constexpr SEC_FORCE_INLINE std::enable_if_t<std::is_arithmetic_v<std::decay_t<Real>>, Real> Arg(
 	        const Real& real) noexcept
 	{
-		return real >= 0 ? 0 : 3.14159265358979323846;
+		return real >= 0 ? 0 : Constant::Pi<Real>;
 	}
 
 	template <typename Real>
@@ -449,10 +450,18 @@ namespace SecUtility::Math
 	//----------------------------------------------------------------------------------------------------------------//
 
 	inline constexpr auto Deg2Rad = [](const auto& deg) constexpr noexcept
-	{ return deg * 3.14159265358979323846 / 180.0; };
+	{
+		using Scalar = std::decay_t<decltype(deg)>;
+		using Output = std::conditional_t<std::is_integral_v<Scalar>, double, Scalar>;
+		return deg * Constant::Pi<Output> / 180;
+	};
 
 	inline constexpr auto Rad2Deg = [](const auto& deg) constexpr noexcept
-	{ return deg * 180.0 / 3.14159265358979323846; };
+	{
+		using Scalar = std::decay_t<decltype(deg)>;
+		using Output = std::conditional_t<std::is_integral_v<Scalar>, double, Scalar>;
+		return deg * 180 / Constant::Pi<Output>;
+	};
 
 	// special functions, e.g., erf, will be exposed under Math/Special.hpp
 }
