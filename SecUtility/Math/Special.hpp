@@ -26,7 +26,8 @@
 #include <utility>
 
 
-namespace SecScf::Math
+
+namespace SecUtility::Math
 {
 #define SEC_EXPORT_RUNTIME_ONLY_MATH_FUNCTION(SEC_NAME, C_NAME)                                                        \
 	template <typename... Args>                                                                                        \
@@ -319,24 +320,27 @@ namespace SecScf::Math
 		}();
 
 		template <typename Scalar>
-		inline
-#if __has_include(<gcem.hpp>)
-		        constexpr
-#endif
-		        auto GammaOfHalfIntegers = []
+		inline constexpr auto GammaOfPositiveHalfIntegers = []
 		{
-#if __has_include(<gcem.hpp>)
-			constexpr Scalar SqrtOfPi = gcem::sqrt(Scalar{3.14159265358979323846});
-#else
-			const Scalar SqrtOfPi = std::sqrt(Scalar{3.14159265358979323846});
-#endif
-
 			std::array<Scalar, 64> result{};
 			for (int i = 0; i < static_cast<int>(result.size()); i++)
 			{
 				// The equation used here can be found in Wikipedia, under "Particular values of the gamma function"
-				result[i] = SqrtOfPi * CalculateDoubleFactorial<Scalar>(static_cast<Scalar>(2 * i - 1))
-				            / (std::uint64_t{1} << i);
+				result[i] = Constant::SqrtOfPi<Scalar>
+				            * CalculateDoubleFactorial<Scalar>(static_cast<Scalar>(2 * i - 1)) / (UInt64{1} << i);
+			}
+			return result;
+		}();
+
+		template <typename Scalar>
+		inline constexpr auto GammaOfNegativeHalfIntegers = []
+		{
+			std::array<Scalar, 63> result{};
+			for (int i = 0; i < static_cast<int>(result.size()); i++)
+			{
+				// The equation used here can be found in Wikipedia, under "Particular values of the gamma function"
+				result[i] = MinusOneToThePowerOf<Scalar>(i + 1) * Constant::SqrtOfPi<Scalar> * (UInt64{1} << (i + 1))
+				            / CalculateDoubleFactorial<Scalar>(static_cast<Scalar>(2 * (i + 1) - 1));
 			}
 			return result;
 		}();
@@ -367,24 +371,24 @@ namespace SecScf::Math
 	/// Returns the Gamma function value of arg which is a positive half integer
 	/// </summary>
 	/// <remarks>
-	/// For half integers be 0.5, 1.5, ..., 17.5 and compile-time computed value will be returned,
+	/// For half integers be 0.5, 1.5, ..., 64.5 and compile-time computed value will be returned,
 	/// otherwise a runtime calculation will be performed
 	/// </remarks>
 	template <typename Scalar>
-#if __has_include(<gcem.hpp>)
-	constexpr
-#endif
-	        SEC_FORCE_INLINE Scalar GammaOfHalfInteger(const Scalar halfInteger) noexcept
+	constexpr SEC_FORCE_INLINE Scalar GammaOfHalfInteger(const Scalar halfInteger) noexcept
 	{
-		assert(halfInteger > 0 && halfInteger <= 17.5);
+		const auto floor = static_cast<int>(Floor(halfInteger));
 
-		if (halfInteger < Detail::GammaOfHalfIntegers<Scalar>.size())
+		if (floor >= 0 && static_cast<std::size_t>(floor) < Detail::GammaOfPositiveHalfIntegers<Scalar>.size())
 		{
-			return Detail::GammaOfHalfIntegers<Scalar>[static_cast<int>(halfInteger)];
+			return Detail::GammaOfPositiveHalfIntegers<Scalar>[floor];
 		}
-		else
+
+		if (floor < 0 && static_cast<std::size_t>(-floor - 1) < Detail::GammaOfNegativeHalfIntegers<Scalar>.size())
 		{
-			return Gamma(halfInteger);
+			return Detail::GammaOfNegativeHalfIntegers<Scalar>[-floor - 1];
 		}
+
+		return Gamma(halfInteger);
 	}
 }
