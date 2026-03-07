@@ -10,6 +10,9 @@
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 #include <gcem.hpp>
+#define SEC_MATH_CORE_CONDITIONAL_CONSTEXPR constexpr
+#else
+#define SEC_MATH_CORE_CONDITIONAL_CONSTEXPR
 #endif
 
 #if defined(SEC_MATH_CORE_EXTENSION)
@@ -52,6 +55,29 @@ namespace SecUtility::Math
 	SEC_EXPORT_MATH_FUNCTION(Round, round)
 	SEC_EXPORT_MATH_FUNCTION(Truncate, trunc)
 	SEC_EXPORT_RUNTIME_ONLY_MATH_FUNCTION(NearByInt, nearbyint)
+
+#define SEC_DEFINE_MATH_ROUNDING_FUNCTION_WITH_CAST(ROUNDING_FUNCTION)                                                 \
+	template <typename Integer, typename Floating>                                                                     \
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR Integer ROUNDING_FUNCTION(const Floating& x) noexcept(                         \
+	        noexcept(static_cast<Integer>(ROUNDING_FUNCTION(x))))                                                      \
+	{                                                                                                                  \
+		static_assert(std::is_integral_v<Integer>);                                                                    \
+		return static_cast<Integer>(ROUNDING_FUNCTION(x));                                                             \
+	}
+
+	SEC_DEFINE_MATH_ROUNDING_FUNCTION_WITH_CAST(Ceil)
+	SEC_DEFINE_MATH_ROUNDING_FUNCTION_WITH_CAST(Floor)
+	SEC_DEFINE_MATH_ROUNDING_FUNCTION_WITH_CAST(Round)
+	SEC_DEFINE_MATH_ROUNDING_FUNCTION_WITH_CAST(Truncate)
+
+	template <typename Integer, typename Floating>
+	Integer NearByInt(const Floating& x) noexcept(noexcept(static_cast<Integer>(NearByInt(x))))
+	{
+		static_assert(std::is_integral_v<Integer>);
+		return static_cast<Integer>(NearByInt(x));
+	}
+
+#undef SEC_DEFINE_MATH_ROUNDING_FUNCTION_WITH_CAST
 
 	SEC_EXPORT_MATH_FUNCTION(Exp, exp)
 	SEC_EXPORT_MATH_FUNCTION(Log, log)
@@ -508,3 +534,5 @@ namespace SecUtility::Math
 
 	// special functions, e.g., erf, will be exposed under Math/Special.hpp
 }
+
+#undef SEC_MATH_CORE_CONDITIONAL_CONSTEXPR
