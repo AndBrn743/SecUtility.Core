@@ -129,11 +129,8 @@ namespace SecUtility::Math
 	}
 
 	template <typename Arg>
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-	constexpr
-#endif
-	        SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept(noexcept(std::signbit(std::forward<Arg>(arg))))
-	                -> std::enable_if_t<!std::is_integral_v<std::decay_t<Arg>>, int>
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept(noexcept(
+	        std::signbit(std::forward<Arg>(arg)))) -> std::enable_if_t<!std::is_integral_v<std::decay_t<Arg>>, int>
 	{
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		SEC_IF_CONSTEVAL
@@ -159,11 +156,9 @@ namespace SecUtility::Math
 	}
 
 	template <typename To, typename From>
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-	constexpr
-#endif
-	        SEC_FORCE_INLINE auto CopySignToTheLeft(To&& to, From&& from) noexcept(noexcept(std::copysign(to, from)))
-	                -> std::enable_if_t<!std::is_integral_v<std::decay_t<To>>, decltype(std::copysign(to, from))>
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto CopySignToTheLeft(To&& to, From&& from) noexcept(
+	        noexcept(std::copysign(to, from)))
+	        -> std::enable_if_t<!std::is_integral_v<std::decay_t<To>>, decltype(std::copysign(to, from))>
 	{
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		SEC_IF_CONSTEVAL
@@ -193,10 +188,8 @@ namespace SecUtility::Math
 	}
 
 	template <typename Real>
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-	constexpr
-#endif
-	        SEC_FORCE_INLINE Real Arg(const std::complex<Real>& complex) noexcept(noexcept(ATan2(Real{}, Real{})))
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE Real
+	Arg(const std::complex<Real>& complex) noexcept(noexcept(ATan2(Real{}, Real{})))
 	{
 		if (Abs(Im(complex)) < std::numeric_limits<Real>::epsilon())
 		{
@@ -241,21 +234,15 @@ namespace SecUtility::Math
 	}
 
 	template <typename Real>
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-	constexpr
-#endif
-	        SEC_FORCE_INLINE Real SquaredNorm(const std::complex<Real>& complex) noexcept
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE Real SquaredNorm(const std::complex<Real>& complex) noexcept
 	{
 		return SquaredNorm(Re(complex)) + SquaredNorm(Im(complex));
 	}
 
 	template <typename Scalar>
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-	constexpr
-#endif
-	        SEC_FORCE_INLINE auto Norm(const Scalar& scalar) noexcept(noexcept(Sqrt(SquaredNorm(scalar))))
-	                -> std::enable_if_t<!std::is_arithmetic_v<std::decay_t<Scalar>>,
-	                                    decltype(Sqrt(SquaredNorm(scalar)))>
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto Norm(const Scalar& scalar) noexcept(
+	        noexcept(Sqrt(SquaredNorm(scalar))))
+	        -> std::enable_if_t<!std::is_arithmetic_v<std::decay_t<Scalar>>, decltype(Sqrt(SquaredNorm(scalar)))>
 	{
 		return Sqrt(SquaredNorm(scalar));
 	}
@@ -268,12 +255,9 @@ namespace SecUtility::Math
 	}
 
 	template <typename Arg>
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-	constexpr
-#endif
-			SEC_FORCE_INLINE auto Abs(Arg&& arg) noexcept(noexcept(std::abs(std::forward<Arg>(arg))))
-					-> std::enable_if_t<!std::is_arithmetic_v<std::decay_t<Arg>>,
-										decltype(std::abs(std::forward<Arg>(arg)))>
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto Abs(Arg&& arg) noexcept(
+	        noexcept(std::abs(std::forward<Arg>(arg))))
+	        -> std::enable_if_t<!std::is_arithmetic_v<std::decay_t<Arg>>, decltype(std::abs(std::forward<Arg>(arg)))>
 	{
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		SEC_IF_CONSTEVAL
@@ -382,10 +366,7 @@ namespace SecUtility::Math
 	}
 
 	template <typename... Scalars>
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-	constexpr
-#endif
-	        SEC_FORCE_INLINE auto Hypotenuse(Scalars&&... scalars)  //
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto Hypotenuse(Scalars&&... scalars)  //
 	        noexcept(noexcept(Sqrt(((scalars * scalars) + ...))))
 	{
 		if constexpr (sizeof...(Scalars) == 2)
@@ -415,7 +396,7 @@ namespace SecUtility::Math
 	                                const Scalar y,
 	                                const Scalar z) noexcept(noexcept(std::fma(x, y, z)))
 	{
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL)
 		SEC_IF_CONSTEVAL
 		{
 			return x * y + z;
