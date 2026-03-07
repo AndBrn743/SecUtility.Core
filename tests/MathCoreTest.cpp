@@ -11,11 +11,7 @@
 using namespace SecUtility::Math;
 using Catch::Approx;
 
-namespace
-{
-	constexpr double Pi = 3.14159265358979323846;
-	constexpr double Epsilon = 1e-10;
-}
+static constexpr double Pi = Constant::Pi<double>;
 
 // ============================================================================
 // Basic Math Functions
@@ -61,6 +57,14 @@ TEST_CASE("CopySignToTheLeft function")
 	REQUIRE(CopySignToTheLeft(5.0, -3.0) == Approx(std::copysign(5.0, -3.0)));
 	REQUIRE(CopySignToTheLeft(-5.0, 3.0) == Approx(std::copysign(-5.0, 3.0)));
 	REQUIRE(CopySignToTheLeft(3.0, -0.0) == Approx(std::copysign(3.0, -0.0)));
+
+	STATIC_CHECK(CopySignToTheLeft(-5.0, 3.0) > 5.0 - 1e-9);
+	STATIC_CHECK(CopySignToTheLeft(-5.0, 3.0) < 5.0 + 1e-9);
+
+	STATIC_CHECK(CopySignToTheLeft(5, 3) == 5);
+	STATIC_CHECK(CopySignToTheLeft(5, -3) == -5);
+	STATIC_CHECK(CopySignToTheLeft(-5, 3) == 5);
+	STATIC_CHECK(CopySignToTheLeft(-5, -3) == -5);
 }
 
 TEST_CASE("Rounding functions")

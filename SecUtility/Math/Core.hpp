@@ -117,7 +117,7 @@ namespace SecUtility::Math
 	{
 		if constexpr (std::is_integral_v<std::decay_t<To>>)
 		{
-			return std::copysign(to, from);
+			return SignBit(from) == SignBit(to) ? to : -to;
 		}
 		else
 		{
