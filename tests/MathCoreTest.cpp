@@ -356,8 +356,21 @@ TEST_CASE("Complex number functions")
 		const Complex c{3.0, 4.0};
 		REQUIRE(Norm(c) == Approx(5.0));
 
-		constexpr double x = 5.0;
-		STATIC_CHECK(Norm(x) == 5.0);
+		constexpr Complex z{3.0, 4.0};
+		STATIC_CHECK(Abs(Norm(z) - 5.0) < 1e-12);
+
+		double y = -5.0;
+		CHECK(Norm(y) == 5.0);
+	}
+
+	SECTION("Abs")
+	{
+		const Complex c{3.0, 4.0};
+		REQUIRE(Abs(c) == Approx(5.0));
+
+
+		constexpr Complex z{3.0, 4.0};
+		STATIC_CHECK(Abs(Abs(z) - 5.0) < 1e-12);
 	}
 }
 

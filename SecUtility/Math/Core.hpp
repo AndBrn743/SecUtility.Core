@@ -47,8 +47,6 @@ namespace SecUtility::Math
 #define SEC_EXPORT_MATH_FUNCTION SEC_EXPORT_RUNTIME_ONLY_MATH_FUNCTION
 #endif
 
-	SEC_EXPORT_MATH_FUNCTION(Abs, abs)
-
 	SEC_EXPORT_MATH_FUNCTION(Ceil, ceil)
 	SEC_EXPORT_MATH_FUNCTION(Floor, floor)
 	SEC_EXPORT_MATH_FUNCTION(Round, round)
@@ -82,6 +80,20 @@ namespace SecUtility::Math
 #undef SEC_EXPORT_RUNTIME_ONLY_MATH_FUNCTION
 #undef SEC_EXPORT_CONSTEXPR_MATH_FUNCTION_WITH_FALLBACK
 #undef SEC_EXPORT_MATH_FUNCTION
+
+	template <typename Arg>
+	constexpr SEC_FORCE_INLINE auto Abs(Arg&& arg) noexcept
+	        -> std::enable_if_t<std::is_arithmetic_v<std::decay_t<Arg>>, std::decay_t<Arg>>
+	{
+		if constexpr (std::is_unsigned_v<std::decay_t<Arg>>)
+		{
+			return arg;
+		}
+		else
+		{
+			return arg < 0 ? -arg : arg;
+		}
+	}
 
 	template <typename Arg>
 	constexpr SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept
@@ -227,6 +239,24 @@ namespace SecUtility::Math
 	        -> std::enable_if_t<std::is_arithmetic_v<std::decay_t<Scalar>>, Scalar>
 	{
 		return Abs(scalar);
+	}
+
+	template <typename Arg>
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+	constexpr
+#endif
+			SEC_FORCE_INLINE auto Abs(Arg&& arg) noexcept(noexcept(std::abs(std::forward<Arg>(arg))))
+					-> std::enable_if_t<!std::is_arithmetic_v<std::decay_t<Arg>>,
+										decltype(std::abs(std::forward<Arg>(arg)))>
+	{
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+		SEC_IF_CONSTEVAL
+		{
+			return Norm(arg);
+		}
+#endif
+
+		return std::abs(std::forward<Arg>(arg));
 	}
 
 	template <typename Scalar>
