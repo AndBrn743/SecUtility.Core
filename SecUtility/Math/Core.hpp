@@ -63,7 +63,6 @@ namespace SecUtility::Math
 
 	SEC_EXPORT_MATH_FUNCTION(Pow, pow)
 	SEC_EXPORT_MATH_FUNCTION(Sqrt, sqrt)
-	// SEC_EXPORT_MATH_FUNCTION(Hypotenuse, hypot)
 
 	SEC_EXPORT_MATH_FUNCTION(Sin, sin)
 	SEC_EXPORT_MATH_FUNCTION(Cos, cos)
@@ -85,24 +84,27 @@ namespace SecUtility::Math
 #undef SEC_EXPORT_MATH_FUNCTION
 
 	template <typename Arg>
-	constexpr SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept(noexcept(std::signbit(std::forward<Arg>(arg))))
-	        -> decltype(std::signbit(std::forward<Arg>(arg)))
+	constexpr SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept
+	        -> std::enable_if_t<std::is_integral_v<std::decay_t<Arg>>, int>
 	{
-		if constexpr (std::is_integral_v<std::decay_t<Arg>>)
+		return arg < 0 ? 1 : 0;
+	}
+
+	template <typename Arg>
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+	constexpr
+#endif
+	        SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept(noexcept(std::signbit(std::forward<Arg>(arg))))
+	                -> std::enable_if_t<!std::is_integral_v<std::decay_t<Arg>>, int>
+	{
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+		SEC_IF_CONSTEVAL
 		{
-			return arg < 0 ? 1 : 0;
+			return gcem::signbit(std::forward<Arg>(arg));
 		}
-		else
-		{
-			SEC_IF_CONSTEVAL
-			{
-				return gcem::signbit(std::forward<Arg>(arg));
-			}
-			else
-			{
-				return std::signbit(std::forward<Arg>(arg));
-			}
-		}
+#endif
+
+		return std::signbit(std::forward<Arg>(arg));
 	}
 
 	template <typename Scalar>
@@ -112,24 +114,26 @@ namespace SecUtility::Math
 	}
 
 	template <typename To, typename From>
-	constexpr SEC_FORCE_INLINE auto CopySignToTheLeft(To&& to, From&& from) noexcept(noexcept(std::copysign(to, from)))
-	        -> decltype(std::copysign(to, from))
+	constexpr SEC_FORCE_INLINE auto CopySignToTheLeft(To&& to, From&& from) noexcept
+	        -> std::enable_if_t<std::is_integral_v<std::decay_t<To>>, std::decay_t<To>>
 	{
-		if constexpr (std::is_integral_v<std::decay_t<To>>)
+		return SignBit(from) == SignBit(to) ? to : -to;
+	}
+
+	template <typename To, typename From>
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+	constexpr
+#endif
+	        SEC_FORCE_INLINE auto CopySignToTheLeft(To&& to, From&& from) noexcept(noexcept(std::copysign(to, from)))
+	                -> std::enable_if_t<!std::is_integral_v<std::decay_t<To>>, decltype(std::copysign(to, from))>
+	{
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+		SEC_IF_CONSTEVAL
 		{
-			return SignBit(from) == SignBit(to) ? to : -to;
+			return gcem::copysign(to, from);
 		}
-		else
-		{
-			SEC_IF_CONSTEVAL
-			{
-				return gcem::copysign(to, from);
-			}
-			else
-			{
-				return std::copysign(to, from);
-			}
-		}
+#endif
+		return std::copysign(to, from);
 	}
 
 	template <typename Real>
@@ -211,9 +215,18 @@ namespace SecUtility::Math
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 	constexpr
 #endif
-	        SEC_FORCE_INLINE auto Norm(const Scalar& scalar) noexcept(noexcept(Sqrt(scalar)))
+	        SEC_FORCE_INLINE auto Norm(const Scalar& scalar) noexcept(noexcept(Sqrt(SquaredNorm(scalar))))
+	                -> std::enable_if_t<!std::is_arithmetic_v<std::decay_t<Scalar>>,
+	                                    decltype(Sqrt(SquaredNorm(scalar)))>
 	{
 		return Sqrt(SquaredNorm(scalar));
+	}
+
+	template <typename Scalar>
+	constexpr SEC_FORCE_INLINE auto Norm(const Scalar& scalar) noexcept(noexcept(Abs(scalar)))
+	        -> std::enable_if_t<std::is_arithmetic_v<std::decay_t<Scalar>>, Scalar>
+	{
+		return Abs(scalar);
 	}
 
 	template <typename Scalar>
@@ -321,14 +334,14 @@ namespace SecUtility::Math
 	{
 		if constexpr (sizeof...(Scalars) == 2)
 		{
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 			SEC_IF_CONSTEVAL
 			{
 				return gcem::hypot(std::forward<Scalars>(scalars)...);
 			}
-			else
-			{
-				return std::hypot(std::forward<Scalars>(scalars)...);
-			}
+#endif
+
+			return std::hypot(std::forward<Scalars>(scalars)...);
 		}
 		else
 		{
@@ -346,14 +359,14 @@ namespace SecUtility::Math
 	                                const Scalar y,
 	                                const Scalar z) noexcept(noexcept(std::fma(x, y, z)))
 	{
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		SEC_IF_CONSTEVAL
 		{
 			return x * y + z;
 		}
-		else
-		{
-			return std::fma(x, y, z);
-		}
+#endif
+
+		return std::fma(x, y, z);
 	}
 
 	template <typename T, typename Compare>
