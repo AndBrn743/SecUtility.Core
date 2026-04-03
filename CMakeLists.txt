@@ -63,33 +63,6 @@ else ()
 endif ()
 target_link_libraries(SecUtility.Core INTERFACE Eigen3::Eigen)
 
-if (TARGET range-v3::range-v3)
-    message(STATUS "SecUtility will use the Eigen3 target defined by ancestor project")
-else ()
-    if (NOT RANGE_V3_SOURCE AND NOT RANGE_V3_REPO AND NOT RANGE_V3_TAG)
-        find_package(range-v3)
-    endif ()
-
-    if (NOT range-v3_FOUND)
-        if (NOT RANGE_V3_SOURCE AND NOT RANGE_V3_REPO AND NOT RANGE_V3_TAG)
-            set(RANGE_V3_SOURCE https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz)
-            # set(RANGE_V3_REPO https://github.com/ericniebler/range-v3.git)
-            # set(RANGE_V3_TAG 0.12.0)
-        endif ()
-
-        include(FetchContent)
-        FetchContent_Declare(
-                range-v3
-                URL ${RANGE_V3_SOURCE}
-                GIT_REPOSITORY ${RANGE_V3_REPO}
-                GIT_TAG ${RANGE_V3_TAG}
-                UPDATE_DISCONNECTED ON
-        )
-        FetchContent_MakeAvailable(range-v3)
-    endif ()
-endif ()
-target_link_libraries(SecUtility.Core INTERFACE range-v3::range-v3)
-
 if (WIN32)
     find_program(PATCH_EXECUTABLE
             NAMES patch
@@ -107,6 +80,42 @@ if (WIN32)
 else ()
     find_program(PATCH_EXECUTABLE NAMES patch)
 endif ()
+
+if (TARGET range-v3::range-v3)
+    message(WARNING "SecUtility.Core will use the range-v3 target defined by the ancestor project. "
+            "For best user experience, SecUtility.Core recommends applying a patch to range-v3. "
+            "SecUtility.Core will automatically apply the recommended patch for standalone builds and builds without "
+            "an ancestor-defined range-v3 target, which is not the current case. SecUtility.Core recommends that you "
+            "manually apply the patch at patches/range-v3/include/range/v3/view/zip_with.hpp.patch")
+else ()
+    # if (NOT RANGE_V3_SOURCE AND NOT RANGE_V3_REPO AND NOT RANGE_V3_TAG)
+    #     find_package(range-v3)
+    # endif ()
+
+    if (NOT range-v3_FOUND)
+        if (NOT RANGE_V3_SOURCE AND NOT RANGE_V3_REPO AND NOT RANGE_V3_TAG)
+            set(RANGE_V3_SOURCE https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz)
+            # set(RANGE_V3_REPO https://github.com/ericniebler/range-v3.git)
+            # set(RANGE_V3_TAG 0.12.0)
+            message(STATUS "Building range-v3 from ${RANGE_V3_SOURCE}")
+        endif ()
+
+        include(FetchContent)
+        FetchContent_Declare(
+                range-v3
+                URL ${RANGE_V3_SOURCE}
+                GIT_REPOSITORY ${RANGE_V3_REPO}
+                GIT_TAG ${RANGE_V3_TAG}
+                UPDATE_DISCONNECTED ON
+                PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching range-v3..."
+                && cd ${CMAKE_BINARY_DIR}/_deps/range-v3-src/include/range/v3/view
+                && ${PATCH_EXECUTABLE} --forward --batch --silent < ${CMAKE_CURRENT_SOURCE_DIR}/patches/range-v3/include/range/v3/view/zip_with.hpp.patch
+                || ${CMAKE_COMMAND} -E echo "range-v3 patch skipped"
+        )
+        FetchContent_MakeAvailable(range-v3)
+    endif ()
+endif ()
+target_link_libraries(SecUtility.Core INTERFACE range-v3::range-v3)
 
 if (TARGET gcem::gcem)
     message(STATUS "SecUtility will use the gcem target defined by ancestor project")

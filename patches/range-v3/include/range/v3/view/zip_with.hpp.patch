@@ -1,0 +1,39 @@
+--- zip_with.hpp  2022-06-22 05:35:11.000000000 +0800
++++ zip_with.hpp  2026-04-03 16:03:08.902411079 +0800
+@@ -282,7 +282,11 @@
+             {
+                 // Return the smallest distance (in magnitude) of any of the iterator
+                 // pairs. This is to accommodate zippers of sequences of different length.
+-                if(0 < std::get<0>(that.its_) - std::get<0>(its_))
++                auto first_size = std::get<0>(that.its_) - std::get<0>(its_);
++                if(first_size == 0)
++                    return static_cast<difference_type>(0);
++
++                if(0 < first_size)
+                     return tuple_foldl(
+                         tuple_transform(its_, that.its_, detail::distance_to),
+                         (std::numeric_limits<difference_type>::max)(),
+@@ -353,15 +357,20 @@
+             requires and_v<sized_range<Rngs const>...>)
+         {
+             using size_type = common_type_t<range_size_t<Rngs const>...>;
+-            return range_cardinality<iter_zip_with_view>::value >= 0
+-                       ? size_type{(
+-                             std::size_t)range_cardinality<iter_zip_with_view>::value}
+-                       : tuple_foldl(tuple_transform(rngs_,
++            if constexpr (range_cardinality<iter_zip_with_view>::value >= 0)
++            {
++                static_assert(range_cardinality<iter_zip_with_view>::value <= std::numeric_limits<size_type>::max());
++                return static_cast<size_type>(range_cardinality<iter_zip_with_view>::value);
++            }
++            else
++            {
++                return tuple_foldl(tuple_transform(rngs_,
+                                                      [](auto && r) -> size_type {
+                                                          return ranges::size(r);
+                                                      }),
+                                      (std::numeric_limits<size_type>::max)(),
+                                      detail::min_);
++            }
+         }
+     };
