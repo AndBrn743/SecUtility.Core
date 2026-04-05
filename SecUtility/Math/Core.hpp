@@ -446,10 +446,10 @@ namespace SecUtility::Math
 
 	template <typename... Scalars>
 	constexpr auto ArithmeticMean(Scalars&&... scalars) noexcept(
-	        noexcept((scalars + ...) / static_cast<decltype((scalars + ...))>(sizeof...(Scalars))))
+	        noexcept((scalars + ...) / static_cast<std::decay_t<decltype((scalars + ...))>>(sizeof...(Scalars))))
 	{
 		static_assert(sizeof...(Scalars) > 0);
-		return (scalars + ...) / static_cast<decltype((scalars + ...))>(sizeof...(Scalars));
+		return (scalars + ...) / static_cast<std::decay_t<decltype((scalars + ...))>>(sizeof...(Scalars));
 	}
 
 	template <typename... Scalars>
@@ -490,7 +490,7 @@ namespace SecUtility::Math
 	constexpr auto HarmonicMean(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
 	{
 		static_assert(sizeof...(Scalars) > 0);
-		using Scalar = decltype((scalars + ...));
+		using Scalar = std::decay_t<decltype((scalars + ...))>;
 		using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
 		assert(((scalars > 0) && ...) && "not validation for negatives and zeros");
 
