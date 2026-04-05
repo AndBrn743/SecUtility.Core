@@ -71,9 +71,19 @@ TEST_CASE("Rounding functions")
 {
 	SECTION("Ceil")
 	{
-		REQUIRE(Ceil(3.7) == Approx(std::ceil(3.7)));
-		REQUIRE(Ceil(-3.7) == Approx(std::ceil(-3.7)));
-		REQUIRE(Ceil(3.0) == Approx(std::ceil(3.0)));
+		REQUIRE(Ceil(3.7) == Approx(4));
+		REQUIRE(Ceil(-3.7) == Approx(-3));
+		REQUIRE(Ceil(3.0) == Approx(3));
+
+		STATIC_CHECK(std::is_same_v<decltype(Ceil(3.7)), double>);
+		STATIC_CHECK(Ceil(3.7) == 4);
+		STATIC_CHECK(Ceil(-3.7) == -3);
+		STATIC_CHECK(Ceil(3.0) == 3);
+
+		STATIC_CHECK(std::is_same_v<decltype(Ceil<long>(3.7)), long>);
+		STATIC_CHECK(Ceil<long>(3.7) == 4L);
+		STATIC_CHECK(Ceil<long>(-3.7) == -3L);
+		STATIC_CHECK(Ceil<long>(3.0) == 3L);
 
 		constexpr auto result = Ceil(2.3);
 		STATIC_CHECK(result == 3.0);
