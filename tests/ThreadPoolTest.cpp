@@ -229,7 +229,7 @@ TEST_CASE("ThreadPool exception handling", "[threadpool][exceptions]")
 		{
 			try
 			{
-				f.get();
+				(void)f.get();
 				++successCount;
 			}
 			catch (...)
@@ -706,7 +706,7 @@ TEST_CASE("ThreadPool benchmarks", "[threadpool][benchmark][!benchmark]")
 		}
 		for (auto& f : futures)
 		{
-			f.get();
+			(void)f.get();
 		}
 	};
 }
