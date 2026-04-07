@@ -138,7 +138,7 @@ namespace SecUtility::Math
 	{
 		/// Calculate upper incomplete gamma using series expansion, suitable for small x
 		template <typename T>
-#if __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		constexpr
 #endif
 		        T GammaUpperIncompleteWithSeriesExpansion(const T a, const T x) noexcept
@@ -171,7 +171,7 @@ namespace SecUtility::Math
 
 		/// Calculate upper incomplete gamma using continued fraction, suitable for large x
 		template <typename T>
-#if __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		constexpr
 #endif
 		        T GammaUpperIncompleteWithContinuedFraction(const T s, const T x) noexcept
@@ -216,7 +216,7 @@ namespace SecUtility::Math
 
 		/// Calculate upper incomplete gamma using series expansion, suitable for x >> s
 		template <typename T>
-#if __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 		constexpr
 #endif
 		        T GammaUpperIncompleteWithAsymptoticExpansion(const T s, const T x) noexcept
@@ -241,7 +241,7 @@ namespace SecUtility::Math
 	}
 
 	template <typename T>
-#if __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 	constexpr
 #endif
 	        SEC_FORCE_INLINE T GammaUpperIncomplete(const T a, const T x) noexcept
