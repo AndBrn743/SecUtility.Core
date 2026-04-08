@@ -3,12 +3,15 @@
 
 #pragma once
 
-#include <SecUtility/Diagnostic/Exception/Exception.hpp>
+#include <SecUtility/Diagnostic/Exception.hpp>
 #include <SecUtility/Misc/Random.hpp>
 #include <filesystem>
-#include <ios>
 #include <fstream>
+#include <ios>
 #include <regex>
+#include <sstream>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -94,11 +97,11 @@ namespace SecUtility::IO
 		/// </summary>
 		bool IsReadable() const
 		{
-			if (IsVoid())
+			if (IsVoid() || !Exist())
 			{
 				return false;
 			}
-			return std::ifstream(Name(), std::ios_base::binary).is_open();
+			return std::ifstream(Name(), std::ios::binary).is_open();
 		}
 
 		/// <summary>
@@ -113,7 +116,7 @@ namespace SecUtility::IO
 		/// </summary>
 		bool IsWritable() const
 		{
-			if (IsVoid())
+			if (IsVoid() || !Exist())
 			{
 				return false;
 			}
@@ -287,8 +290,8 @@ namespace SecUtility::IO
 		/// If no match is found, calls <paramref name="action"/>.
 		/// <paramref name="action"/> may either return a <c>Derived</c> instance or be [[noreturn]] (i.e. throw).
 		/// </summary>
-		template <typename Action>
-		static Derived LocateFromOrCustomAction(const List<std::string>& prefixes,
+		template <typename Prefixes, typename Action>
+		static Derived LocateFromOrCustomAction(const Prefixes& prefixes,
 												const std::regex& regex,
 												Action&& action)
 		{
@@ -333,8 +336,8 @@ namespace SecUtility::IO
 		/// If no match is found, calls <paramref name="action"/>.
 		/// <paramref name="action"/> may either return a <c>Derived</c> instance or be [[noreturn]] (i.e. throw).
 		/// </summary>
-		template <typename Action>
-		static Derived LocateFromOrCustomAction(const List<std::string>& prefixes,
+		template <typename Prefixes, typename Action>
+		static Derived LocateFromOrCustomAction(const Prefixes& prefixes,
 												const std::string& name,
 												Action&& action)
 		{
@@ -342,7 +345,7 @@ namespace SecUtility::IO
 			{
 				// A trailing '/' is added defensively; redundant slashes are harmless.
 				// NOLINTNEXTLINE(*-inefficient-string-concatenation)
-				if (Derived file(prefix + '/' + name); file.Exist())
+				if (Derived file(std::string{prefix} + '/' + name); file.Exist())
 				{
 					return file;
 				}
@@ -362,7 +365,8 @@ namespace SecUtility::IO
 		}
 
 		/// <summary>Returns the first match across prefixes, or <paramref name="defaultFile"/> if none found.</summary>
-		static Derived LocateFromOrDefault(const List<std::string>& prefixes,
+		template <typename Prefixes>
+		static Derived LocateFromOrDefault(const Prefixes& prefixes,
 										   const std::regex& regex,
 										   const Derived& defaultFile)
 		{
@@ -371,7 +375,8 @@ namespace SecUtility::IO
 
 		/// <summary>Returns the first exact-name match across prefixes, or <paramref name="defaultFile"/> if none
 		/// found.</summary>
-		static Derived LocateFromOrDefault(const List<std::string>& prefixes,
+		template <typename Prefixes>
+		static Derived LocateFromOrDefault(const Prefixes& prefixes,
 										   const std::string& name,
 										   const Derived& defaultFile)
 		{
@@ -379,7 +384,8 @@ namespace SecUtility::IO
 		}
 
 		/// <summary>Returns the first match across prefixes, or throws IOException if none found.</summary>
-		static Derived LocateFrom(const List<std::string>& prefixes, const std::regex& regex)
+		template <typename Prefixes>
+		static Derived LocateFrom(const Prefixes& prefixes, const std::regex& regex)
 		{
 			return LocateFromOrCustomAction(prefixes,
 											regex,
@@ -392,7 +398,8 @@ namespace SecUtility::IO
 		}
 
 		/// <summary>Returns the first exact-name match across prefixes, or throws IOException if none found.</summary>
-		static Derived LocateFrom(const List<std::string>& prefixes, const std::string& name)
+		template <typename Prefixes>
+		static Derived LocateFrom(const Prefixes& prefixes, const std::string& name)
 		{
 			return LocateFromOrCustomAction(prefixes,
 											name,
@@ -463,7 +470,8 @@ namespace SecUtility::IO
 		/// Formats a list of path prefixes as a human-readable set literal, e.g. { "a", "b" }.
 		/// Used in diagnostic exception messages.
 		/// </summary>
-		static std::string PathPrefixesToString(const std::vector<std::string>& prefixes)
+		template <typename Prefixes>
+		static std::string PathPrefixesToString(const Prefixes& prefixes)
 		{
 			std::ostringstream oss;
 			oss << "{ ";
