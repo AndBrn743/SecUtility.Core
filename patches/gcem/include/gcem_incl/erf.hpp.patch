@@ -1,0 +1,15 @@
+--- erf.hpp     2026-03-11 23:04:07.402087179 +0800
++++ erf.hpp     2026-04-08 14:27:13.326280160 +0800
+@@ -154,9 +154,9 @@
+             is_nan(x) ? \
+                 GCLIM<T>::quiet_NaN() :
+             // +/-Inf
+-            is_posinf(x) ? \
++            x > 10 ? \
+                 T(1) :
+-            is_neginf(x) ? \
++            x < -10 ? \
+                 - T(1) :
+             // indistinguishable from zero
+             GCLIM<T>::min() > abs(x) ? \
+

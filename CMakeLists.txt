@@ -138,8 +138,10 @@ else ()
                 SOURCE_DIR ${GcemSourceDir}
                 PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching GCEM..."
                 && cd ${GcemSourceDir}
-                && ${PATCH_EXECUTABLE} --forward --batch --silent  < ${CMAKE_CURRENT_SOURCE_DIR}/patches/gcem/CMakeLists.txt.patch
-                || ${CMAKE_COMMAND} -E echo "GCEM patch skipped")
+                && ${PATCH_EXECUTABLE} --forward --batch --silent < ${CMAKE_CURRENT_SOURCE_DIR}/patches/gcem/CMakeLists.txt.patch
+                && cd ${GcemSourceDir}/include/gcem_incl
+                && ${PATCH_EXECUTABLE} --forward --batch --silent < ${CMAKE_CURRENT_SOURCE_DIR}/patches/gcem/include/gcem_incl/erf.hpp.patch
+                || ${CMAKE_COMMAND} -E echo "GCEM erf.hpp patch skipped")
         FetchContent_MakeAvailable(gcem)
         add_library(gcem::gcem ALIAS gcem)
     endif ()
