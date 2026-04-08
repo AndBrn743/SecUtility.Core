@@ -55,7 +55,6 @@ namespace SecUtility::Math
 	SEC_EXPORT_MATH_FUNCTION(Erf, erf)
 	SEC_EXPORT_MATH_FUNCTION(Gamma, tgamma)
 	SEC_EXPORT_MATH_FUNCTION(LogGamma, lgamma)
-	SEC_EXPORT_MATH_FUNCTION(Beta, beta)
 
 	SEC_EXPORT_MATH_FUNCTION(GreatestCommonDivisor, gcd)
 	SEC_EXPORT_MATH_FUNCTION(LeastCommonMultiple, lcm)
@@ -80,22 +79,25 @@ namespace SecUtility::Math
 		return std::erfc(arg);
 	}
 
-	template <typename... Args>
+	template <typename Scalar>
+	SEC_FORCE_INLINE
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-	constexpr
+			constexpr
 #endif
-	        SEC_FORCE_INLINE auto LogBeta(Args&&... args) noexcept(
-	                noexcept(std::log(std::beta(std::forward<Args>(args)...))))
-	                -> decltype(std::log(std::beta(std::forward<Args>(args)...)))
+			Scalar LogBeta(const Scalar x,
+						   const Scalar y) noexcept(noexcept(LogGamma(x) + LogGamma(y) - LogGamma(x + y)))
 	{
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-		SEC_IF_CONSTEVAL
-		{
-			return gcem::lbeta(std::forward<Args>(args)...);
-		}
-#endif
+		return LogGamma(x) + LogGamma(y) - LogGamma(x + y);
+	}
 
-		return std::log(std::beta(std::forward<Args>(args)...));
+	template <typename Scalar>
+	SEC_FORCE_INLINE
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+			constexpr
+#endif
+			Scalar Beta(const Scalar x, const Scalar y) noexcept(noexcept(Exp(LogBeta(x, y))))
+	{
+		return Exp(LogBeta(x, y));
 	}
 
 	template <typename Scalar>
