@@ -286,6 +286,39 @@ TEMPLATE_TEST_CASE("RandomUnitaryWithGivenFirstColumn", "[template]", double, (s
 	}
 }
 
+TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryWithGivenFirstColumn", "[template]", double, (std::complex<double>))
+{
+	SECTION("Basic properties")
+	{
+		const int dim = 5;
+		Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Random(dim).normalized();
+
+		const auto m = FirstNColumnsOfRandomUnitaryWithGivenFirstColumn(firstCol, 3);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == 3);
+
+		REQUIRE(std::abs((m.col(0) - firstCol).norm()) < 1e-12);
+		CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(3, 3)).norm()) < 1e-12);
+	}
+
+	SECTION("Special case: first column is [1, 0, 0, ...]")
+	{
+		const int dim = 5;
+		Eigen::VectorX<TestType> firstCol(dim);
+		firstCol.setZero();
+		firstCol[0] = 1.0;
+
+		const auto m = FirstNColumnsOfRandomUnitaryWithGivenFirstColumn(firstCol, 3);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == 3);
+
+		// When first column is already [1, 0, 0, ...], should get identity
+		CHECK((m - Eigen::MatrixX<TestType>::Identity(dim, 3)).norm() < 1e-14);
+	}
+}
+
 
 TEST_CASE("RandomSparseMatrixInDenseForm")
 {

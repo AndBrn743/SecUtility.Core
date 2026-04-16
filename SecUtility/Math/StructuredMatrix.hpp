@@ -38,10 +38,12 @@ namespace SecUtility::Math
 	}
 
 	template <typename Scalar>
-	Eigen::MatrixX<Scalar> RandomUnitaryWithGivenFirstColumn(Eigen::VectorX<Scalar> vector)
+	Eigen::MatrixX<Scalar> FirstNColumnsOfRandomUnitaryWithGivenFirstColumn(Eigen::VectorX<Scalar> vector,
+	                                                                        const Eigen::Index cols)
 	{
-		const auto n = vector.size();
-		eigen_assert(n > 0);
+		eigen_assert(cols > 0);
+		const auto rows = vector.size();
+		eigen_assert(rows > 0);
 
 		vector.normalize();
 
@@ -52,20 +54,26 @@ namespace SecUtility::Math
 
 		if (squaredNorm < static_cast<typename Eigen::NumTraits<Scalar>::Real>(1e-14))
 		{
-			return Eigen::MatrixX<Scalar>::Identity(n, n);
+			return Eigen::MatrixX<Scalar>::Identity(rows, cols);
 		}
 
 		if constexpr (std::is_same_v<Scalar, typename Eigen::NumTraits<Scalar>::Real>)
 		{
-			return Eigen::MatrixX<Scalar>::Identity(n, n)
-			       - (static_cast<Scalar>(2) / squaredNorm) * (vector * vector.adjoint());
+			return Eigen::MatrixX<Scalar>::Identity(rows, cols)
+			       - (static_cast<Scalar>(2) / squaredNorm) * (vector * vector.head(cols).adjoint());
 		}
 		else
 		{
-			return (Eigen::MatrixX<Scalar>::Identity(n, n)
-			        - (static_cast<Scalar>(2) / squaredNorm) * (vector * vector.adjoint()))
+			return (Eigen::MatrixX<Scalar>::Identity(rows, cols)
+			        - (static_cast<Scalar>(2) / squaredNorm) * (vector * vector.head(cols).adjoint()))
 			       * alpha;
 		}
+	}
+
+	template <typename Scalar>
+	Eigen::MatrixX<Scalar> RandomUnitaryWithGivenFirstColumn(Eigen::VectorX<Scalar> vector)
+	{
+		return FirstNColumnsOfRandomUnitaryWithGivenFirstColumn(vector, vector.size());
 	}
 
 	template <typename Scalar>
