@@ -319,6 +319,19 @@ TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryWithGivenFirstColumn", "[templat
 	}
 }
 
+TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryMatrix", "[template]", double, (std::complex<double>))
+{
+	SECTION("Basic properties")
+	{
+		const auto m = FirstNColumnsOfRandomUnitaryMatrix<TestType>(5, 3);
+
+		REQUIRE(m.rows() == 5);
+		REQUIRE(m.cols() == 3);
+
+		CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(3, 3)).norm()) < 1e-12);
+	}
+}
+
 
 TEST_CASE("RandomSparseMatrixInDenseForm")
 {

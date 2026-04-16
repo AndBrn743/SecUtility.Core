@@ -83,6 +83,12 @@ namespace SecUtility::Math
 	}
 
 	template <typename Scalar>
+	Eigen::MatrixX<Scalar> FirstNColumnsOfRandomUnitaryMatrix(const Eigen::Index rows, const Eigen::Index cols)
+	{
+		return FirstNColumnsOfRandomUnitaryWithGivenFirstColumn<Scalar>(Eigen::VectorX<Scalar>::Random(rows), cols);
+	}
+
+	template <typename Scalar>
 	Eigen::MatrixX<Scalar> RandomPositiveDefiniteHermitianMatrix(const Eigen::Index dimension)
 	{
 		Eigen::VectorX<Scalar> eigenvalues =
