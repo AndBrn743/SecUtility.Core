@@ -21,7 +21,7 @@
 #endif
 
 #include <cmath>
-#include <complex>
+#include <SecUtility/Math/Complex.hpp>
 #include <utility>
 
 namespace SecUtility::Math
