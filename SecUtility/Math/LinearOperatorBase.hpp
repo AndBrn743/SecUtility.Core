@@ -34,8 +34,7 @@ struct Eigen::internal::generic_product_impl<SecUtility::Math::LinearOperatorBas
                                 generic_product_impl<SecUtility::Math::LinearOperatorBase<Derived>, Rhs>>
 {
 	/// <summary>
-	/// Calculates <code>dst += alpha * lhs * rhs</code>,
-	/// where <code>rhs</code> and <code>rhs</code> being a vector,
+	/// Calculates <code>dst += alpha * lhs * rhs</code>, where <code>rhs</code> being a vector,
 	/// <code>alpha</code> and <code>lhs</code> being scalar and matrix respectively.
 	/// </summary>
 	template <typename Dest>
@@ -83,7 +82,7 @@ public:
 	        noexcept(noexcept(static_cast<const Derived&>(*this).ApplyOn_Impl(vector)))
 	{
 		eigen_assert(vector.rows() == 1 || vector.cols() == 1);
-		eigen_assert(vector.size() == rows());
+		eigen_assert(vector.size() == cols());
 		return static_cast<const Derived&>(*this).ApplyOn_Impl(vector);
 	}
 
@@ -91,8 +90,9 @@ public:
 	/* CRTP VIRTUAL */ Eigen::VectorX<DestScalar> ExtractColumn(const Eigen::Index col) const
 	{
 		static_assert(std::is_convertible_v<Scalar, DestScalar>);
-		eigen_assert(col >= 0 && col < this->rows());
-		Eigen::VectorX<DestScalar> v = Eigen::VectorX<DestScalar>::Zero(this->rows());
+		eigen_assert(cols() != Eigen::Dynamic);  // can't extract a column if we don't know the size of a column
+		eigen_assert(col >= 0 && col < cols());
+		Eigen::VectorX<DestScalar> v = Eigen::VectorX<DestScalar>::Zero(cols());
 		v(col) = static_cast<DestScalar>(1);
 		return ApplyOn(v);
 	}
@@ -101,8 +101,9 @@ public:
 	/* CRTP VIRTUAL */ Eigen::MatrixX<DestScalar> ToDense() const
 	{
 		static_assert(std::is_convertible_v<Scalar, DestScalar>);
+		eigen_assert(rows() != Eigen::Dynamic && cols() != Eigen::Dynamic);
 		Eigen::MatrixX<DestScalar> dense(rows(), cols());
-		Eigen::VectorX<Scalar> v(rows());
+		Eigen::VectorX<Scalar> v(cols());
 
 		for (Eigen::Index i = 0; i < cols(); i++)
 		{
