@@ -87,10 +87,10 @@ namespace SecUtility::Math
 	template <typename Scalar>
 	SEC_FORCE_INLINE
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-			constexpr
+	        constexpr
 #endif
-			Scalar LogBeta(const Scalar x,
-						   const Scalar y) noexcept(noexcept(LogGamma(x) + LogGamma(y) - LogGamma(x + y)))
+	        Scalar LogBeta(const Scalar x,
+	                       const Scalar y) noexcept(noexcept(LogGamma(x) + LogGamma(y) - LogGamma(x + y)))
 	{
 		return LogGamma(x) + LogGamma(y) - LogGamma(x + y);
 	}
@@ -98,9 +98,9 @@ namespace SecUtility::Math
 	template <typename Scalar>
 	SEC_FORCE_INLINE
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
-			constexpr
+	        constexpr
 #endif
-			Scalar Beta(const Scalar x, const Scalar y) noexcept(noexcept(Exp(LogBeta(x, y))))
+	        Scalar Beta(const Scalar x, const Scalar y) noexcept(noexcept(Exp(LogBeta(x, y))))
 	{
 		return Exp(LogBeta(x, y));
 	}
