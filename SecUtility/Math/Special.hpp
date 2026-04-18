@@ -41,8 +41,14 @@ namespace SecUtility::Math
 	constexpr SEC_FORCE_INLINE auto SEC_NAME(Args&&... args) noexcept(                                                 \
 	        noexcept(std::C_NAME(std::forward<Args>(args)...))) -> decltype(std::C_NAME(std::forward<Args>(args)...))  \
 	{                                                                                                                  \
-		SEC_IF_CONSTEVAL return gcem::C_NAME(std::forward<Args>(args)...);                                             \
-		else return std::C_NAME(std::forward<Args>(args)...);                                                          \
+		SEC_IF_CONSTEVAL                                                                                               \
+		{                                                                                                              \
+			return gcem::C_NAME(std::forward<Args>(args)...);                                                          \
+		}                                                                                                              \
+		else                                                                                                           \
+		{                                                                                                              \
+			return std::C_NAME(std::forward<Args>(args)...);                                                           \
+		}                                                                                                              \
 	}
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
