@@ -197,12 +197,28 @@ namespace SecUtility::Math
 	// in-class definition, template type parameter will be automatically filled to match the template definition itself
 	// which is not we need in this case
 
+	// NOTE (GCC <= 15):
+	// GCC 15 and earlier reject trailing return types in lambdas that depend on
+	// captured variables, e.g.
+	// [f = Functor{operand._get_functor()}](const auto& vector)
+	//   -> Eigen::VectorX<typename Eigen::internal::traits<decltype(-f(vector))>::Scalar>
+	// {...}
+	// when `f` is captured.
+	//
+	// This appears to be a compiler bug. The C++ standard explicitly allows this;
+	// see e.g. N4950 and N5032 [expr.prim.lambda] Example 3, where a capture is
+	// used in a trailing return type. Although the example wasn't found in earlier
+	// C++ working drafts I do think this feature is always allowed.
+	//
+	// The issue is fixed in GCC 16 (unreleased at the time of writing).
+
 	template <typename Functor>
 	constexpr auto operator-(const MatrixFreeLinearOperator<Functor>& operand)
 	{
 		return MatrixFreeLinearOperator{
 		        [f = Functor{operand._get_functor()}](const auto& vector)
-		                -> Eigen::VectorX<typename Eigen::internal::traits<decltype(-f(vector))>::Scalar>
+		                -> Eigen::VectorX<
+		                        typename Eigen::internal::traits<decltype(-std::declval<Functor>()(vector))>::Scalar>
 		        { return -f(vector); },
 		        operand.rows(),
 		        operand.cols()};
@@ -216,7 +232,9 @@ namespace SecUtility::Math
 
 		return MatrixFreeLinearOperator{
 		        [lf = LhsFunctor{lhs._get_functor()}, rf = RhsFunctor{rhs._get_functor()}](const auto& vector)
-		                -> Eigen::VectorX<typename Eigen::internal::traits<decltype(lf(vector) + rf(vector))>::Scalar>
+		                -> Eigen::VectorX<typename Eigen::internal::traits<decltype(std::declval<LhsFunctor>()(vector)
+		                                                                            + std::declval<RhsFunctor>()(
+		                                                                                    vector))>::Scalar>
 		        { return lf(vector) + rf(vector); },
 		        lhs.rows(),
 		        rhs.cols()};
@@ -230,7 +248,9 @@ namespace SecUtility::Math
 
 		return MatrixFreeLinearOperator{
 		        [lf = LhsFunctor{lhs._get_functor()}, rf = RhsFunctor{rhs._get_functor()}](const auto& vector)
-		                -> Eigen::VectorX<typename Eigen::internal::traits<decltype(lf(vector) - rf(vector))>::Scalar>
+		                -> Eigen::VectorX<typename Eigen::internal::traits<decltype(std::declval<LhsFunctor>()(vector)
+		                                                                            - std::declval<RhsFunctor>()(
+		                                                                                    vector))>::Scalar>
 		        { return lf(vector) - rf(vector); },
 		        lhs.rows(),
 		        rhs.cols()};
@@ -244,8 +264,8 @@ namespace SecUtility::Math
 
 		return MatrixFreeLinearOperator{
 		        [lf = LhsFunctor{lhs._get_functor()}, rf = RhsFunctor{rhs._get_functor()}](const auto& vector)
-		                -> Eigen::VectorX<typename Eigen::internal::traits<decltype(lf(rf(vector)))>::Scalar>
-		        { return lf(rf(vector)); },
+		                -> Eigen::VectorX<typename Eigen::internal::traits<decltype(std::declval<LhsFunctor>()(
+		                        std::declval<RhsFunctor>()(vector)))>::Scalar> { return lf(rf(vector)); },
 		        lhs.rows(),
 		        rhs.cols()};
 	}
@@ -273,11 +293,11 @@ namespace SecUtility::Math
 	{
 		static_assert(SecUtility::Math::IsScalar<std::decay_t<OtherScalar>>);
 
-		return MatrixFreeLinearOperator{
-		        [lf = LhsFunctor{linearOperator._get_functor()}, scalar](const auto& vector)
-		                -> Eigen::VectorX<typename Eigen::internal::traits<decltype(lf(vector) / scalar)>::Scalar>
-		        { return lf(vector) / scalar; },
-		        linearOperator.rows(),
-		        linearOperator.cols()};
+		return MatrixFreeLinearOperator{[lf = LhsFunctor{linearOperator._get_functor()}, scalar](const auto& vector)
+		                                        -> Eigen::VectorX<typename Eigen::internal::traits<
+		                                                decltype(std::declval<LhsFunctor>()(vector) / scalar)>::Scalar>
+		                                { return lf(vector) / scalar; },
+		                                linearOperator.rows(),
+		                                linearOperator.cols()};
 	}
 }
