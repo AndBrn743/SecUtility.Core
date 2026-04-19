@@ -20,8 +20,8 @@
 #endif
 #endif
 
-#include <cmath>
 #include <SecUtility/Math/Complex.hpp>
+#include <cmath>
 #include <utility>
 
 namespace SecUtility::Math
@@ -85,6 +85,7 @@ namespace SecUtility::Math
 #undef SEC_DEFINE_MATH_ROUNDING_FUNCTION_WITH_CAST
 
 	SEC_EXPORT_MATH_FUNCTION(Exp, exp)
+	SEC_EXPORT_MATH_FUNCTION(Expm1, expm1)
 	SEC_EXPORT_MATH_FUNCTION(Log, log)
 	SEC_EXPORT_MATH_FUNCTION(Log1p, log1p)
 	SEC_EXPORT_MATH_FUNCTION(Log2, log2)
