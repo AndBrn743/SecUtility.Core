@@ -113,6 +113,20 @@ namespace SecUtility::Math
 #undef SEC_EXPORT_CONSTEXPR_MATH_FUNCTION_WITH_FALLBACK
 #undef SEC_EXPORT_MATH_FUNCTION
 
+	/// Returns log(1 - exp(logP))
+	template <typename T>
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE T Log1mExp(T logP) noexcept
+	{
+		return logP < -0.6931471805599453 ? Log(1 - Exp(logP)) : Log(-Expm1(logP));
+	}
+
+	/// Returns log(1 + exp(logQ))
+	template <typename T>
+	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE T Log1pExp(T logQ) noexcept
+	{
+		return logQ > 0 ? logQ + Log(1 + Exp(-logQ)) : Log(1 + Exp(logQ));
+	}
+
 	template <typename Arg>
 	constexpr SEC_FORCE_INLINE auto Abs(Arg&& arg) noexcept
 	        -> std::enable_if_t<std::is_arithmetic_v<std::decay_t<Arg>>, std::decay_t<Arg>>
