@@ -6,3 +6,5 @@
 
 #include <SecUtility/Math/Special/Common.hpp>
 #include <SecUtility/Math/Special/Digamma.hpp>
+#include <SecUtility/Math/Special/Factorial.hpp>
+#include <SecUtility/Math/Special/Gamma.hpp>
