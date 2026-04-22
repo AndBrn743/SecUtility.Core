@@ -294,6 +294,12 @@ namespace SecUtility::Math
 		return !IsOdd(n);
 	}
 
+	template <typename Scalar>
+	constexpr SEC_FORCE_INLINE bool IsNan(const Scalar x) noexcept
+	{
+		return x != x;
+	}
+
 	template <typename Integer>
 	constexpr SEC_FORCE_INLINE bool IsPowerOfTwo(const Integer n) noexcept
 	{
