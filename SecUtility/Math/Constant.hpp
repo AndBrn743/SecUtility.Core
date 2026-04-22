@@ -15,6 +15,9 @@ namespace SecUtility::Math::Constant
 	inline constexpr Scalar Pi = 3.141592653589793238462643383279502884L;
 
 	template <typename Scalar>
+	inline constexpr Scalar EulerGamma = 0.57721566490153286060651209008240L;
+
+	template <typename Scalar>
 	inline constexpr Scalar GoldenRatio = 1.618033988749894848204586834365638118L;
 
 	template <typename Scalar>
