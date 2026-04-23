@@ -8,3 +8,4 @@
 #include <SecUtility/Math/Special/Digamma.hpp>
 #include <SecUtility/Math/Special/Factorial.hpp>
 #include <SecUtility/Math/Special/Gamma.hpp>
+#include <SecUtility/Math/Special/HarmonicNumber.hpp>
