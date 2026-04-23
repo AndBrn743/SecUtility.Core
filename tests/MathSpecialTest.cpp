@@ -585,3 +585,81 @@ TEST_CASE("GammaRegularizedQ")
 	}
 }
 
+TEST_CASE("GammaUpperIncomplete")
+{
+	SECTION("Typical")
+	{
+		CHECK(GammaUpperIncomplete(0.5, 0.) == Catch::Approx(std::tgamma(0.5)));
+		CHECK(GammaUpperIncomplete(1.0, 0.) == Catch::Approx(std::tgamma(1.0)));
+		CHECK(GammaUpperIncomplete(2.0, 0.) == Catch::Approx(std::tgamma(2.0)));
+		CHECK(GammaUpperIncomplete(5.0, 0.) == Catch::Approx(std::tgamma(5.0)));
+		CHECK(GammaUpperIncomplete(10.0, 0.) == Catch::Approx(std::tgamma(10.0)));
+		CHECK(GammaUpperIncomplete(50.0, 0.) == Catch::Approx(std::tgamma(50.0)));
+
+		CHECK(GammaUpperIncomplete(0.5, 0.1) == Catch::Approx(1.160462484793744));
+		CHECK(GammaUpperIncomplete(1.0, 0.1) == Catch::Approx(0.90483741803596));
+		CHECK(GammaUpperIncomplete(2.0, 0.1) == Catch::Approx(0.995321159839556));
+		CHECK(GammaUpperIncomplete(5.0, 0.1) == Catch::Approx(23.9999981597276));
+		CHECK(GammaUpperIncomplete(10.0, 0.1) == Catch::Approx(362880.));
+		CHECK(GammaUpperIncomplete(50.0, 0.1) == Catch::Approx(6.082818640342676e+62));
+
+		CHECK(GammaUpperIncomplete(0.5, 1.) == Catch::Approx(0.278805585280662));
+		CHECK(GammaUpperIncomplete(1.0, 1.) == Catch::Approx(0.3678794411714423));
+		CHECK(GammaUpperIncomplete(2.0, 1.) == Catch::Approx(0.7357588823428847));
+		CHECK(GammaUpperIncomplete(5.0, 1.) == Catch::Approx(23.91216367614375));
+		CHECK(GammaUpperIncomplete(10.0, 1.) == Catch::Approx(362879.9595659225));
+		CHECK(GammaUpperIncomplete(50.0, 1.) == Catch::Approx(6.082818640342676e+62));
+
+		CHECK(GammaUpperIncomplete(0.5, 10.) == Catch::Approx(0.00001372626623544985));
+		CHECK(GammaUpperIncomplete(1.0, 10.) == Catch::Approx(0.00004539992976248485));
+		CHECK(GammaUpperIncomplete(2.0, 10.) == Catch::Approx(0.0004993992273873335));
+		CHECK(GammaUpperIncomplete(5.0, 10.) == Catch::Approx(0.7020645138470658));
+		CHECK(GammaUpperIncomplete(10.0, 10.) == Catch::Approx(166173.5347875457));
+		CHECK(GammaUpperIncomplete(50.0, 10.) == Catch::Approx(6.082818640342676e+62));
+	}
+	SECTION("Large a (overflow & scaling issues)")
+	{
+		CHECK(GammaUpperIncomplete(100., 50.) == Catch::Approx(9.33262154140792e+155));
+		CHECK(GammaUpperIncomplete(100., 100.) == Catch::Approx(4.542198120862669e+155));
+		CHECK(GammaUpperIncomplete(100., 200.) == Catch::Approx(1.720836160087029e+141));
+
+		CHECK(GammaUpperIncomplete(100., 1.) == Catch::Approx(9.33262154439441e+155));
+		CHECK(GammaUpperIncomplete(150., 1.) == Catch::Approx(3.80892263763057e+260));
+		CHECK(GammaUpperIncomplete(170., 1.) == Catch::Approx(4.269068009004707e+304));
+		CHECK(GammaUpperIncomplete(200., 1.) == std::numeric_limits<double>::infinity());
+	}
+	SECTION("Underflow")
+	{
+		CHECK(GammaUpperIncomplete(.1, 700.) < std::numeric_limits<double>::epsilon());
+		CHECK(GammaUpperIncomplete(.1, 1e+10) < std::numeric_limits<double>::epsilon());
+		CHECK(GammaUpperIncomplete(.1, 1e+100) < std::numeric_limits<double>::epsilon());
+		CHECK(GammaUpperIncomplete(.1, 1e+308) < std::numeric_limits<double>::epsilon());
+
+		CHECK(GammaUpperIncomplete(1., 700.) < std::numeric_limits<double>::epsilon());
+		CHECK(GammaUpperIncomplete(1., 1e+10) < std::numeric_limits<double>::epsilon());
+		CHECK(GammaUpperIncomplete(1., 1e+100) < std::numeric_limits<double>::epsilon());
+		CHECK(GammaUpperIncomplete(1., 1e+308) < std::numeric_limits<double>::epsilon());
+	}
+	SECTION("Small a")
+	{
+		CHECK(GammaUpperIncomplete(1e-15, 1e-8) == Catch::Approx(17.84346508905066));
+		CHECK(GammaUpperIncomplete(1e-10, 1e-8) == Catch::Approx(17.84345817565918));
+		CHECK(GammaUpperIncomplete(1e-5, 1e-8) == Catch::Approx(17.84177847622777));
+		CHECK(GammaUpperIncomplete(1e-3, 1e-8) == Catch::Approx(17.67582947441952));
+
+		CHECK(GammaUpperIncomplete(1e-15, 0.1) == Catch::Approx(1.82292395841939));
+		CHECK(GammaUpperIncomplete(1e-10, 0.1) == Catch::Approx(1.822921752929687));
+		CHECK(GammaUpperIncomplete(1e-5, 0.1) == Catch::Approx(1.822904105632915));
+		CHECK(GammaUpperIncomplete(1e-3, 0.1) == Catch::Approx(1.820940381128025));
+
+		CHECK(GammaUpperIncomplete(1e-15, 1.) == Catch::Approx(0.2193839343955203));
+		CHECK(GammaUpperIncomplete(1e-10, 1.) == Catch::Approx(0.2193839343955203));
+		CHECK(GammaUpperIncomplete(1e-5, 1.) == Catch::Approx(0.2193849127797876));
+		CHECK(GammaUpperIncomplete(1e-3, 1.) == Catch::Approx(0.219481813207608));
+
+		CHECK(GammaUpperIncomplete(1e-15, 10.) == Catch::Approx(4.156968929685338e-6));
+		CHECK(GammaUpperIncomplete(1e-10, 10.) == Catch::Approx(4.156968930677779e-6));
+		CHECK(GammaUpperIncomplete(1e-5, 10.) == Catch::Approx(4.157068176350878e-6));
+		CHECK(GammaUpperIncomplete(1e-3, 10.) == Catch::Approx(4.166905347305812e-6));
+	}
+}
