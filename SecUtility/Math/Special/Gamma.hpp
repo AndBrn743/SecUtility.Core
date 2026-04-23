@@ -74,22 +74,6 @@ namespace SecUtility::Math
 		}
 
 		template <typename T>
-		SEC_MATH_CONDITIONAL_CONSTEXPR T GammaQ_Temme(const T a, const T x) noexcept
-		{
-			const T lambda = x / a;
-			const T logLambda = Log(lambda);
-
-			const T sign = lambda >= 1 ? 1 : -1;
-
-			const T eta = sign * Sqrt(2 * (lambda - 1 - logLambda));
-
-			const T z = eta * Sqrt(a / 2);
-
-			// leading-order Temme approximation
-			return T(0.5) * Erfc(z);
-		}
-
-		template <typename T>
 		SEC_MATH_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE T LogGammaQ(const T a, const T x, const T logGammaA) noexcept
 		{
 			if (x < 0 || a <= 0)
