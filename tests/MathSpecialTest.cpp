@@ -7,13 +7,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <SecUtility/Math/Special.hpp>
-#include <SecUtility/Misc/Random.hpp>
 
 using namespace SecUtility::Math;
 using Catch::Approx;
 
 TEST_CASE("Erf function")
 {
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 	static constexpr std::array TestArgs{
 	        -400., -300., -200., -100., -50., -10., -5.,  -2.,  -1.7 - 1.6, -1.5, -1.4 - 1.3, -1.2, -1.1 - 1.0,
 	        -0.9,  -0.8,  -0.7,  -0.6,  -0.5, -0.4, -0.3, -0.2, -0.1,       -0.,  400.,       300., 200.,
@@ -37,10 +37,14 @@ TEST_CASE("Erf function")
 	{
 		CHECK(compileTimeResult[i] == Approx(std::erf(TestArgs[i])).margin(std::numeric_limits<double>::epsilon()));
 	}
+#else
+	SKIP("Test requires C++20 or compiler magic (GCC 9 or higher, Clang 9 or higher, MSVC 19.25 or higher)");
+#endif
 }
 
 TEST_CASE("Erfc function")
 {
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 	static constexpr std::array TestArgs{
 	        -400., -300., -200., -100., -50., -10., -5.,  -2.,  -1.7 - 1.6, -1.5, -1.4 - 1.3, -1.2, -1.1 - 1.0,
 	        -0.9,  -0.8,  -0.7,  -0.6,  -0.5, -0.4, -0.3, -0.2, -0.1,       -0.,  400.,       300., 200.,
@@ -64,10 +68,14 @@ TEST_CASE("Erfc function")
 	{
 		CHECK(compileTimeResult[i] == Approx(std::erfc(TestArgs[i])).margin(std::numeric_limits<double>::epsilon()));
 	}
+#else
+	SKIP("Test requires C++20 or compiler magic (GCC 9 or higher, Clang 9 or higher, MSVC 19.25 or higher)");
+#endif
 }
 
 TEST_CASE("Gamma")
 {
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 	SECTION("Positive half integers")
 	{
 		static constexpr std::array References{
@@ -189,4 +197,7 @@ TEST_CASE("Gamma")
 			CHECK(GammaOfHalfInteger(-i - 0.5) == Approx(References[i]));
 		}
 	}
+#else
+	SKIP("Test requires C++20 or compiler magic (GCC 9 or higher, Clang 9 or higher, MSVC 19.25 or higher)");
+#endif
 }
