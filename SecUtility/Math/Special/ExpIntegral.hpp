@@ -49,7 +49,7 @@ namespace SecUtility::Math
 		}
 		else
 		{
-			T result = (Pow(x, N - 1) / Factorial(N - 1)) * (-Log(x) + Math::Digamma<T>(N));
+			T result = (Pow(-x, N - 1) / Factorial(N - 1)) * (-Log(x) + Math::Digamma<T>(N));
 
 			T powerOfMinusXToMOverFactorialOfM = 1;
 			for (int m = 0; m < 200; m++)
