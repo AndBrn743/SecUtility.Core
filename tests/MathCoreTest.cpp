@@ -2,8 +2,8 @@
 // Created by Andy on 3/6/2026.
 //
 
-#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Misc/Random.hpp>
@@ -916,8 +916,8 @@ TEST_CASE("GeometricMean")
 {
 	SECTION("Basic functionality")
 	{
-		REQUIRE(GeometricMean(1, 4) == Approx(2.0)); // sqrt(1*4) = 2
-		REQUIRE(GeometricMean(2, 8) == Approx(4.0)); // sqrt(2*8) = 4
+		REQUIRE(GeometricMean(1, 4) == Approx(2.0));  // sqrt(1*4) = 2
+		REQUIRE(GeometricMean(2, 8) == Approx(4.0));  // sqrt(2*8) = 4
 		REQUIRE(GeometricMean(1., 2, 4, 8) == Approx(Sqrt(Sqrt(1 * 2 * 4 * 8))));
 	}
 
@@ -936,8 +936,8 @@ TEST_CASE("GeometricMean")
 
 	SECTION("Three values (cube root)")
 	{
-		REQUIRE(GeometricMean(1, 8, 27) == Approx(6.0)); // cbrt(216) = 6
-		REQUIRE(GeometricMean(2, 4, 8) == Approx(4.0)); // cbrt(64) = 4
+		REQUIRE(GeometricMean(1, 8, 27) == Approx(6.0));  // cbrt(216) = 6
+		REQUIRE(GeometricMean(2, 4, 8) == Approx(4.0));   // cbrt(64) = 4
 	}
 
 	SECTION("Many values (power)")
@@ -970,8 +970,8 @@ TEST_CASE("HarmonicMean")
 	SECTION("Basic functionality")
 	{
 		REQUIRE(HarmonicMean(1., 1) == Approx(1));
-		REQUIRE(HarmonicMean(1., 2) == Approx(2 * 2. /3.)); // 2/(1+0.5) = 4/3
-		REQUIRE(HarmonicMean(2., 4) == Approx(2 * 8. / 6.)); // 2/(0.5+0.25) = 8/3
+		REQUIRE(HarmonicMean(1., 2) == Approx(2 * 2. / 3.));  // 2/(1+0.5) = 4/3
+		REQUIRE(HarmonicMean(2., 4) == Approx(2 * 8. / 6.));  // 2/(0.5+0.25) = 8/3
 	}
 
 	SECTION("Speed averaging")
@@ -1031,5 +1031,161 @@ TEST_CASE("Mean functions edge cases")
 		STATIC_CHECK(GeometricMean(1, 4) > 1.0 && GeometricMean(1, 4) < 3.0);
 
 		STATIC_CHECK(HarmonicMean(5) == 5);
+	}
+}
+
+// ============================================================================
+// PowInt Function
+// ============================================================================
+
+TEST_CASE("PowInt function")
+{
+	SECTION("Basic positive exponents")
+	{
+		REQUIRE(PowInt(2.0, 3) == Approx(8.0));
+		REQUIRE(PowInt(3.0, 4) == Approx(81.0));
+		REQUIRE(PowInt(5.0, 2) == Approx(25.0));
+		REQUIRE(PowInt(1.5, 3) == Approx(3.375));
+		REQUIRE(PowInt(2.0, 10) == Approx(1024.0));
+	}
+
+	SECTION("Zero exponent")
+	{
+		REQUIRE(PowInt(2.0, 0) == 1.0);
+		REQUIRE(PowInt(0.0, 0) == 1.0);
+		REQUIRE(PowInt(-5.0, 0) == 1.0);
+		REQUIRE(PowInt(100.0, 0) == 1.0);
+
+		constexpr auto result_ct = PowInt(5.0, 0);
+		const auto result_rt = PowInt(5.0, 0);  // NOLINT
+		STATIC_CHECK(result_ct == 1.0);
+		CHECK(result_rt == 1.0);
+	}
+
+	SECTION("Exponent of 1")
+	{
+		REQUIRE(PowInt(2.0, 1) == Approx(2.0));
+		REQUIRE(PowInt(-3.0, 1) == Approx(-3.0));
+		REQUIRE(PowInt(0.0, 1) == Approx(0.0));
+	}
+
+	SECTION("Negative exponents")
+	{
+		REQUIRE(PowInt(2.0, -1) == Approx(0.5));
+		REQUIRE(PowInt(2.0, -2) == Approx(0.25));
+		REQUIRE(PowInt(10.0, -3) == Approx(0.001));
+		REQUIRE(PowInt(3.0, -2) == Approx(1.0 / 9.0));
+	}
+
+	SECTION("Negative bases")
+	{
+		REQUIRE(PowInt(-2.0, 2) == Approx(4.0));
+		REQUIRE(PowInt(-2.0, 3) == Approx(-8.0));
+		REQUIRE(PowInt(-3.0, 4) == Approx(81.0));
+		REQUIRE(PowInt(-1.5, 3) == Approx(-3.375));
+	}
+
+	SECTION("Fractional bases")
+	{
+		REQUIRE(PowInt(0.5, 2) == Approx(0.25));
+		REQUIRE(PowInt(1.5, 3) == Approx(3.375));
+		REQUIRE(PowInt(2.5, 4) == Approx(39.0625));
+	}
+
+	SECTION("Large exponents (uses std::pow)")
+	{
+		REQUIRE(PowInt(2.0, 40) == Approx(std::pow(2.0, 40)));
+		REQUIRE(PowInt(1.5, 50) == Approx(std::pow(1.5, 50)));
+		REQUIRE(PowInt(2.0, -40) == Approx(std::pow(2.0, -40)));
+	}
+
+	SECTION("Constexpr evaluation")
+	{
+		constexpr auto result1 = PowInt(2.0, 10);
+		STATIC_CHECK(result1 == 1024.0);
+
+		constexpr auto result2 = PowInt(3.0, 5);
+		STATIC_CHECK(result2 == 243.0);
+
+		constexpr auto result3 = PowInt(2.0, -3);
+		STATIC_CHECK(result3 > 0.124 && result3 < 0.126);
+
+		// Runtime version
+		const auto result_rt = PowInt(5.0, 3);  // NOLINT
+		CHECK(result_rt == Approx(125.0));
+	}
+
+	SECTION("Different scalar types")
+	{
+		STATIC_CHECK(PowInt(2.0f, 5) == 32.0f);
+		STATIC_CHECK(PowInt(2.0, 10) == 1024.0);
+		STATIC_CHECK(PowInt(2.0L, 8) == 256.0L);
+	}
+
+	SECTION("Different exponent types")
+	{
+		REQUIRE(PowInt(2.0, 3) == Approx(8.0));
+		REQUIRE(PowInt(2.0, 3LL) == Approx(8.0));
+		REQUIRE(PowInt(2.0, 3u) == Approx(8.0));
+		REQUIRE(PowInt(2.0, std::int8_t{3}) == Approx(8.0));
+	}
+
+	SECTION("Agreement with std::pow")
+	{
+		for (int i = -10; i <= 10; i++)
+		{
+			REQUIRE(PowInt(2.0, i) == Approx(std::pow(2.0, i)));
+			REQUIRE(PowInt(1.5, i) == Approx(std::pow(1.5, i)));
+			REQUIRE(PowInt(3.0, i) == Approx(std::pow(3.0, i)));
+		}
+	}
+
+	SECTION("Edge cases")
+	{
+		// Zero base with positive exponent
+		REQUIRE(PowInt(0.0, 5) == Approx(0.0));
+
+		// Zero base with negative exponent (should be infinity)
+		REQUIRE(std::isinf(PowInt(0.0, -1)));
+
+		// One as base
+		REQUIRE(PowInt(1.0, 100) == Approx(1.0));
+		REQUIRE(PowInt(1.0, -50) == Approx(1.0));
+
+		// Negative one with even/odd exponents
+		REQUIRE(PowInt(-1.0, 4) == Approx(1.0));
+		REQUIRE(PowInt(-1.0, 5) == Approx(-1.0));
+	}
+
+	SECTION("Integer bases")
+	{
+		STATIC_CHECK(PowInt(2, 5) == 32);
+		STATIC_CHECK(PowInt(3, 3) == 27);
+		STATIC_CHECK(PowInt(5, 4) == 625);
+		STATIC_CHECK(PowInt(10, 3) == 1000);
+
+		// With negative exponent (should not automatically return floating point)
+		{
+			constexpr auto result = PowInt(2, -2);
+			STATIC_CHECK(result == 0);
+		}
+		{
+			constexpr auto result = PowInt<double>(2, -2);
+			STATIC_CHECK(Abs(result - 0.25) < 1e-9);
+		}
+	}
+
+	SECTION("Performance-critical small exponents")
+	{
+		// These should use the fast path (exponentiation by squaring)
+		STATIC_CHECK(PowInt(2.0, 2) == 4.0);
+		STATIC_CHECK(PowInt(2.0, 3) == 8.0);
+		STATIC_CHECK(PowInt(2.0, 4) == 16.0);
+		STATIC_CHECK(PowInt(2.0, 5) == 32.0);
+		STATIC_CHECK(PowInt(2.0, 6) == 64.0);
+		STATIC_CHECK(PowInt(2.0, 7) == 128.0);
+		STATIC_CHECK(PowInt(2.0, 8) == 256.0);
+		STATIC_CHECK(PowInt(2.0, 16) == 65536.0);
+		STATIC_CHECK(PowInt(2.0, 32) == 4294967296.0);
 	}
 }

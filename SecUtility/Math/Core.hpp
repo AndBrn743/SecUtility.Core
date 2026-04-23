@@ -330,6 +330,45 @@ namespace SecUtility::Math
 		return exponent % 2 == 0 ? 1 : -1;
 	}
 
+	template <typename Scalar, typename Int>
+	constexpr Scalar PowInt(Scalar base, Int exponent) noexcept
+	{
+		static_assert(std::is_integral_v<Int>);
+
+		if (exponent == 0)
+		{
+			return Scalar{1};
+		}
+
+		SEC_IF_NOT_CONSTEVAL
+		{
+			if (Abs(exponent) > 32)
+			{
+				return std::pow(base, exponent);
+			}
+		}
+
+		if (exponent < 0)
+		{
+			base = Scalar{1} / base;
+			exponent = -exponent;
+		}
+
+		auto result = Scalar{1};
+		while (exponent != 0)
+		{
+			if (exponent % 2 != 0)
+			{
+				result *= base;
+			}
+
+			base *= base;
+			exponent >>= 1;
+		}
+
+		return result;
+	}
+
 	// ReSharper disable once CppTemplateParameterNeverUsed
 	template <typename Comp, typename Arg>
 	constexpr SEC_FORCE_INLINE decltype(auto) Extrema(Arg&& arg) noexcept
