@@ -3,9 +3,10 @@
 
 #pragma once
 
-#include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/ContinuedFraction.hpp>
+#include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/Special/Common.hpp>
+#include <SecUtility/Math/Special/ExpIntegral.hpp>
 #include <SecUtility/Math/Special/Factorial.hpp>
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
@@ -101,11 +102,10 @@ namespace SecUtility::Math
 				return T{0};
 			}
 
-			// --- Temme transition region ---
-			// if (a > 20 && Abs(x - a) < 0.3 * a)
-			// {
-			// 	return Log(GammaQ_Temme(a, x));
-			// }
+			if (a < 1e-6)
+			{
+				return -x + Log1p(a * Math::ExpIntegral<1>(x));
+			}
 
 			// --- asymptotic (large x) ---
 			if (x > a + 50)
@@ -168,15 +168,13 @@ namespace SecUtility::Math
 		{
 			return T{1};  // i'm not sure if compiler could optimize Exp(0) to 1
 		}
-		else
-		{
-			if (a > 20 && Abs(x - a) < 0.3 * a)
-			{
-				return GammaQ_Temme(a, x);
-			}
 
-			return Exp(LogGammaQ(a, x));
+		if (a < 1e-6)
+		{
+			return Exp(-x) * (1 + a * Math::ExpIntegral<1>(x));
 		}
+
+		return Exp(LogGammaQ(a, x));
 	}
 
 
@@ -191,6 +189,11 @@ namespace SecUtility::Math
 		if (x == 0)
 		{
 			return Gamma(a);
+		}
+
+		if (a < 1e-6)
+		{
+			return Math::ExpIntegral<1>(x);
 		}
 		else  // NOLINT
 		{
