@@ -86,11 +86,6 @@ namespace SecUtility::Math
 				return T{0};
 			}
 
-			if (a < 1e-6)
-			{
-				return -x + Log1p(a * Math::ExpIntegral<1>(x));
-			}
-
 			// --- asymptotic (large x) ---
 			if (x > a + 50)
 			{
@@ -151,11 +146,6 @@ namespace SecUtility::Math
 		if (x == 0)
 		{
 			return T{1};  // i'm not sure if compiler could optimize Exp(0) to 1
-		}
-
-		if (a < 1e-6)
-		{
-			return Exp(-x) * (1 + a * Math::ExpIntegral<1>(x));
 		}
 
 		return Exp(LogGammaQ(a, x));
