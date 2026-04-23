@@ -203,13 +203,13 @@ namespace SecUtility::Math
 	/// Returns the Gamma function value of arg which is a positive half integer
 	/// </summary>
 	/// <remarks>
-	/// For half integers be -62.5, -61.5, ..., -0.5, 0.5, 1.5, ..., 63.5 and compile-time computed value will be
-	/// returned, otherwise a runtime calculation will be performed
+	/// If the half integers was -62.5, -61.5, ..., -0.5, 0.5, 1.5, ..., or 63.5, the compile-time computed value will
+	/// be returned, otherwise a runtime calculation will be performed
 	/// </remarks>
 	template <typename Scalar>
-	constexpr SEC_FORCE_INLINE Scalar GammaOfHalfInteger(const Scalar halfInteger) noexcept
+	SEC_MATH_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE Scalar GammaOfHalfInteger(const Scalar halfInteger) noexcept
 	{
-		const auto floor = static_cast<int>(Floor(halfInteger));
+		const auto floor = Floor<int>(halfInteger);
 
 		if (floor >= 0 && static_cast<std::size_t>(floor) < Detail::Gamma::GammaOfPositiveHalfIntegers<Scalar>.size())
 		{
