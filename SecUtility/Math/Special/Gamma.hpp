@@ -4,6 +4,7 @@
 #pragma once
 
 #include <SecUtility/Math/Core.hpp>
+#include <SecUtility/Math/ContinuedFraction.hpp>
 #include <SecUtility/Math/Special/Common.hpp>
 #include <SecUtility/Math/Special/Factorial.hpp>
 
@@ -21,42 +22,10 @@ namespace SecUtility::Math
 		template <typename T>
 		SEC_MATH_CONDITIONAL_CONSTEXPR T LogGammaQ_ContinuedFraction(const T a, const T x, const T logGammaA) noexcept
 		{
-			constexpr T eps = std::numeric_limits<T>::epsilon();
-			constexpr T tiny = std::numeric_limits<T>::min() * 1e+3;
-
-			T b = x + 1 - a;
-			T c = 1 / tiny;
-			T d = 1 / b;
-			T h = d;
-
-			for (int i = 1; i < 200; ++i)
-			{
-				T an = -i * (i - a);
-
-				b += 2;
-				d = an * d + b;
-				if (Abs(d) < tiny)
-				{
-					d = tiny;
-				}
-
-				c = b + an / c;
-				if (Abs(c) < tiny)
-				{
-					c = tiny;
-				}
-
-				d = 1 / d;
-				T delta = d * c;
-				h *= delta;
-
-				if (Abs(delta - 1) < eps)
-				{
-					break;
-				}
-			}
-
-			return -x + a * Log(x) - logGammaA + Log(h);
+			const auto cf = ContinuedFraction<T>([a](const int i) { return i == 0 ? 1 : i * (a - i); },
+			                                     [a, x](const int i) { return x - a + 2 * i + 1; },
+			                                     std::numeric_limits<T>::epsilon());
+			return -x + a * Log(x) - logGammaA + Log(cf);
 		}
 
 		template <typename T>
