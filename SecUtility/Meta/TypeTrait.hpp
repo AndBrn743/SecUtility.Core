@@ -28,7 +28,7 @@ namespace std
 	};
 
 	template <typename T>
-    inline constexpr bool is_bounded_array_v = is_bounded_array<T>::value;
+	inline constexpr bool is_bounded_array_v = is_bounded_array<T>::value;
 
 	template <typename>
 	struct is_unbounded_array : std::false_type
@@ -41,6 +41,20 @@ namespace std
 	};
 
 	template <typename T>
-    inline constexpr bool is_unbounded_array_v = is_unbounded_array<T>::value;
+	inline constexpr bool is_unbounded_array_v = is_unbounded_array<T>::value;
+}
+#endif
+
+#if !(defined(__cpp_lib_type_identity) && __cpp_lib_type_identity >= 201806L)
+namespace std
+{
+	template <typename T>
+	struct type_identity
+	{
+		using type = T;
+	};
+
+	template <typename T>
+	using type_identity_t = typename type_identity<T>::type;
 }
 #endif
