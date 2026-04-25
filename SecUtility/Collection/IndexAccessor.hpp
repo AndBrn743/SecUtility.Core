@@ -21,7 +21,8 @@ namespace SecUtility
 	template <typename Indexable>
 	SEC_FORCE_INLINE constexpr auto MakeIndexAccessor(Indexable indexable) noexcept
 	{
-		return [indexable = std::move(indexable)](const auto index) -> decltype(auto) { return indexable[index]; };
+		return [indexable = std::move(indexable)](const auto index) noexcept(
+		               noexcept(std::declval<const Indexable&>()[index])) -> decltype(auto) { return indexable[index]; };
 	}
 
 
@@ -34,6 +35,7 @@ namespace SecUtility
 	template <typename Indexable>
 	SEC_FORCE_INLINE constexpr auto MakeIndexAccessor(std::reference_wrapper<Indexable> indexable) noexcept
 	{
-		return [&indexable = indexable.get()](const auto index) -> decltype(auto) { return indexable[index]; };
+		return [&indexable = indexable.get()](const auto index) noexcept(noexcept(
+		               std::declval<const Indexable&>()[index])) -> decltype(auto) { return indexable[index]; };
 	}
 }
