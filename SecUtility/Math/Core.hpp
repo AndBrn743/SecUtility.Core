@@ -340,7 +340,9 @@ namespace SecUtility::Math
 			return Scalar{1};
 		}
 
+#if defined(SEC_IF_NOT_CONSTEVAL)
 		SEC_IF_NOT_CONSTEVAL
+#endif
 		{
 			if (Abs(exponent) > 32)
 			{
