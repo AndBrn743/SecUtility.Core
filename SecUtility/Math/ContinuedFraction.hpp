@@ -94,6 +94,7 @@ namespace SecUtility::Math
 	                                         const int maxIteration = 200)  //
 	        noexcept(noexcept(coefficients(0)))
 	{
-		return ContinuedFraction<Scalar>([](const auto) { return 1; }, coefficients, tolerance, maxIteration);
+		return ContinuedFraction<Scalar>(
+		        [](const auto) constexpr noexcept { return 1; }, coefficients, tolerance, maxIteration);
 	}
 }
