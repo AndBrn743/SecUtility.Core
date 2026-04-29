@@ -137,6 +137,12 @@ namespace SecUtility::Math
 		}
 		else
 		{
+#if defined(SEC_IF_NOT_CONSTEVAL)
+			SEC_IF_NOT_CONSTEVAL
+			{
+				return std::abs(arg);
+			}
+#endif
 			return arg < 0 ? -arg : arg;
 		}
 	}
