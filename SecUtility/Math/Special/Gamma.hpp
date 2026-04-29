@@ -21,16 +21,16 @@ namespace SecUtility::Math
 	namespace Detail::Gamma
 	{
 		template <typename T>
-		SEC_MATH_CONDITIONAL_CONSTEXPR T LogGammaQ_ContinuedFraction(const T a, const T x, const T logGammaA) noexcept
+		SEC_MATH_CONDITIONAL_CONSTEXPR T GammaQ_ContinuedFraction(const T a, const T x, const T logGammaA) noexcept
 		{
 			const auto cf = ContinuedFraction<T>([a](const int i) { return i == 0 ? 1 : i * (a - i); },
 			                                     [a, x](const int i) { return x - a + 2 * i + 1; },
-			                                     std::numeric_limits<T>::epsilon());
-			return -x + a * Log(x) - logGammaA + Log(cf);
+			                                     1000 * std::numeric_limits<T>::epsilon());
+			return Exp(-x + a * Log(x) - logGammaA) * cf;
 		}
 
 		template <typename T>
-		SEC_MATH_CONDITIONAL_CONSTEXPR T LogGammaP_Series(const T a, const T x, const T logGammaA) noexcept
+		SEC_MATH_CONDITIONAL_CONSTEXPR T GammaP_Series(const T a, const T x, const T logGammaA) noexcept
 		{
 			constexpr T eps = std::numeric_limits<T>::epsilon();
 
@@ -48,11 +48,11 @@ namespace SecUtility::Math
 				}
 			}
 
-			return -x + a * Log(x) - logGammaA + Log(sum);
+			return sum * Exp(-x + a * Log(x) - logGammaA);
 		}
 
 		template <typename T>
-		SEC_MATH_CONDITIONAL_CONSTEXPR T LogGammaQ_Asymptotic(const T a, const T x, const T logGammaA) noexcept
+		SEC_MATH_CONDITIONAL_CONSTEXPR T GammaQ_Asymptotic(const T a, const T x, const T logGammaA) noexcept
 		{
 			constexpr int maxIter = 20;
 
@@ -70,7 +70,36 @@ namespace SecUtility::Math
 				}
 			}
 
-			return (a - 1) * Log(x) - x + Log(sum) - logGammaA;
+			return sum * Exp((a - 1) * Log(x) - x - logGammaA);
+		}
+
+		template <typename T>
+		SEC_MATH_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE T GammaQ(const T a, const T x, const T logGammaA) noexcept
+		{
+			if (x < 0 || a <= 0)
+			{
+				return std::numeric_limits<T>::quiet_NaN();
+			}
+
+			if (x == 0)
+			{
+				return T{1};
+			}
+
+			// --- asymptotic (large x) ---
+			if (x > a + 50)
+			{
+				return Gamma::GammaQ_Asymptotic(a, x, logGammaA);
+			}
+
+			// --- small x: use P ---
+			if (x < a + 1)
+			{
+				return 1 - Gamma::GammaP_Series(a, x, logGammaA);
+			}
+
+			// --- default: continued fraction ---
+			return Gamma::GammaQ_ContinuedFraction(a, x, logGammaA);
 		}
 
 		template <typename T>
@@ -86,20 +115,7 @@ namespace SecUtility::Math
 				return T{0};
 			}
 
-			// --- asymptotic (large x) ---
-			if (x > a + 50)
-			{
-				return Gamma::LogGammaQ_Asymptotic(a, x, logGammaA);
-			}
-
-			// --- small x: use P ---
-			if (x < a + 1)
-			{
-				return Log1mExp(Gamma::LogGammaP_Series(a, x, logGammaA));
-			}
-
-			// --- default: continued fraction ---
-			return Gamma::LogGammaQ_ContinuedFraction(a, x, logGammaA);
+			return Log(GammaQ(a, x, logGammaA));
 		}
 
 		template <typename Scalar>
@@ -138,17 +154,7 @@ namespace SecUtility::Math
 	template <typename T>
 	SEC_MATH_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE T GammaQ(const T a, const T x) noexcept
 	{
-		if (x < 0 || a <= 0)
-		{
-			return std::numeric_limits<T>::quiet_NaN();
-		}
-
-		if (x == 0)
-		{
-			return T{1};  // i'm not sure if compiler could optimize Exp(0) to 1
-		}
-
-		return Exp(LogGammaQ(a, x));
+		return Detail::Gamma::GammaQ(a, x, LogGamma(a));
 	}
 
 
@@ -169,11 +175,9 @@ namespace SecUtility::Math
 		{
 			return Math::ExpIntegral<1>(x);
 		}
-		else  // NOLINT
-		{
-			const auto logGammaA = LogGamma(a);
-			return Exp(logGammaA + Detail::Gamma::LogGammaQ(a, x, logGammaA));
-		}
+
+		const auto logGammaA = LogGamma(a);
+		return Exp(logGammaA) * Detail::Gamma::GammaQ(a, x, logGammaA);
 	}
 
 	/// <summary>
