@@ -83,19 +83,24 @@ TEST_CASE("Bitset construction", "[bitset][construction]")
 		{
 			Bitset<0> bs;
 			STATIC_REQUIRE(bs.Size() == 0);
-		}{
+		}
+		{
 			Bitset<64> bs;
 			STATIC_REQUIRE(bs.Size() == 64);
-		}{
+		}
+		{
 			Bitset<32> bs;
 			STATIC_REQUIRE(bs.Size() == 32);
-		}{
+		}
+		{
 			Bitset<1024> bs;
 			STATIC_REQUIRE(bs.Size() == 1024);
-		}{
+		}
+		{
 			Bitset<264> bs;
 			STATIC_REQUIRE(bs.Size() == 264);
-		}{
+		}
+		{
 			Bitset<164> bs;
 			STATIC_REQUIRE(bs.Size() == 164);
 		}
@@ -488,7 +493,7 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 		++rit;
 		REQUIRE(*rit == false);  // index 6
 		++rit;
-		REQUIRE(*rit == true);   // index 5
+		REQUIRE(*rit == true);  // index 5
 	}
 
 	SECTION("Iterator compatibility with std::vector constructor")
@@ -538,9 +543,12 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 		}
 
 		std::size_t count = 0;
-		for (bool bit : bs)
+		for (const bool bit : bs)
 		{
-			if (bit) ++count;
+			if (bit)
+			{
+				++count;
+			}
 		}
 
 		// Should have ceil(1000/7) = 143 bits set
@@ -561,4 +569,3 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 		REQUIRE(dist == 5);
 	}
 }
-
