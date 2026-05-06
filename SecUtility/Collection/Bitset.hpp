@@ -513,17 +513,25 @@ namespace SecUtility
 			return Size() != 0 && !IsAllOnes();
 		}
 
-#if false
 		// ----------------------------------------------------------
 		//  Counting
 		// ----------------------------------------------------------
-		std::size_t CountOnes() const noexcept;
-
-		std::size_t CountZeros() const noexcept
+		std::size_t OneCount() const noexcept
 		{
-			return Size() - CountOnes();
+			std::size_t count = 0;
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				count += Detail::Bitset::PopCount(MaskOfBlock(i) & Block(i));
+			}
+			return count;
 		}
 
+		std::size_t ZeroCount() const noexcept
+		{
+			return Size() - OneCount();
+		}
+
+#if false
 		std::size_t TrailingZeroCount() const noexcept;
 
 		std::size_t TrailingOneCount() const noexcept;

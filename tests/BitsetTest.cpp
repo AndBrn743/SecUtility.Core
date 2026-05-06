@@ -1033,3 +1033,19 @@ TEST_CASE("IsAllOnes, IsAllZeros, HasOnes, and HasZeros")
 		}
 	}
 }
+
+TEST_CASE("OneCount and ZeroCount")
+{
+	const std::size_t size = GENERATE(0, 1, 4, 42, 69, 73, 420);
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+	const auto bitString = RandomBitString(size, seed);
+	DynamicBitset bs(size);
+	std::transform(bitString.rbegin(), bitString.rend(), bs.begin(), [](const char c) { return c != '0'; });
+
+	const auto oneCount = bs.OneCount();
+	const auto zeroCount = bs.ZeroCount();
+
+	CHECK(oneCount == static_cast<std::size_t>(std::count_if(bitString.begin(), bitString.end(), [](const char c){ return c != '0'; })));
+	CHECK(zeroCount == static_cast<std::size_t>(std::count_if(bitString.begin(), bitString.end(), [](const char c){ return c == '0'; })));
+}
