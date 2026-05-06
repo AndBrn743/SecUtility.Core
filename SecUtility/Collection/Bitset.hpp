@@ -205,7 +205,7 @@ namespace SecUtility
 			}
 		}
 
-		std::uint64_t MaskOfBlock(const std::size_t index) const SEC_NOEXCEPT
+		constexpr std::uint64_t MaskOfBlock(const std::size_t index) const SEC_NOEXCEPT
 		{
 			if (BlockCount() == 1)
 			{
@@ -292,7 +292,7 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		//  Element access
 		// ----------------------------------------------------------
-		bool operator[](const std::size_t index) const SEC_NOEXCEPT
+		constexpr bool operator[](const std::size_t index) const SEC_NOEXCEPT
 		{
 			SEC_ASSERT(index < Size());
 			return (Block((index + HeadPadding()) / Detail::Bitset::BitsPerBlock)
@@ -323,14 +323,14 @@ namespace SecUtility
 			return AsDerived();
 		}
 
-		Derived& Reset(const std::size_t index) SEC_NOEXCEPT
+		constexpr Derived& Reset(const std::size_t index) SEC_NOEXCEPT
 		{
 			SEC_ASSERT(index < Size());
 			(*this)[index] = false;
 			return AsDerived();
 		}
 
-		Derived& Flip(const std::size_t index) SEC_NOEXCEPT
+		constexpr Derived& Flip(const std::size_t index) SEC_NOEXCEPT
 		{
 			SEC_ASSERT(index < Size());
 			(*this)[index].Flip();
@@ -402,32 +402,32 @@ namespace SecUtility
 
 
 	public:
-		BitsetSegmentExpr<Derived> Segment(const std::size_t start, const std::size_t count) noexcept
+		constexpr BitsetSegmentExpr<Derived> Segment(const std::size_t start, const std::size_t count) noexcept
 		{
 			return {AsDerived(), start, count};
 		}
 
-		BitsetSegmentExpr<const Derived> Segment(const std::size_t start, const std::size_t count) const noexcept
+		constexpr BitsetSegmentExpr<const Derived> Segment(const std::size_t start, const std::size_t count) const noexcept
 		{
 			return {AsDerived(), start, count};
 		}
 
-		BitsetSegmentExpr<Derived> Leading(const std::size_t count) noexcept
+		constexpr BitsetSegmentExpr<Derived> Leading(const std::size_t count) noexcept
 		{
 			return {AsDerived(), Size() - count, count};
 		}
 
-		BitsetSegmentExpr<const Derived> Leading(const std::size_t count) const noexcept
+		constexpr BitsetSegmentExpr<const Derived> Leading(const std::size_t count) const noexcept
 		{
 			return {AsDerived(), Size() - count, count};
 		}
 
-		BitsetSegmentExpr<Derived> Trailing(const std::size_t count) noexcept
+		constexpr BitsetSegmentExpr<Derived> Trailing(const std::size_t count) noexcept
 		{
 			return {AsDerived(), 0, count};
 		}
 
-		BitsetSegmentExpr<const Derived> Trailing(const std::size_t count) const noexcept
+		constexpr BitsetSegmentExpr<const Derived> Trailing(const std::size_t count) const noexcept
 		{
 			return {AsDerived(), 0, count};
 		}
@@ -436,7 +436,7 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		//  Whole-set operations
 		// ----------------------------------------------------------
-		void SetAll(const bool value = true) SEC_NOEXCEPT
+		constexpr void SetAll(const bool value = true) SEC_NOEXCEPT
 		{
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
@@ -451,12 +451,12 @@ namespace SecUtility
 			}
 		}
 
-		void ResetAll() noexcept
+		constexpr void ResetAll() noexcept
 		{
 			SetAll(false);
 		}
 
-		void FlipAll() noexcept
+		constexpr void FlipAll() noexcept
 		{
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
@@ -467,7 +467,7 @@ namespace SecUtility
 			}
 		}
 
-		bool IsAllOnes() const noexcept
+		constexpr bool IsAllOnes() const noexcept
 		{
 			if (Size() == 0)
 			{
@@ -485,7 +485,7 @@ namespace SecUtility
 			return true;
 		}
 
-		bool IsAllZeros() const noexcept
+		constexpr bool IsAllZeros() const noexcept
 		{
 			if (Size() == 0)
 			{
@@ -503,12 +503,12 @@ namespace SecUtility
 			return true;
 		}
 
-		bool HasOnes() const noexcept
+		constexpr bool HasOnes() const noexcept
 		{
 			return Size() != 0 && !IsAllZeros();
 		}
 
-		bool HasZeros() const noexcept
+		constexpr bool HasZeros() const noexcept
 		{
 			return Size() != 0 && !IsAllOnes();
 		}
@@ -516,7 +516,7 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		//  Counting
 		// ----------------------------------------------------------
-		std::size_t OneCount() const noexcept
+		constexpr std::size_t OneCount() const noexcept
 		{
 			std::size_t count = 0;
 			for (std::size_t i = 0; i < BlockCount(); ++i)
@@ -526,7 +526,7 @@ namespace SecUtility
 			return count;
 		}
 
-		std::size_t ZeroCount() const noexcept
+		constexpr std::size_t ZeroCount() const noexcept
 		{
 			return Size() - OneCount();
 		}
