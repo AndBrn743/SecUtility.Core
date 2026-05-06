@@ -79,7 +79,7 @@ namespace SecUtility
 		template <typename T>
 		std::size_t PopCount(T) = delete;  // to prevent conversion
 
-		constexpr std::size_t CountTrailingZeros(std::uint64_t v) SEC_NOEXCEPT  // count trailing zeros, v != 0
+		constexpr std::size_t TrailingZeroCount(std::uint64_t v) SEC_NOEXCEPT  // count trailing zeros, v != 0
 		{
 			if (v == 0)
 			{
@@ -104,9 +104,9 @@ namespace SecUtility
 		}
 
 		template <typename T>
-		std::size_t CountTrailingZeros(T) = delete;  // to prevent conversion
+		std::size_t TrailingZeroCount(T) = delete;  // to prevent conversion
 
-		constexpr std::size_t CountLeadingZeros(std::uint64_t v) SEC_NOEXCEPT  // count leading zeros, v != 0
+		constexpr std::size_t LeadingZeroCount(std::uint64_t v) SEC_NOEXCEPT  // count leading zeros, v != 0
 		{
 			SEC_ASSERT(v != 0);
 #if defined(__GNUC__) || defined(__clang__)
@@ -127,7 +127,7 @@ namespace SecUtility
 		}
 
 		template <typename T>
-		std::size_t CountLeadingZeros(T) = delete;  // to prevent coversion
+		std::size_t LeadingZeroCount(T) = delete;  // to prevent coversion
 
 		template <typename>
 		struct is_fixed_size_bitset : std::false_type
@@ -554,7 +554,7 @@ namespace SecUtility
 			{
 				if (const std::uint64_t block = Block(i) & MaskOfBlock(i); block != 0)
 				{
-					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::CountTrailingZeros(block) - HeadPadding();
+					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(block) - HeadPadding();
 				}
 			}
 
@@ -572,7 +572,7 @@ namespace SecUtility
 			{
 				if (const std::uint64_t flippedBock = ~Block(i) & MaskOfBlock(i); flippedBock != 0)
 				{
-					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::CountTrailingZeros(flippedBock)
+					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(flippedBock)
 					       - HeadPadding();
 				}
 			}
@@ -592,7 +592,7 @@ namespace SecUtility
 				if (const std::uint64_t block = Block(i) & MaskOfBlock(i); block != 0)
 				{
 					return (BlockCount() - 1 - i) * Detail::Bitset::BitsPerBlock
-					       + Detail::Bitset::CountLeadingZeros(block) - TailPadding();
+					       + Detail::Bitset::LeadingZeroCount(block) - TailPadding();
 				}
 			}
 
@@ -611,7 +611,7 @@ namespace SecUtility
 				if (const std::uint64_t flippedBlock = ~Block(i) & MaskOfBlock(i); flippedBlock != 0)
 				{
 					return (BlockCount() - 1 - i) * Detail::Bitset::BitsPerBlock
-					       + Detail::Bitset::CountLeadingZeros(flippedBlock) - TailPadding();
+					       + Detail::Bitset::LeadingZeroCount(flippedBlock) - TailPadding();
 				}
 			}
 
