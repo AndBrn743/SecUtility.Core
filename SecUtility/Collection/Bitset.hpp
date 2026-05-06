@@ -205,6 +205,27 @@ namespace SecUtility
 			}
 		}
 
+		std::uint64_t MaskOfBlock(const std::size_t index) const SEC_NOEXCEPT
+		{
+			if (BlockCount() == 1)
+			{
+				return (HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding()))
+				       & Detail::Bitset::LastBlockMask(HeadPadding() + Size());
+			}
+
+			if (BlockCount() > 1 && index == 0)
+			{
+				return HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding());
+			}
+
+			if (BlockCount() > 1 && index + 1 == BlockCount() && TailPadding() != 0)
+			{
+				return Detail::Bitset::LastBlockMask(HeadPadding() + Size());
+			}
+
+			return ~std::uint64_t{0};
+		}
+
 		constexpr void RestPaddingBitsOfLastBlock() noexcept
 		{
 			if (const std::size_t paddedSize = Size() + HeadPadding(); paddedSize != 0)
@@ -417,51 +438,15 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		void SetAll(const bool value = true) SEC_NOEXCEPT
 		{
-			if (BlockCount() == 1)
+			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				const auto mask = (HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding()))
-								& Detail::Bitset::LastBlockMask(HeadPadding() + Size());
-
 				if (value)
 				{
-					Block(0) |= mask;
+					Block(i) |= MaskOfBlock(i);
 				}
 				else
 				{
-					Block(0) &= ~mask;
-				}
-
-				return;
-			}
-
-			if (BlockCount() > 1)
-			{
-				const auto mask = HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding());
-				if (value)
-				{
-					Block(0) |= mask;
-				}
-				else
-				{
-					Block(0) &= ~mask;
-				}
-			}
-
-			for (std::size_t index = 1; index + 1 < BlockCount(); ++index)
-			{
-				Block(index) = value ? ~std::uint64_t{0} : std::uint64_t{0};
-			}
-
-			if (BlockCount() > 1 && TailPadding() != 0)
-			{
-				const auto mask = Detail::Bitset::LastBlockMask(HeadPadding() + Size());
-				if (value)
-				{
-					Block(BlockCount() - 1) |= mask;
-				}
-				else
-				{
-					Block(BlockCount() - 1) &= ~mask;
+					Block(i) &= ~MaskOfBlock(i);
 				}
 			}
 		}
