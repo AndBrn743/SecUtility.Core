@@ -762,39 +762,6 @@ namespace SecUtility
 		}
 
 
-	protected:
-		template <typename Fn>
-		void ApplyToAll(Fn fn) SEC_NOEXCEPT
-		{
-			if (Size() == 0)
-			{
-				return;
-			}
-
-			std::size_t bitIdx = HeadPadding(), remain = Size();
-			while (remain > 0)
-			{
-				const std::size_t blkIdx = bitIdx / Detail::Bitset::BitsPerBlock;
-				const std::size_t bitInBlk = bitIdx % Detail::Bitset::BitsPerBlock;
-				const std::size_t bitsNow = std::min(Detail::Bitset::BitsPerBlock - bitInBlk, remain);
-				const std::uint64_t mask = bitsNow == Detail::Bitset::BitsPerBlock
-				                                   ? ~std::uint64_t{0}
-				                                   : ((std::uint64_t{1} << bitsNow) - 1u) << bitInBlk;
-				fn(Block(bitIdx), mask);
-				bitIdx += bitsNow;
-				remain -= bitsNow;
-			}
-		}
-
-		// const overload: casts away const so we can reuse the mutable version,
-		// but the lambda must only read.
-		template <typename Fn>
-		constexpr void ApplyToAll(Fn fn) const noexcept(noexcept(fn(std::uint64_t{}, std::uint64_t{})))
-		{
-			const_cast<BitsetBase*>(this)->ApplyToAll([&fn](const std::uint64_t block, const std::uint64_t mask)
-			                                          { fn(block, mask); });
-		}
-
 	private:
 		static constexpr std::size_t BitsPerBlock = Detail::Bitset::BitsPerBlock;
 	};
