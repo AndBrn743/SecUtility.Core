@@ -310,64 +310,64 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		//  Iterator
 		// ----------------------------------------------------------
-		auto begin() noexcept
+		constexpr auto begin() noexcept
 		{
 			return SubscriptBasedIterator<Derived>{AsDerived(), 0};
 		}
 
-		auto begin() const noexcept
+		constexpr auto begin() const noexcept
 		{
 			return SubscriptBasedIterator<const Derived>{AsDerived(), 0};
 		}
 
-		auto cbegin() const noexcept  // NOLINT
+		constexpr auto cbegin() const noexcept  // NOLINT
 		{
 			return SubscriptBasedIterator<const Derived>{AsDerived(), 0};
 		}
 
-		auto end() noexcept
+		constexpr auto end() noexcept
 		{
 			return SubscriptBasedIterator<Derived>{AsDerived(), Size()};
 		}
 
-		auto end() const noexcept
+		constexpr auto end() const noexcept
 		{
 			return SubscriptBasedIterator<const Derived>{AsDerived(), Size()};
 		}
 
-		auto cend() const noexcept  // NOLINT
+		constexpr auto cend() const noexcept  // NOLINT
 		{
 			return SubscriptBasedIterator<const Derived>{AsDerived(), Size()};
 		}
 
-		auto rbegin() noexcept
+		constexpr auto rbegin() noexcept
 		{
-			return std::reverse_iterator{SubscriptBasedIterator<Derived>{AsDerived(), 0}};
+			return std::reverse_iterator{end()};
 		}
 
-		auto rbegin() const noexcept
+		constexpr auto rbegin() const noexcept
 		{
-			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), 0}};
+			return std::reverse_iterator{end()};
 		}
 
-		auto rcbegin() const noexcept  // NOLINT
+		constexpr auto rcbegin() const noexcept
 		{
-			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), 0}};
+			return std::reverse_iterator{cend()};
 		}
 
-		auto rend() noexcept
+		constexpr auto rend() noexcept
 		{
-			return std::reverse_iterator{SubscriptBasedIterator<Derived>{AsDerived(), Size()}};
+			return std::reverse_iterator{begin()};
 		}
 
-		auto rend() const noexcept
+		constexpr auto rend() const noexcept
 		{
-			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), Size()}};
+			return std::reverse_iterator{begin()};
 		}
 
-		auto rcend() const noexcept  // NOLINT
+		constexpr auto rcend() const noexcept
 		{
-			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), Size()}};
+			return std::reverse_iterator{cbegin()};
 		}
 
 #if false

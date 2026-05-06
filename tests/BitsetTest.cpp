@@ -274,3 +274,291 @@ TEST_CASE("Modification operations", "[bitset][modify]")
 }
 
 
+// =============================================================================
+//  Test Iterators
+// =============================================================================
+TEST_CASE("Iterators", "[bitset][iterator]")
+{
+	SECTION("Forward iteration - empty bitset")
+	{
+		{
+			Bitset<0> bs;
+			REQUIRE(bs.begin() == bs.end());
+			REQUIRE(bs.cbegin() == bs.cend());
+		}
+		{
+			DynamicBitset bs;
+			REQUIRE(bs.begin() == bs.end());
+			REQUIRE(bs.cbegin() == bs.cend());
+		}
+	}
+
+	SECTION("Forward iteration - Bitset<N>")
+	{
+		Bitset<16> bs;
+
+		// Set some bits
+		bs.Set(0).Set(3).Set(7).Set(15);
+
+		std::vector<bool> collected;
+		for (auto it = bs.begin(); it != bs.end(); ++it)
+		{
+			collected.push_back(*it);
+		}
+
+		REQUIRE(collected.size() == 16);
+		REQUIRE(collected[0] == true);
+		REQUIRE(collected[1] == false);
+		REQUIRE(collected[2] == false);
+		REQUIRE(collected[3] == true);
+		REQUIRE(collected[7] == true);
+		REQUIRE(collected[15] == true);
+	}
+
+	SECTION("Forward iteration - range-based for loop")
+	{
+		const std::size_t size = 32;
+		DynamicBitset bs(size);
+
+		// Set alternating bits
+		for (std::size_t i = 0; i < size; i += 2)
+		{
+			bs.Set(i);
+		}
+
+		std::size_t index = 0;
+		for (bool bit : bs)
+		{
+			REQUIRE(bit == (index % 2 == 0));
+			++index;
+		}
+
+		REQUIRE(index == size);
+	}
+
+	SECTION("Const iteration - cbegin/cend")
+	{
+		const Bitset<8> bs = []()
+		{
+			Bitset<8> tmp;
+			tmp.Set(1).Set(3).Set(5).Set(7);
+			return tmp;
+		}();
+
+		std::vector<bool> collected;
+		for (auto it = bs.cbegin(); it != bs.cend(); ++it)
+		{
+			collected.push_back(*it);
+		}
+
+		REQUIRE(collected.size() == 8);
+		REQUIRE(collected[0] == false);
+		REQUIRE(collected[1] == true);
+		REQUIRE(collected[2] == false);
+		REQUIRE(collected[3] == true);
+		REQUIRE(collected[4] == false);
+		REQUIRE(collected[5] == true);
+		REQUIRE(collected[6] == false);
+		REQUIRE(collected[7] == true);
+	}
+
+	SECTION("Const iterator from const reference")
+	{
+		Bitset<10> bs;
+		bs.Set(2).Set(5).Set(9);
+
+		const Bitset<10>& cbs = bs;
+		std::vector<bool> collected;
+
+		for (auto it = cbs.begin(); it != cbs.end(); ++it)
+		{
+			collected.push_back(*it);
+		}
+
+		REQUIRE(collected.size() == 10);
+		REQUIRE(collected[2] == true);
+		REQUIRE(collected[5] == true);
+		REQUIRE(collected[9] == true);
+		REQUIRE(collected[0] == false);
+		REQUIRE(collected[1] == false);
+	}
+
+	SECTION("Reverse iteration - rbegin/rend")
+	{
+		DynamicBitset bs(8);
+		bs.Set(0).Set(1).Set(2);
+
+		std::vector<bool> collected;
+		for (auto it = bs.rbegin(); it != bs.rend(); ++it)
+		{
+			collected.push_back(*it);
+		}
+
+		// Reverse iteration should give us: index 7, 6, 5, 4, 3, 2, 1, 0
+		REQUIRE(collected.size() == 8);
+		REQUIRE(collected[0] == false);  // index 7
+		REQUIRE(collected[1] == false);  // index 6
+		REQUIRE(collected[2] == false);  // index 5
+		REQUIRE(collected[3] == false);  // index 4
+		REQUIRE(collected[4] == false);  // index 3
+		REQUIRE(collected[5] == true);   // index 2
+		REQUIRE(collected[6] == true);   // index 1
+		REQUIRE(collected[7] == true);   // index 0
+	}
+
+	SECTION("Const reverse iteration - rcbegin/rcend")
+	{
+		const Bitset<5> bs = []()
+		{
+			Bitset<5> tmp;
+			tmp.Set(0).Set(4);
+			return tmp;
+		}();
+
+		std::vector<bool> collected;
+		for (auto it = bs.rcbegin(); it != bs.rcend(); ++it)
+		{
+			collected.push_back(*it);
+		}
+
+		REQUIRE(collected.size() == 5);
+		REQUIRE(collected[0] == true);   // index 4
+		REQUIRE(collected[1] == false);  // index 3
+		REQUIRE(collected[2] == false);  // index 2
+		REQUIRE(collected[3] == false);  // index 1
+		REQUIRE(collected[4] == true);   // index 0
+	}
+
+	SECTION("Reverse iteration from const reference")
+	{
+		DynamicBitset bs(6);
+		bs.Set(1).Set(3).Set(5);
+
+		const DynamicBitset& cbs = bs;
+		std::vector<bool> collected;
+
+		for (auto it = cbs.rbegin(); it != cbs.rend(); ++it)
+		{
+			collected.push_back(*it);
+		}
+
+		REQUIRE(collected.size() == 6);
+		REQUIRE(collected[0] == true);   // index 5
+		REQUIRE(collected[1] == false);  // index 4
+		REQUIRE(collected[2] == true);   // index 3
+		REQUIRE(collected[3] == false);  // index 2
+		REQUIRE(collected[4] == true);   // index 1
+		REQUIRE(collected[5] == false);  // index 0
+	}
+
+	SECTION("Iterator with std:: algorithms")
+	{
+		Bitset<10> bs;
+		bs.Set(2).Set(5).Set(8);
+
+		// std::count
+		const auto count = std::count(bs.begin(), bs.end(), true);
+		REQUIRE(count == 3);
+
+		const auto zeroCount = std::count(bs.begin(), bs.end(), false);
+		REQUIRE(zeroCount == 7);
+
+		// std::find
+		const auto it = std::find(bs.begin(), bs.end(), true);
+		REQUIRE(it != bs.end());
+		REQUIRE(*it == true);
+
+		// std::find on const bitset
+		const auto& cbs = bs;
+		const auto cit = std::find(cbs.begin(), cbs.end(), false);
+		REQUIRE(cit != cbs.end());
+		REQUIRE(*cit == false);
+	}
+
+	SECTION("std::reverse_iterator with std::find")
+	{
+		DynamicBitset bs(8);
+		bs.Set(3).Set(5).Set(7);
+
+		// Find last true using reverse iterator
+		auto rit = std::find(bs.rbegin(), bs.rend(), true);
+		REQUIRE(rit != bs.rend());
+		REQUIRE(*rit == true);  // Should find index 7 first in reverse
+
+		++rit;
+		REQUIRE(*rit == false);  // index 6
+		++rit;
+		REQUIRE(*rit == true);   // index 5
+	}
+
+	SECTION("Iterator compatibility with std::vector constructor")
+	{
+		Bitset<12> bs;
+		bs.Set(0).Set(2).Set(4).Set(6).Set(8).Set(10);
+
+		std::vector<bool> vec(bs.begin(), bs.end());
+
+		REQUIRE(vec.size() == 12);
+		for (std::size_t i = 0; i < 12; ++i)
+		{
+			REQUIRE(vec[i] == bs[i]);
+		}
+	}
+
+	SECTION("Single element bitset iteration")
+	{
+		{
+			Bitset<1> bsTrue{true};
+			REQUIRE(*bsTrue.begin() == true);
+			REQUIRE(*bsTrue.cbegin() == true);
+			REQUIRE(*bsTrue.rbegin() == true);
+
+			Bitset<1> bsFalse{false};
+			REQUIRE(*bsFalse.begin() == false);
+			REQUIRE(*bsFalse.cbegin() == false);
+			REQUIRE(*bsFalse.rbegin() == false);
+		}
+		{
+			DynamicBitset bs(1, true);
+			REQUIRE(*bs.begin() == true);
+			REQUIRE(*bs.cbegin() == true);
+			REQUIRE(*bs.rbegin() == true);
+		}
+	}
+
+	SECTION("Large bitset iteration")
+	{
+		const std::size_t size = 1000;
+		DynamicBitset bs(size);
+
+		// Set every 7th bit
+		for (std::size_t i = 0; i < size; i += 7)
+		{
+			bs.Set(i);
+		}
+
+		std::size_t count = 0;
+		for (bool bit : bs)
+		{
+			if (bit) ++count;
+		}
+
+		// Should have ceil(1000/7) = 143 bits set
+		REQUIRE(count == 143);
+	}
+
+	SECTION("Iterator distance and arithmetic")
+	{
+		Bitset<20> bs;
+		bs.Set(5).Set(10).Set(15);
+
+		auto it1 = bs.begin();
+		auto it2 = bs.begin() + 5;
+
+		REQUIRE(*it2 == true);
+
+		auto dist = it2 - it1;
+		REQUIRE(dist == 5);
+	}
+}
+
