@@ -1046,6 +1046,54 @@ TEST_CASE("OneCount and ZeroCount")
 	const auto oneCount = bs.OneCount();
 	const auto zeroCount = bs.ZeroCount();
 
-	CHECK(oneCount == static_cast<std::size_t>(std::count_if(bitString.begin(), bitString.end(), [](const char c){ return c != '0'; })));
-	CHECK(zeroCount == static_cast<std::size_t>(std::count_if(bitString.begin(), bitString.end(), [](const char c){ return c == '0'; })));
+	CHECK(oneCount
+	      == static_cast<std::size_t>(
+	              std::count_if(bitString.begin(), bitString.end(), [](const char c) { return c != '0'; })));
+	CHECK(zeroCount
+	      == static_cast<std::size_t>(
+	              std::count_if(bitString.begin(), bitString.end(), [](const char c) { return c == '0'; })));
+}
+
+TEST_CASE("operator==")
+{
+	{
+		constexpr char bitString[] = "0110001001100001111011000100110111111010110101110101101100011101"
+		                             "0110001000111011100010011011100110111110110000010011000101110010"
+		                             "0010110000100000000101100000101110001111010001001101111101011101"
+		                             "0000100000011101110011111001100010111000111011100110101110101110"
+		                             "1010110001000010100001110100100111011000100111011100110101011101";
+		DynamicBitset bs(std::string_view(bitString).size());
+		std::transform(
+		        std::begin(bitString), std::end(bitString) - 1, std::begin(bs), [](const char c) { return c != '0'; });
+
+		CHECK(bs.Segment(20, 8) == bs.Segment(1, 8));
+		CHECK(bs.Segment(0, 9) == bs.Segment(64, 9));
+		CHECK(bs.Segment(0, 10) != bs.Segment(64, 10));
+		CHECK(bs.Segment(0, 10) != bs.Segment(64, 9));
+
+		CHECK(bs.Segment(0, 64) != bs.Segment(15, 64));
+		CHECK(bs.Segment(0, 165) != bs.Segment(15, 165));
+		CHECK(bs.Segment(15, 64) != bs.Segment(0, 64));
+		CHECK(bs.Segment(15, 165) != bs.Segment(0, 165));
+	}
+	{
+		DynamicBitset bs{365};
+
+		for (std::size_t i = 0; i < bs.Size(); ++i)
+		{
+			if (i % 5 == 0)
+			{
+				bs.Flip(i);
+			}
+		}
+
+		CHECK(bs.Segment(0, 128) == bs.Segment(100, 128));
+		CHECK(bs.Segment(100, 128) == bs.Segment(0, 128));
+
+		CHECK(bs.Segment(0, 135) == bs.Segment(100, 135));
+		CHECK(bs.Segment(100, 135) == bs.Segment(0, 135));
+
+		CHECK(bs.Segment(1, 135) != bs.Segment(100, 135));
+		CHECK(bs.Segment(100, 135) != bs.Segment(1, 135));
+	}
 }
