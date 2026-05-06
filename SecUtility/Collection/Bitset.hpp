@@ -550,27 +550,15 @@ namespace SecUtility
 				return 0;
 			}
 
-			std::size_t count = Math::Min(Detail::Bitset::CountTrailingZeros(Block(0) >> HeadPadding()), Size());
-			if (count < Detail::Bitset::BitsPerBlock - HeadPadding())
+			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				return count;
-			}
-			for (std::size_t i = 1; i + 1 < BlockCount(); ++i)
-			{
-				const auto c = Detail::Bitset::CountTrailingZeros(Block(i));
-				count += c;
-				if (c != Detail::Bitset::BitsPerBlock)
+				if (const std::uint64_t block = Block(i) & MaskOfBlock(i); block != 0)
 				{
-					return count;
+					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::CountTrailingZeros(block) - HeadPadding();
 				}
 			}
 
-			if (BlockCount() > 1)
-			{
-				count += Detail::Bitset::CountTrailingZeros(Block(BlockCount() - 1) | ~MaskOfBlock(BlockCount() - 1));
-			}
-
-			return count;
+			return Size();
 		}
 
 		constexpr std::size_t TrailingOneCount() const noexcept
@@ -580,27 +568,15 @@ namespace SecUtility
 				return 0;
 			}
 
-			std::size_t count = Math::Min(Detail::Bitset::CountTrailingZeros(~(Block(0) >> HeadPadding())), Size());
-			if (count < Detail::Bitset::BitsPerBlock - HeadPadding())
+			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				return count;
-			}
-			for (std::size_t i = 1; i + 1 < BlockCount(); ++i)
-			{
-				const auto c = Detail::Bitset::CountTrailingZeros(~Block(i));
-				count += c;
-				if (c != Detail::Bitset::BitsPerBlock)
+				if (const std::uint64_t flippedBock = ~Block(i) & MaskOfBlock(i); flippedBock != 0)
 				{
-					return count;
+					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::CountTrailingZeros(flippedBock) - HeadPadding();
 				}
 			}
 
-			if (BlockCount() > 1)
-			{
-				count += Detail::Bitset::CountTrailingZeros(~Block(BlockCount() - 1) | ~MaskOfBlock(BlockCount() - 1));
-			}
-
-			return count;
+			return Size();
 		}
 
 #if false

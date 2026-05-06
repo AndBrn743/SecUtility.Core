@@ -1140,6 +1140,24 @@ TEST_CASE("TrailingZeroCount and TrailingOneCount")
 			      == static_cast<std::size_t>(std::distance(
 			              bs.cbegin(), std::find_if(bs.cbegin(), bs.cend(), [](const bool b) { return !b; }))));
 		}
+
+		if (bs.Size() > 8 && bs.Size() > t + 8)
+		{
+			auto seg = bs.Segment(8, t);
+
+			bs.Trailing(t).ResetAll();
+			const auto tzc = seg.TrailingZeroCount();
+
+			CHECK(tzc
+			      == static_cast<std::size_t>(std::distance(
+			              seg.cbegin(), std::find_if(seg.cbegin(), seg.cend(), [](const bool b) { return b; }))));
+
+			bs.Trailing(t).SetAll();
+			const auto toc = seg.TrailingOneCount();
+			CHECK(toc
+			      == static_cast<std::size_t>(std::distance(
+			              seg.cbegin(), std::find_if(seg.cbegin(), seg.cend(), [](const bool b) { return !b; }))));
+		}
 	}
 
 	SECTION("Edge case")
