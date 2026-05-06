@@ -39,6 +39,9 @@ namespace SecUtility
 	template <typename Nested>
 	class BitsetSegmentExpr;
 
+	template <typename Nested>
+	class BitsetNotExpr;
+
 	class DynamicBitset;
 
 	// ============================================================
@@ -160,6 +163,9 @@ namespace SecUtility
 
 		friend BitsetSegmentExpr<Derived>;
 		friend BitsetSegmentExpr<const Derived>;
+
+		friend BitsetNotExpr<Derived>;
+		friend BitsetNotExpr<const Derived>;
 
 		constexpr const Derived& AsDerived() const noexcept
 		{
@@ -665,11 +671,6 @@ namespace SecUtility
 		template <typename OtherDerived>
 		Derived& operator^=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT;
 
-		CompExpr<const Derived> operator~() const noexcept
-		{
-			return CompExpr<const Derived>{AsDerived()};
-		}
-
 		// ----------------------------------------------------------
 		//  Shift operations  (bit 0 == LSB of Data()[0])
 		//  <<  shifts bits toward higher indices ("left" in math notation)
@@ -683,6 +684,11 @@ namespace SecUtility
 
 		RightShiftExpr<const Derived> operator>>(std::size_t shift) const;
 #endif
+
+		BitsetNotExpr<const Derived> operator~() const noexcept
+		{
+			return BitsetNotExpr<const Derived>{AsDerived()};
+		}
 
 		// ----------------------------------------------------------
 		//  Comparison
@@ -1159,6 +1165,67 @@ namespace SecUtility
 
 	template <typename Nested>
 	struct Traits<BitsetSegmentExpr<Nested>>
+	{
+		static constexpr bool IsNestedByRef = false;
+	};
+
+	// ============================================================
+	//  BitsetNotExpr  --  bitwise not of existing bitset
+	// ============================================================
+	template <typename Nested>
+	class BitsetNotExpr : public BitsetBase<BitsetNotExpr<Nested>>
+	{
+		using Base = BitsetBase<BitsetNotExpr>;
+		friend Base;
+
+		friend BitsetBase<BitsetNotExpr<std::remove_const_t<Nested>>>;
+		friend BitsetBase<std::remove_const_t<Nested>>;
+		friend BitsetBase<Nested>;
+
+	private:
+		friend Nested;
+		friend BitsetBase<Nested>;
+
+		using BaseOfNested = std::conditional_t<std::is_const_v<Nested>,
+		                                        const BitsetBase<std::remove_const_t<Nested>>,
+		                                        BitsetBase<Nested>>;
+
+		explicit constexpr BitsetNotExpr(const Nested& nested) noexcept : m_Nested(nested)
+		{
+			/* NO CODE */
+		}
+
+		/* CRTP VIRTUAL */ constexpr std::size_t BlockCount() const noexcept
+		{
+			return static_cast<BaseOfNested&>(m_Nested).BlockCount();
+		}
+
+		/* CRTP VIRTUAL */ constexpr std::uint64_t& Block(std::size_t index) noexcept = delete;
+
+		/* CRTP VIRTUAL */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
+		{
+			return ~static_cast<BaseOfNested&>(m_Nested).Block(index);
+		}
+
+		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		{
+			return static_cast<BaseOfNested&>(m_Nested).HeadPadding();
+		}
+
+
+	public:
+		/* CRTP VIRTUAL */ constexpr std::size_t Size() const noexcept
+		{
+			return m_Nested.Size();
+		}
+
+
+	private:
+		std::conditional_t<Traits<std::decay_t<Nested>>::IsNestedByRef, Nested&, Nested> m_Nested;
+	};
+
+	template <typename Nested>
+	struct Traits<BitsetNotExpr<Nested>>
 	{
 		static constexpr bool IsNestedByRef = false;
 	};
