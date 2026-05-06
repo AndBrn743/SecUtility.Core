@@ -564,13 +564,8 @@ namespace SecUtility
 	template <std::size_t N>
 	class Bitset : public BitsetBase<Bitset<N>>
 	{
-	public:
 		using Base = BitsetBase<Bitset>;
 		friend Base;
-
-	private:
-		template <typename>
-		friend class BitsetBase;  // allow ExtractRange/ExtractRangeWithSize
 
 		static constexpr std::size_t kN = N;
 		static constexpr std::size_t kBlockCount =
@@ -676,13 +671,8 @@ namespace SecUtility
 	// ============================================================
 	class DynamicBitset : public BitsetBase<DynamicBitset>
 	{
-	public:
 		using Base = BitsetBase;
 		friend Base;
-
-	private:
-		template <typename>
-		friend class BitsetBase;  // allow ExtractRange
 
 		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
 		{
@@ -846,7 +836,6 @@ namespace SecUtility
 	template <typename Nested>
 	class BitsetSegmentExpr : public BitsetBase<BitsetSegmentExpr<Nested>>
 	{
-	public:
 		using Base = BitsetBase<BitsetSegmentExpr>;
 		friend Base;
 
