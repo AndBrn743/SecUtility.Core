@@ -1128,14 +1128,22 @@ TEST_CASE("TrailingZeroCount and TrailingOneCount")
 
 	SECTION("Random")
 	{
-		const auto tzc = bs.TrailingZeroCount();
-		CHECK(tzc
+		CHECK(bs.TrailingZeroCount()
 		      == static_cast<std::size_t>(std::distance(
 		              bitString.cbegin(),
 		              std::find_if(bitString.cbegin(), bitString.cend(), [](const char c) { return c != '0'; }))));
 
-		const auto toc = bs.TrailingOneCount();
-		CHECK(toc
+		CHECK(bs.TrailingOneCount()
+		      == static_cast<std::size_t>(std::distance(
+		              bitString.cbegin(),
+		              std::find_if(bitString.cbegin(), bitString.cend(), [](const char c) { return c == '0'; }))));
+
+		CHECK(bs.IndexOfFirstOne()
+		      == static_cast<std::size_t>(std::distance(
+		              bitString.cbegin(),
+		              std::find_if(bitString.cbegin(), bitString.cend(), [](const char c) { return c != '0'; }))));
+
+		CHECK(bs.IndexOfFirstZero()
 		      == static_cast<std::size_t>(std::distance(
 		              bitString.cbegin(),
 		              std::find_if(bitString.cbegin(), bitString.cend(), [](const char c) { return c == '0'; }))));
@@ -1258,9 +1266,17 @@ TEST_CASE("LeadingZeroCount and LeadingOneCount")
 		bs.ResetAll();
 		CHECK(bs.LeadingZeroCount() == bs.Size());
 		CHECK(bs.LeadingOneCount() == 0);
+		CHECK(bs.IndexOfFirstZero() == 0);
+		CHECK(bs.IndexOfFirstOne() == bs.Size());
+		CHECK(bs.IndexOfLastZero() == (bs.Size() == 0 ? 0 : bs.Size() - 1));
+		CHECK(bs.IndexOfLastOne() == bs.Size());
 
 		bs.SetAll();
 		CHECK(bs.LeadingZeroCount() == 0);
 		CHECK(bs.LeadingOneCount() == bs.Size());
+		CHECK(bs.IndexOfFirstZero() == bs.Size());
+		CHECK(bs.IndexOfFirstOne() == 0);
+		CHECK(bs.IndexOfLastZero() == bs.Size());
+		CHECK(bs.IndexOfLastOne() == (bs.Size() == 0 ? 0 : bs.Size() - 1));
 	}
 }

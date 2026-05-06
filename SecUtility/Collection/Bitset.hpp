@@ -597,32 +597,32 @@ namespace SecUtility
 		}
 
 
-#if false
 		// ----------------------------------------------------------
 		//  Index-of queries  (return Size() when not found)
 		// ----------------------------------------------------------
-		std::size_t IndexOfFirstOne() const noexcept
+		constexpr std::size_t IndexOfFirstOne() const noexcept
 		{
 			return TrailingZeroCount();
 		}
 
-		std::size_t IndexOfFirstZero() const noexcept
+		constexpr std::size_t IndexOfFirstZero() const noexcept
 		{
 			return TrailingOneCount();
 		}
 
-		std::size_t IndexOfLastOne() const noexcept
+		constexpr std::size_t IndexOfLastOne() const noexcept
 		{
-			const std::size_t lz = LeadingZeroCount();
-			return lz == Size() ? Size() : Size() - 1 - lz;
+			const std::size_t lzc = LeadingZeroCount();
+			return lzc == Size() ? Size() : Size() - 1 - lzc;
 		}
 
-		std::size_t IndexOfLastZero() const noexcept
+		constexpr std::size_t IndexOfLastZero() const noexcept
 		{
-			const std::size_t lo = LeadingOneCount();
-			return lo == Size() ? Size() : Size() - 1 - lo;
+			const std::size_t loc = LeadingOneCount();
+			return loc == Size() ? Size() : Size() - 1 - loc;
 		}
 
+#if false
 		std::size_t IndexOfNextOne(const std::size_t pos) const noexcept;
 
 		std::size_t IndexOfNextZero(const std::size_t pos) const noexcept;
