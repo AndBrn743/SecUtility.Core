@@ -569,24 +569,10 @@ namespace SecUtility
 
 		constexpr std::size_t TrailingOneCount() const noexcept
 		{
-			if (Size() == 0)
-			{
-				return 0;
-			}
-
-			for (std::size_t i = 0; i < BlockCount(); ++i)
-			{
-				if (const std::uint64_t flippedBock = ~Block(i) & MaskOfBlock(i); flippedBock != 0)
-				{
-					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(flippedBock)
-					       - HeadPadding();
-				}
-			}
-
-			return Size();
+			return (~AsDerived()).TrailingZeroCount();
 		}
 
-		constexpr std::size_t LeadingZeroCount() const SEC_NOEXCEPT
+		constexpr std::size_t LeadingZeroCount() const noexcept
 		{
 			if (Size() == 0)
 			{
@@ -605,23 +591,9 @@ namespace SecUtility
 			return Size();
 		}
 
-		constexpr std::size_t LeadingOneCount() const SEC_NOEXCEPT
+		constexpr std::size_t LeadingOneCount() const noexcept
 		{
-			if (Size() == 0)
-			{
-				return 0;
-			}
-
-			for (std::size_t i = BlockCount(); i-- > 0;)
-			{
-				if (const std::uint64_t flippedBlock = ~Block(i) & MaskOfBlock(i); flippedBlock != 0)
-				{
-					return (BlockCount() - 1 - i) * Detail::Bitset::BitsPerBlock
-					       + Detail::Bitset::LeadingZeroCount(flippedBlock) - TailPadding();
-				}
-			}
-
-			return Size();
+			return (~AsDerived()).LeadingZeroCount();
 		}
 
 
