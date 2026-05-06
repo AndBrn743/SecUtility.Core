@@ -276,7 +276,7 @@ namespace SecUtility
 			// ReSharper disable once CppNonExplicitConversionOperator
 			constexpr operator bool() const noexcept
 			{
-				return static_cast<bool>(r_Derived.Block(m_PaddedIndex / Detail::Bitset::BitsPerBlock) & m_Mask);
+				return static_cast<bool>(std::as_const(r_Derived).Block(m_PaddedIndex / Detail::Bitset::BitsPerBlock) & m_Mask);
 			}
 
 			// ReSharper disable once CppMemberFunctionMayBeConst
