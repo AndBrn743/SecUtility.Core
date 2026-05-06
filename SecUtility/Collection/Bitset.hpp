@@ -3,16 +3,16 @@
 
 #pragma once
 
-#include "SecUtility/Meta/TypeTrait.hpp"
+#include <SecUtility/Collection/SubscriptBasedIterator.hpp>
+#include <SecUtility/IO/BitOrder.hpp>
+#include <SecUtility/Meta/TypeTrait.hpp>
 
-
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <vector>
-
-#include <SecUtility/Collection/SubscriptBasedIterator.hpp>
 
 #if !defined(SEC_ASSERT)
 #define SEC_ASSERT(expr) assert(expr)
@@ -533,25 +533,36 @@ namespace SecUtility
 		{
 			return !(*this == other.AsDerived());
 		}
+#endif
 
 		// ----------------------------------------------------------
 		//  Conversion
 		// ----------------------------------------------------------
-		// Convention matches std::bitset: leftmost character = highest index bit.
-		std::string ToString() const
+		// the conventional ordering have leftmost character at highest index bit
+		std::string ToString(const bool isUsingConventionalBitOrdering = true) const
 		{
 			const std::size_t size = Size();
-			std::string s(size, '0');
-			for (std::size_t i = 0; i < size; ++i)
+			std::string s(size, '-');
+
+			if (isUsingConventionalBitOrdering)
 			{
-				if ((*this)[i])
-				{
-					s[size - 1 - i] = '1';
-				}
+				std::transform(cbegin(), cend(), s.rbegin(), [](const bool b) { return b ? '1' : '0'; });
 			}
+			else
+			{
+				std::transform(cbegin(), cend(), s.begin(), [](const bool b) { return b ? '1' : '0'; });
+			}
+
 			return s;
 		}
-#endif
+
+		// use the conventional bit ordering by default. one could switch the behavior with LsbFirst and MsbFirst.
+		// e.g., `os << LsbFirst << bs;`
+		friend std::ostream& operator<<(std::ostream& os, BitsetBase& bs)
+		{
+			return os << bs.ToString(os.iword(BitOrderFlag()) == 0);
+		}
+
 
 	private:
 		static constexpr std::size_t BitsPerBlock = Detail::Bitset::BitsPerBlock;
@@ -847,12 +858,15 @@ namespace SecUtility
 		friend Nested;
 		friend BitsetBase<Nested>;
 
-		using BaseOfNested = std::conditional_t<std::is_const_v<Nested>, const BitsetBase<std::remove_const_t<Nested>>, BitsetBase<Nested>>;
+		using BaseOfNested = std::conditional_t<std::is_const_v<Nested>,
+		                                        const BitsetBase<std::remove_const_t<Nested>>,
+		                                        BitsetBase<Nested>>;
 
 		constexpr BitsetSegmentExpr(Nested& nested, const std::size_t start, const std::size_t size) SEC_NOEXCEPT
 		    : m_Nested(nested),
 		      m_HeadPadding((start + static_cast<BaseOfNested&>(nested).HeadPadding()) % Detail::Bitset::BitsPerBlock),
-		      m_BlockIndexOffset((start + static_cast<BaseOfNested&>(nested).HeadPadding()) / Detail::Bitset::BitsPerBlock),
+		      m_BlockIndexOffset((start + static_cast<BaseOfNested&>(nested).HeadPadding())
+		                         / Detail::Bitset::BitsPerBlock),
 		      m_Size(size)
 		{
 			SEC_ASSERT(start + size <= nested.Size());

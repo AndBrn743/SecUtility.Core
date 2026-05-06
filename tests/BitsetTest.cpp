@@ -26,6 +26,7 @@
 #include <catch2/generators/catch_generators_range.hpp>
 
 #include <algorithm>
+#include <sstream>
 #include <cstdint>
 #include <random>
 #include <string>
@@ -717,7 +718,7 @@ TEST_CASE("BitsetSegmentExpr - basic functionality", "[bitset][segment]")
 		}
 
 		// STL algorithm should work
-		REQUIRE(std::all_of(leading.begin(), leading.end(), [](const bool b){ return b; }));
+		REQUIRE(std::all_of(leading.begin(), leading.end(), [](const bool b) { return b; }));
 
 		// Modify through leading
 		leading.Reset(0);
@@ -732,7 +733,7 @@ TEST_CASE("BitsetSegmentExpr - basic functionality", "[bitset][segment]")
 		DynamicBitset bs(100);
 
 		// Set first 30 bits
-		std::for_each_n(bs.begin(), 30, [](auto&& b){ b = true; });
+		std::for_each_n(bs.begin(), 30, [](auto&& b) { b = true; });
 
 		auto trailing = bs.Trailing(30);
 		REQUIRE(trailing.Size() == 30);
@@ -777,4 +778,46 @@ TEST_CASE("BitsetSegmentExpr - basic functionality", "[bitset][segment]")
 		REQUIRE(trailingOne.Size() == 1);
 		REQUIRE(trailingOne[0] == true);
 	}
+}
+
+TEST_CASE(".ToString() and operator<<")
+{
+	const std::size_t size = GENERATE(0, 1, 42, 69, 73, 420);
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420);
+
+	const auto bitString = RandomBitString(size, seed);
+	DynamicBitset bs(size);
+	std::transform(bitString.rbegin(), bitString.rend(), bs.begin(), [](const char c) { return c != '0'; });
+
+	const auto msbfString = bs.ToString();
+	CHECK(msbfString == bitString);
+	{
+		std::ostringstream msbfOss;
+		msbfOss << bs;
+		CHECK(msbfOss.str() == msbfString);
+	}
+	{
+		std::ostringstream msbfOss;
+		msbfOss << MsbFirst << bs;
+		CHECK(msbfOss.str() == msbfString);
+	}
+	{
+		std::ostringstream msbfOss;
+		msbfOss << LsbFirst << MsbFirst << bs;
+		CHECK(msbfOss.str() == msbfString);
+	}
+
+	auto string = bs.ToString(false);
+	{
+		std::ostringstream msbfOss;
+		msbfOss << LsbFirst << bs;
+		CHECK(msbfOss.str() == string);
+	}
+	{
+		std::ostringstream msbfOss;
+		msbfOss << LsbFirst << MsbFirst << LsbFirst << bs;
+		CHECK(msbfOss.str() == string);
+	}
+	std::reverse(string.begin(), string.end());
+	CHECK(string == bitString);
 }
