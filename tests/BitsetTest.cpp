@@ -987,6 +987,28 @@ TEST_CASE("IsAllOnes, IsAllZeros, HasOnes, and HasZeros")
 				CHECK_FALSE(seg.HasOnes());
 				CHECK(seg.HasZeros());
 			}
+
+			{
+				auto seg = std::as_const(bs).Trailing(42);
+				CHECK(seg.IsAllOnes());
+				CHECK_FALSE(seg.IsAllZeros());
+				CHECK(seg.HasOnes());
+				CHECK_FALSE(seg.HasZeros());
+			}
+			{
+				auto seg = std::as_const(bs).Trailing(43);
+				CHECK_FALSE(seg.IsAllOnes());
+				CHECK_FALSE(seg.IsAllZeros());
+				CHECK(seg.HasOnes());
+				CHECK(seg.HasZeros());
+			}
+			{
+				auto seg = std::as_const(bs).Segment(42, 1);
+				CHECK_FALSE(seg.IsAllOnes());
+				CHECK(seg.IsAllZeros());
+				CHECK_FALSE(seg.HasOnes());
+				CHECK(seg.HasZeros());
+			}
 		}
 	}
 
@@ -1001,6 +1023,11 @@ TEST_CASE("IsAllOnes, IsAllZeros, HasOnes, and HasZeros")
 
 		{
 			auto seg = bs.Segment(bs.Size() / 2, 4);
+			CHECK(seg.IsAllOnes() == std::all_of(seg.begin(), seg.end(), [](const bool b) { return b; }));
+			CHECK(seg.IsAllZeros() == std::none_of(seg.begin(), seg.end(), [](const bool b) { return b; }));
+		}
+		{
+			auto seg = std::as_const(bs).Segment(bs.Size() / 2, 4);
 			CHECK(seg.IsAllOnes() == std::all_of(seg.begin(), seg.end(), [](const bool b) { return b; }));
 			CHECK(seg.IsAllZeros() == std::none_of(seg.begin(), seg.end(), [](const bool b) { return b; }));
 		}
