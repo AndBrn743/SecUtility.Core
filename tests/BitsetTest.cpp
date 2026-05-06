@@ -1097,3 +1097,59 @@ TEST_CASE("operator==")
 		CHECK(bs.Segment(100, 135) != bs.Segment(1, 135));
 	}
 }
+
+TEST_CASE("TrailingZeroCount and TrailingOneCount")
+{
+	const std::size_t size = GENERATE(0, 1, 4, 42, 69, 73, 423);
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+	const auto bitString = RandomBitString(size, seed);
+	DynamicBitset bs(size);
+	std::transform(bitString.begin(), bitString.end(), bs.begin(), [](const char c) { return c != '0'; });
+
+	SECTION("Random")
+	{
+		const auto tzc = bs.TrailingZeroCount();
+		CHECK(tzc
+		      == static_cast<std::size_t>(std::distance(
+		              bitString.cbegin(),
+		              std::find_if(bitString.cbegin(), bitString.cend(), [](const char c) { return c != '0'; }))));
+
+		const auto toc = bs.TrailingOneCount();
+		CHECK(toc
+		      == static_cast<std::size_t>(std::distance(
+		              bitString.cbegin(),
+		              std::find_if(bitString.cbegin(), bitString.cend(), [](const char c) { return c == '0'; }))));
+	}
+
+	SECTION("Random with modification")
+	{
+		const std::size_t t = GENERATE(32, 63, 64, 65, 165, 235, 400);
+
+		if (bs.Size() > t)
+		{
+			bs.Trailing(t).ResetAll();
+			const auto tzc = bs.TrailingZeroCount();
+			CHECK(tzc
+			      == static_cast<std::size_t>(std::distance(
+			              bs.cbegin(), std::find_if(bs.cbegin(), bs.cend(), [](const bool b) { return b; }))));
+
+			bs.Trailing(t).SetAll();
+			const auto toc = bs.TrailingOneCount();
+			CHECK(toc
+			      == static_cast<std::size_t>(std::distance(
+			              bs.cbegin(), std::find_if(bs.cbegin(), bs.cend(), [](const bool b) { return !b; }))));
+		}
+	}
+
+	SECTION("Edge case")
+	{
+		bs.ResetAll();
+		CHECK(bs.TrailingZeroCount() == bs.Size());
+		CHECK(bs.TrailingOneCount() == 0);
+
+		bs.SetAll();
+		CHECK(bs.TrailingZeroCount() == 0);
+		CHECK(bs.TrailingOneCount() == bs.Size());
+	}
+}

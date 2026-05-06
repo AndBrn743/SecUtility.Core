@@ -5,6 +5,7 @@
 
 #include <SecUtility/Collection/SubscriptBasedIterator.hpp>
 #include <SecUtility/IO/BitOrder.hpp>
+#include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Meta/TypeTrait.hpp>
 
 #include <algorithm>
@@ -80,7 +81,11 @@ namespace SecUtility
 
 		constexpr std::size_t CountTrailingZeros(std::uint64_t v) SEC_NOEXCEPT  // count trailing zeros, v != 0
 		{
-			SEC_ASSERT(v != 0);
+			if (v == 0)
+			{
+				return 64;
+			}
+			// SEC_ASSERT(v != 0);
 #if defined(__GNUC__) || defined(__clang__)
 			// `long long` is at least 64 bits
 			// ReSharper disable once CppRedundantCastExpression
@@ -538,11 +543,67 @@ namespace SecUtility
 			return Size() - OneCount();
 		}
 
+		constexpr std::size_t TrailingZeroCount() const noexcept
+		{
+			if (Size() == 0)
+			{
+				return 0;
+			}
+
+			std::size_t count = Math::Min(Detail::Bitset::CountTrailingZeros(Block(0) >> HeadPadding()), Size());
+			if (count < Detail::Bitset::BitsPerBlock - HeadPadding())
+			{
+				return count;
+			}
+			for (std::size_t i = 1; i + 1 < BlockCount(); ++i)
+			{
+				const auto c = Detail::Bitset::CountTrailingZeros(Block(i));
+				count += c;
+				if (c != Detail::Bitset::BitsPerBlock)
+				{
+					return count;
+				}
+			}
+
+			if (BlockCount() > 1)
+			{
+				count += Detail::Bitset::CountTrailingZeros(Block(BlockCount() - 1) | ~MaskOfBlock(BlockCount() - 1));
+			}
+
+			return count;
+		}
+
+		std::size_t TrailingOneCount() const noexcept
+		{
+			if (Size() == 0)
+			{
+				return 0;
+			}
+
+			std::size_t count = Math::Min(Detail::Bitset::CountTrailingZeros(~(Block(0) >> HeadPadding())), Size());
+			if (count < Detail::Bitset::BitsPerBlock - HeadPadding())
+			{
+				return count;
+			}
+			for (std::size_t i = 1; i + 1 < BlockCount(); ++i)
+			{
+				const auto c = Detail::Bitset::CountTrailingZeros(~Block(i));
+				count += c;
+				if (c != Detail::Bitset::BitsPerBlock)
+				{
+					return count;
+				}
+			}
+
+			if (BlockCount() > 1)
+			{
+				count += Detail::Bitset::CountTrailingZeros(~Block(BlockCount() - 1) | ~MaskOfBlock(BlockCount() - 1));
+			}
+
+			return count;
+		}
+
 #if false
-		std::size_t TrailingZeroCount() const noexcept;
-
-		std::size_t TrailingOneCount() const noexcept;
-
 		std::size_t LeadingZeroCount() const noexcept;
 
 		std::size_t LeadingOneCount() const noexcept;
