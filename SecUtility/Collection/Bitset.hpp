@@ -572,18 +572,54 @@ namespace SecUtility
 			{
 				if (const std::uint64_t flippedBock = ~Block(i) & MaskOfBlock(i); flippedBock != 0)
 				{
-					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::CountTrailingZeros(flippedBock) - HeadPadding();
+					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::CountTrailingZeros(flippedBock)
+					       - HeadPadding();
 				}
 			}
 
 			return Size();
 		}
 
+		constexpr std::size_t LeadingZeroCount() const SEC_NOEXCEPT
+		{
+			if (Size() == 0)
+			{
+				return 0;
+			}
+
+			for (std::size_t i = BlockCount(); i-- > 0;)
+			{
+				if (const std::uint64_t block = Block(i) & MaskOfBlock(i); block != 0)
+				{
+					return (BlockCount() - 1 - i) * Detail::Bitset::BitsPerBlock
+					       + Detail::Bitset::CountLeadingZeros(block) - TailPadding();
+				}
+			}
+
+			return Size();
+		}
+
+		constexpr std::size_t LeadingOneCount() const SEC_NOEXCEPT
+		{
+			if (Size() == 0)
+			{
+				return 0;
+			}
+
+			for (std::size_t i = BlockCount(); i-- > 0;)
+			{
+				if (const std::uint64_t flippedBlock = ~Block(i) & MaskOfBlock(i); flippedBlock != 0)
+				{
+					return (BlockCount() - 1 - i) * Detail::Bitset::BitsPerBlock
+					       + Detail::Bitset::CountLeadingZeros(flippedBlock) - TailPadding();
+				}
+			}
+
+			return Size();
+		}
+
+
 #if false
-		std::size_t LeadingZeroCount() const noexcept;
-
-		std::size_t LeadingOneCount() const noexcept;
-
 		// ----------------------------------------------------------
 		//  Index-of queries  (return Size() when not found)
 		// ----------------------------------------------------------

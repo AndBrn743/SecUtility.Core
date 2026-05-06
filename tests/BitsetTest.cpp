@@ -1171,3 +1171,77 @@ TEST_CASE("TrailingZeroCount and TrailingOneCount")
 		CHECK(bs.TrailingOneCount() == bs.Size());
 	}
 }
+
+TEST_CASE("LeadingZeroCount and LeadingOneCount")
+{
+	const std::size_t size = GENERATE(0, 1, 4, 42, 69, 73, 423);
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+	const auto bitString = RandomBitString(size, seed);
+	DynamicBitset bs(size);
+	std::transform(bitString.begin(), bitString.end(), bs.begin(), [](const char c) { return c != '0'; });
+
+	SECTION("Random")
+	{
+		const auto tzc = bs.LeadingZeroCount();
+		CHECK(tzc
+		      == static_cast<std::size_t>(std::distance(
+		              bitString.crbegin(),
+		              std::find_if(bitString.crbegin(), bitString.crend(), [](const char c) { return c != '0'; }))));
+
+		const auto toc = bs.LeadingOneCount();
+		CHECK(toc
+		      == static_cast<std::size_t>(std::distance(
+		              bitString.crbegin(),
+		              std::find_if(bitString.crbegin(), bitString.crend(), [](const char c) { return c == '0'; }))));
+	}
+
+	SECTION("Random with modification")
+	{
+		const std::size_t t = GENERATE(32, 63, 64, 65, 165, 235, 400);
+
+		if (bs.Size() > t)
+		{
+			bs.Leading(t).ResetAll();
+			const auto tzc = bs.LeadingZeroCount();
+			CHECK(tzc
+			      == static_cast<std::size_t>(std::distance(
+			              bs.rcbegin(), std::find_if(bs.rcbegin(), bs.rcend(), [](const bool b) { return b; }))));
+
+			bs.Leading(t).SetAll();
+			const auto toc = bs.LeadingOneCount();
+			CHECK(toc
+			      == static_cast<std::size_t>(std::distance(
+			              bs.rcbegin(), std::find_if(bs.rcbegin(), bs.rcend(), [](const bool b) { return !b; }))));
+		}
+
+		if (bs.Size() > 8 && bs.Size() > t + 8)
+		{
+			auto seg = bs.Segment(bs.Size() - 8 - t, t);
+
+			bs.Leading(t).ResetAll();
+			const auto tzc = seg.LeadingZeroCount();
+
+			CHECK(tzc
+			      == static_cast<std::size_t>(std::distance(
+			              seg.rcbegin(), std::find_if(seg.rcbegin(), seg.rcend(), [](const bool b) { return b; }))));
+
+			bs.Leading(t).SetAll();
+			const auto toc = seg.LeadingOneCount();
+			CHECK(toc
+			      == static_cast<std::size_t>(std::distance(
+			              seg.rcbegin(), std::find_if(seg.rcbegin(), seg.rcend(), [](const bool b) { return !b; }))));
+		}
+	}
+
+	SECTION("Edge case")
+	{
+		bs.ResetAll();
+		CHECK(bs.LeadingZeroCount() == bs.Size());
+		CHECK(bs.LeadingOneCount() == 0);
+
+		bs.SetAll();
+		CHECK(bs.LeadingZeroCount() == 0);
+		CHECK(bs.LeadingOneCount() == bs.Size());
+	}
+}
