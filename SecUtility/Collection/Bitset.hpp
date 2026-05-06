@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "SecUtility/Meta/TypeTrait.hpp"
+
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +28,9 @@ namespace SecUtility
 
 	template <std::size_t N>  // N to avoid shadowing the Size() method
 	class Bitset;
+
+	template <typename Nested>
+	class BitsetSegmentExpr;
 
 	class DynamicBitset;
 
@@ -141,6 +147,9 @@ namespace SecUtility
 		template <typename>
 		friend class BitsetBase;
 
+		friend BitsetSegmentExpr<Derived>;
+		friend BitsetSegmentExpr<const Derived>;
+
 		constexpr const Derived& AsDerived() const noexcept
 		{
 			return static_cast<const Derived&>(*this);
@@ -177,14 +186,14 @@ namespace SecUtility
 		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const SEC_NOEXCEPT  // corresponds to trailing
 		{
 			const auto padding = AsDerived().HeadPadding();
-			SEC_ASSERT(padding < 64);
+			SEC_ASSERT(padding < Detail::Bitset::BitsPerBlock);
 			return padding;
 		}
 
 		constexpr std::size_t TailPadding() const noexcept  // corresponds to leading
 		{
 			const auto padding = BlockCount() * Detail::Bitset::BitsPerBlock - (Size() + HeadPadding());
-			SEC_ASSERT(padding < 64);
+			SEC_ASSERT(padding < Detail::Bitset::BitsPerBlock);
 			return padding;
 		}
 
@@ -370,6 +379,39 @@ namespace SecUtility
 			return std::reverse_iterator{cbegin()};
 		}
 
+
+	public:
+		BitsetSegmentExpr<Derived> Segment(const std::size_t start, const std::size_t count) noexcept
+		{
+			return {AsDerived(), start, count};
+		}
+
+		BitsetSegmentExpr<const Derived> Segment(const std::size_t start, const std::size_t count) const noexcept
+		{
+			return {AsDerived(), start, count};
+		}
+
+		BitsetSegmentExpr<Derived> Leading(const std::size_t count) noexcept
+		{
+			return {AsDerived(), Size() - count, count};
+		}
+
+		BitsetSegmentExpr<const Derived> Leading(const std::size_t count) const noexcept
+		{
+			return {AsDerived(), Size() - count, count};
+		}
+
+		BitsetSegmentExpr<Derived> Trailing(const std::size_t count) noexcept
+		{
+			return {AsDerived(), 0, count};
+		}
+
+		BitsetSegmentExpr<const Derived> Trailing(const std::size_t count) const noexcept
+		{
+			return {AsDerived(), 0, count};
+		}
+
+
 #if false
 		// ----------------------------------------------------------
 		//  Whole-set operations
@@ -395,37 +437,6 @@ namespace SecUtility
 		bool HasZeros() const noexcept
 		{
 			return !IsEmpty() && !IsAllOnes();
-		}
-
-	public:
-		SegmentExpr<Derived> Segment(const std::size_t start, const std::size_t count) noexcept
-		{
-			return {AsDerived(), start, count};
-		}
-
-		SegmentExpr<const Derived> Segment(const std::size_t start, const std::size_t count) const noexcept
-		{
-			return {AsDerived(), start, count};
-		}
-
-		SegmentExpr<Derived> Leading(const std::size_t count) noexcept
-		{
-			return {AsDerived(), 0, count};
-		}
-
-		SegmentExpr<const Derived> Leading(const std::size_t start, const std::size_t count) const noexcept
-		{
-			return {AsDerived(), 0, count};
-		}
-
-		SegmentExpr<Derived> Trailing(const std::size_t count) noexcept
-		{
-			return {AsDerived(), Size() - count, count};
-		}
-
-		SegmentExpr<const Derived> Trailing(const std::size_t start, const std::size_t count) const noexcept
-		{
-			return {AsDerived(), Size() - count, count};
 		}
 
 		// ----------------------------------------------------------
@@ -553,9 +564,11 @@ namespace SecUtility
 	template <std::size_t N>
 	class Bitset : public BitsetBase<Bitset<N>>
 	{
+	public:
 		using Base = BitsetBase<Bitset>;
 		friend Base;
 
+	private:
 		template <typename>
 		friend class BitsetBase;  // allow ExtractRange/ExtractRangeWithSize
 
@@ -651,16 +664,25 @@ namespace SecUtility
 		std::uint64_t m_Data[kBlockCount == 0 ? 1 : kBlockCount];
 	};
 
+	template <std::size_t N>
+	struct Traits<Bitset<N>>
+	{
+		static constexpr bool IsNestedByRef = true;
+	};
+
 
 	// ============================================================
 	//  DynamicBitset  --  runtime-determined size
 	// ============================================================
 	class DynamicBitset : public BitsetBase<DynamicBitset>
 	{
+	public:
 		using Base = BitsetBase;
 		friend Base;
-		// template <typename>
-		// friend class BitsetBase;  // allow ExtractRange
+
+	private:
+		template <typename>
+		friend class BitsetBase;  // allow ExtractRange
 
 		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
 		{
@@ -809,5 +831,83 @@ namespace SecUtility
 	private:
 		std::size_t m_Size;
 		std::vector<std::uint64_t> m_Data;
+	};
+
+	template <>
+	struct Traits<DynamicBitset>
+	{
+		static constexpr bool IsNestedByRef = true;
+	};
+
+
+	// ============================================================
+	//  BitsetSegmentExpr  --  segment of existing bitset
+	// ============================================================
+	template <typename Nested>
+	class BitsetSegmentExpr : public BitsetBase<BitsetSegmentExpr<Nested>>
+	{
+	public:
+		using Base = BitsetBase<BitsetSegmentExpr>;
+		friend Base;
+
+		friend BitsetBase<BitsetSegmentExpr<std::remove_const_t<Nested>>>;
+		friend BitsetBase<std::remove_const_t<Nested>>;
+		friend BitsetBase<Nested>;
+
+	private:
+		friend Nested;
+		friend BitsetBase<Nested>;
+
+		using BaseOfNested = std::conditional_t<std::is_const_v<Nested>, const BitsetBase<std::remove_const_t<Nested>>, BitsetBase<Nested>>;
+
+		constexpr BitsetSegmentExpr(Nested& nested, const std::size_t start, const std::size_t size) SEC_NOEXCEPT
+		    : m_Nested(nested),
+		      m_HeadPadding((start + static_cast<BaseOfNested&>(nested).HeadPadding()) % Detail::Bitset::BitsPerBlock),
+		      m_BlockIndexOffset((start + static_cast<BaseOfNested&>(nested).HeadPadding()) / Detail::Bitset::BitsPerBlock),
+		      m_Size(size)
+		{
+			SEC_ASSERT(start + size <= nested.Size());
+		}
+
+		/* CRTP VIRTUAL */ constexpr std::size_t BlockCount() const noexcept
+		{
+			return (m_HeadPadding + m_Size + Detail::Bitset::BitsPerBlock - 1) / Detail::Bitset::BitsPerBlock;
+		}
+
+		template <typename..., bool IsConst = std::is_const_v<Nested>>
+		/* CRTP VIRTUAL */ constexpr std::enable_if_t<!IsConst, std::uint64_t&> Block(const std::size_t index) noexcept
+		{
+			return static_cast<BaseOfNested&>(m_Nested).Block(index + m_BlockIndexOffset);
+		}
+
+		/* CRTP VIRTUAL */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
+		{
+			return static_cast<BaseOfNested&>(m_Nested).Block(index + m_BlockIndexOffset);
+		}
+
+		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		{
+			return m_HeadPadding;
+		}
+
+
+	public:
+		/* CRTP VIRTUAL */ constexpr std::size_t Size() const noexcept
+		{
+			return m_Size;
+		}
+
+
+	private:
+		std::conditional_t<Traits<std::decay_t<Nested>>::IsNestedByRef, Nested&, Nested> m_Nested;
+		std::size_t m_HeadPadding;
+		std::size_t m_BlockIndexOffset;
+		std::size_t m_Size;
+	};
+
+	template <typename Nested>
+	struct Traits<BitsetSegmentExpr<Nested>>
+	{
+		static constexpr bool IsNestedByRef = false;
 	};
 }

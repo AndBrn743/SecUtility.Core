@@ -140,6 +140,9 @@ TEST_CASE("Element access", "[bitset][access]")
 		const std::string pattern = RandomBitString(size, seed);
 		DynamicBitset bs(size);
 
+		STATIC_REQUIRE(std::is_same_v<decltype(std::as_const(bs)[0]), bool>);
+		STATIC_REQUIRE_FALSE(std::is_same_v<decltype(bs[0]), bool>);
+
 		for (std::size_t i = 0; i < size; ++i)
 		{
 			CHECK(bs.IsOne(i) == static_cast<bool>(bs[i]));
@@ -567,5 +570,211 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 
 		auto dist = it2 - it1;
 		REQUIRE(dist == 5);
+	}
+}
+
+
+// =============================================================================
+//  Test BitsetSegmentExpr via Segment(), Leading(), Trailing()
+// =============================================================================
+TEST_CASE("BitsetSegmentExpr - basic functionality", "[bitset][segment]")
+{
+	SECTION("Segment() - basic read access")
+	{
+		Bitset<365> bs;
+
+		const auto seed = GENERATE(42, 69, 73);
+		std::mt19937_64 rng(seed);
+
+
+		for (std::size_t i = 0; i < 100; ++i)
+		{
+			bs.Set(i, static_cast<bool>(rng() & 1u));
+		}
+
+		const std::size_t start = GENERATE(0, 42, 69, 73);
+		const std::size_t size = GENERATE(0, 42, 69, 73, 240);
+
+		auto seg = bs.Segment(start, size);
+		REQUIRE(seg.Size() == size);
+
+		for (std::size_t i = 0; i < size; ++i)
+		{
+			REQUIRE(seg[i] == bs[i + start]);
+		}
+		REQUIRE_THROWS(seg[size]);
+	}
+
+	SECTION("Segment() - write access modifies parent")
+	{
+		DynamicBitset bs(64);
+
+		// Create segment covering middle 32 bits
+		auto seg = bs.Segment(16, 32);
+
+		// Set bits through segment
+		for (std::size_t i = 0; i < 32; ++i)
+		{
+			seg.Set(i);
+		}
+
+		// Verify through parent
+		for (std::size_t i = 0; i < 64; ++i)
+		{
+			REQUIRE(bs[i] == (i >= 16 && i < 16 + 32));
+		}
+
+		// Reset bits through segment
+		for (std::size_t i = 0; i < 32; i += 2)
+		{
+			seg.Reset(i);
+		}
+
+		// Verify alternating pattern in parent
+		for (std::size_t i = 16; i < 48; ++i)
+		{
+			REQUIRE(bs[i] == ((i - 16) % 2 == 1));
+		}
+	}
+
+	SECTION("Segment() - iteration")
+	{
+		Bitset<80> bs;
+
+		// Set every 3rd bit
+		for (std::size_t i = 0; i < 80; i += 3)
+		{
+			bs.Set(i);
+		}
+
+		// Iterate over segment [10:50]
+		auto seg = bs.Segment(10, 40);
+
+		std::size_t count = 0;
+		for (bool bit : seg)
+		{
+			if (bit)
+			{
+				++count;
+			}
+		}
+
+		// Count bits set in range [10:50] where every 3rd bit is set
+		std::size_t expected = 0;
+		for (std::size_t i = 10; i < 50; ++i)
+		{
+			if (i % 3 == 0)
+			{
+				++expected;
+			}
+		}
+		REQUIRE(count == expected);
+	}
+
+	SECTION("Segment() - const segment from const bitset")
+	{
+		const Bitset<50> bs = []
+		{
+			Bitset<50> tmp;
+			for (std::size_t i = 0; i < 50; ++i)
+			{
+				tmp.Set(i, i % 3 == 0);
+			}
+			return tmp;
+		}();
+
+		// Segment should be const
+		auto seg = bs.Segment(10, 30);
+
+		// Should be able to read
+		REQUIRE(seg.Size() == 30);
+		for (std::size_t i = 0; i < 30; ++i)
+		{
+			REQUIRE(seg[i] == ((i + 10) % 3 == 0));
+		}
+
+		// This should NOT compile - const segment can't modify
+		// seg.Set(0);  // Uncomment to test
+	}
+
+	SECTION("Leading() - get last N bits")
+	{
+		Bitset<100> bs;
+
+		// Set last 20 bits
+		for (std::size_t i = 80; i < 100; ++i)
+		{
+			bs.Set(i);
+		}
+
+		auto leading = bs.Leading(20);
+		REQUIRE(leading.Size() == 20);
+
+		// All should be true
+		for (std::size_t i = 0; i < 20; ++i)
+		{
+			REQUIRE(leading[i] == true);
+		}
+
+		// STL algorithm should work
+		REQUIRE(std::all_of(leading.begin(), leading.end(), [](const bool b){ return b; }));
+
+		// Modify through leading
+		leading.Reset(0);
+
+		// Should affect bit 80 in parent
+		REQUIRE_FALSE(bs[80]);
+		REQUIRE(bs[81]);
+	}
+
+	SECTION("Trailing() - get first N bits")
+	{
+		DynamicBitset bs(100);
+
+		// Set first 30 bits
+		std::for_each_n(bs.begin(), 30, [](auto&& b){ b = true; });
+
+		auto trailing = bs.Trailing(30);
+		REQUIRE(trailing.Size() == 30);
+
+		// All should be true
+		for (std::size_t i = 0; i < 30; ++i)
+		{
+			REQUIRE(trailing[i] == true);
+		}
+
+		// Modify through trailing
+		trailing.Reset(15);
+
+		// Should affect bit 15 in parent
+		REQUIRE(bs[14]);
+		REQUIRE_FALSE(bs[15]);
+		REQUIRE(bs[16]);
+	}
+
+	SECTION("Leading() and Trailing() with empty/small ranges")
+	{
+		Bitset<64> bs;
+		bs.Set(0).Set(63);
+
+		// Leading(0) should be empty
+		auto leadingEmpty = bs.Leading(0);
+		REQUIRE(leadingEmpty.Size() == 0);
+		REQUIRE(leadingEmpty.begin() == leadingEmpty.end());
+
+		// Trailing(0) should be empty
+		auto trailingEmpty = bs.Trailing(0);
+		REQUIRE(trailingEmpty.Size() == 0);
+		REQUIRE(trailingEmpty.begin() == trailingEmpty.end());
+
+		// Leading(1) should have only last bit
+		auto leadingOne = bs.Leading(1);
+		REQUIRE(leadingOne.Size() == 1);
+		REQUIRE(leadingOne[0] == true);
+
+		// Trailing(1) should have only first bit
+		auto trailingOne = bs.Trailing(1);
+		REQUIRE(trailingOne.Size() == 1);
+		REQUIRE(trailingOne[0] == true);
 	}
 }
