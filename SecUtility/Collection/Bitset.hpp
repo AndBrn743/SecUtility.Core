@@ -9,6 +9,8 @@
 #include <cstring>
 #include <vector>
 
+#include <SecUtility/Collection/SubscriptBasedIterator.hpp>
+
 #if !defined(SEC_ASSERT)
 #define SEC_ASSERT(expr) assert(expr)
 #endif
@@ -284,6 +286,50 @@ namespace SecUtility
 			(*this)[index].Flip();
 			return AsDerived();
 		}
+
+		// ----------------------------------------------------------
+		//  Iterator
+		// ----------------------------------------------------------
+		auto begin() noexcept
+		{
+			return SubscriptBasedIterator<Derived>{AsDerived(), 0};
+		}
+
+		auto begin() const noexcept
+		{
+			return SubscriptBasedIterator<const Derived>{AsDerived(), 0};
+		}
+
+		auto cbegin() const noexcept  // NOLINT
+		{
+			return SubscriptBasedIterator<const Derived>{AsDerived(), 0};
+		}
+
+		auto end() noexcept
+		{
+			return SubscriptBasedIterator<Derived>{AsDerived(), Size()};
+		}
+
+		auto end() const noexcept
+		{
+			return SubscriptBasedIterator<const Derived>{AsDerived(), Size()};
+		}
+
+		auto cend() const noexcept  // NOLINT
+		{
+			return SubscriptBasedIterator<const Derived>{AsDerived(), Size()};
+		}
+
+		auto rbegin() noexcept
+		{
+			return std::reverse_iterator{SubscriptBasedIterator<Derived>{AsDerived(), 0}};
+		}
+
+		auto rbegin() const noexcept
+		{
+			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), 0}};
+		}
+
 
 #if false
 		// ----------------------------------------------------------

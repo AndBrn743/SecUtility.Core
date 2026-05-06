@@ -185,10 +185,6 @@ TEST_CASE("Modification operations", "[bitset][modify]")
 		for (std::size_t i = 0; i < size; ++i)
 		{
 			bs.Reset(i);
-		}
-
-		for (std::size_t i = 0; i < size; ++i)
-		{
 			REQUIRE(bs[i] == false);
 		}
 	}
