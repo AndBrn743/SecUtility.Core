@@ -236,21 +236,40 @@ TEST_CASE("Modification operations", "[bitset][modify]")
 
 	SECTION("Method chaining")
 	{
-		Bitset<128> bs;
+		{
+			Bitset<128> bs;
 
-		bs.Set(0).Set(1).Set(2);
-		REQUIRE(bs[0]);
-		REQUIRE(bs[1]);
-		REQUIRE(bs[2]);
+			bs.Set(0).Set(1).Set(2);
+			REQUIRE(bs[0]);
+			REQUIRE(bs[1]);
+			REQUIRE(bs[2]);
 
-		bs.Reset(0).Reset(1);
-		REQUIRE(!bs[0]);
-		REQUIRE(!bs[1]);
-		REQUIRE(bs[2]);
+			bs.Reset(0).Reset(1);
+			REQUIRE(!bs[0]);
+			REQUIRE(!bs[1]);
+			REQUIRE(bs[2]);
 
-		bs.Flip(2).Flip(3);
-		REQUIRE(!bs[2]);
-		REQUIRE(bs[3]);
+			bs.Flip(2).Flip(3);
+			REQUIRE(!bs[2]);
+			REQUIRE(bs[3]);
+		}
+		{
+			Bitset<125> bs{true};
+
+			bs.Reset(0).Reset(1).Reset(2);
+			REQUIRE_FALSE(bs[0]);
+			REQUIRE_FALSE(bs[1]);
+			REQUIRE_FALSE(bs[2]);
+
+			bs.Set(0).Set(1);
+			REQUIRE_FALSE(!bs[0]);
+			REQUIRE_FALSE(!bs[1]);
+			REQUIRE_FALSE(bs[2]);
+
+			bs.Flip(2).Flip(3);
+			REQUIRE_FALSE(!bs[2]);
+			REQUIRE_FALSE(bs[3]);
+		}
 	}
 }
 
