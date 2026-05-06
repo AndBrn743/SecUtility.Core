@@ -575,6 +575,25 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 	}
 }
 
+TEST_CASE("BitsetNotExpr")
+{
+	const std::size_t size = GENERATE(0, 1, 4, 42, 69, 73, 423);
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+	const auto bitString = RandomBitString(size, seed);
+	DynamicBitset bs(size);
+	std::transform(bitString.begin(), bitString.end(), bs.begin(), [](const char c) { return c != '0'; });
+
+	auto nbs = ~bs;
+	CHECK(nbs.Size() == bs.Size());
+
+	for (std::size_t i = 0; i < size; ++i)
+	{
+		CHECK(nbs[i] != bs[i]);
+		// nbs[i] = true;  // won't compile by design
+		// nbs[i].Flip();  // won't compile by design
+	}
+}
 
 // =============================================================================
 //  Test BitsetSegmentExpr via Segment(), Leading(), Trailing()
