@@ -467,21 +467,53 @@ namespace SecUtility
 			}
 		}
 
-#if false
-		bool IsAllOnes() const noexcept;
+		bool IsAllOnes() const noexcept
+		{
+			if (Size() == 0)
+			{
+				return false;
+			}
 
-		bool IsAllZeros() const noexcept;
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				if (const auto mask = MaskOfBlock(i); (mask & Block(i)) != mask)
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		bool IsAllZeros() const noexcept
+		{
+			if (Size() == 0)
+			{
+				return false;
+			}
+
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				if ((MaskOfBlock(i) & Block(i)) != 0)
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
 
 		bool HasOnes() const noexcept
 		{
-			return !IsEmpty() && !IsAllZeros();
+			return Size() != 0 && !IsAllZeros();
 		}
 
 		bool HasZeros() const noexcept
 		{
-			return !IsEmpty() && !IsAllOnes();
+			return Size() != 0 && !IsAllOnes();
 		}
 
+#if false
 		// ----------------------------------------------------------
 		//  Counting
 		// ----------------------------------------------------------

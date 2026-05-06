@@ -896,3 +896,113 @@ TEST_CASE("SetAll, ResetAll, and FlipAll")
 		}
 	}
 }
+
+TEST_CASE("IsAllOnes, IsAllZeros, HasOnes, and HasZeros")
+{
+	SECTION("Known samples")
+	{
+		{
+			Bitset<0> bs{};
+			CHECK_FALSE(bs.IsAllOnes());
+			CHECK_FALSE(bs.IsAllZeros());
+			CHECK_FALSE(bs.HasOnes());
+			CHECK_FALSE(bs.HasZeros());
+		}
+		{
+			DynamicBitset bs{};
+			CHECK_FALSE(bs.IsAllOnes());
+			CHECK_FALSE(bs.IsAllZeros());
+			CHECK_FALSE(bs.HasOnes());
+			CHECK_FALSE(bs.HasZeros());
+		}
+		{
+			Bitset<3> bs{};
+			CHECK_FALSE(bs.IsAllOnes());
+			CHECK(bs.IsAllZeros());
+			CHECK_FALSE(bs.HasOnes());
+			CHECK(bs.HasZeros());
+		}
+		{
+			Bitset<3> bs{true};
+			CHECK(bs.IsAllOnes());
+			CHECK_FALSE(bs.IsAllZeros());
+			CHECK(bs.HasOnes());
+			CHECK_FALSE(bs.HasZeros());
+		}
+		{
+			Bitset<3> bs{true};
+			bs[0].Flip();
+			CHECK_FALSE(bs.IsAllOnes());
+			CHECK_FALSE(bs.IsAllZeros());
+			CHECK(bs.HasOnes());
+			CHECK(bs.HasZeros());
+		}
+		{
+			DynamicBitset bs{200};
+			CHECK_FALSE(bs.IsAllOnes());
+			CHECK(bs.IsAllZeros());
+			CHECK_FALSE(bs.HasOnes());
+			CHECK(bs.HasZeros());
+		}
+		{
+			DynamicBitset bs{200, true};
+			CHECK(bs.IsAllOnes());
+			CHECK_FALSE(bs.IsAllZeros());
+			CHECK(bs.HasOnes());
+			CHECK_FALSE(bs.HasZeros());
+		}
+		{
+			DynamicBitset bs{200, true};
+			bs.Flip(42).Flip(69);
+			CHECK_FALSE(bs.IsAllOnes());
+			CHECK_FALSE(bs.IsAllZeros());
+			CHECK(bs.HasOnes());
+			CHECK(bs.HasZeros());
+
+			{
+				auto seg = bs.Trailing(4);
+				CHECK(seg.IsAllOnes());
+				CHECK_FALSE(seg.IsAllZeros());
+				CHECK(seg.HasOnes());
+				CHECK_FALSE(seg.HasZeros());
+			}
+			{
+				auto seg = bs.Trailing(42);
+				CHECK(seg.IsAllOnes());
+				CHECK_FALSE(seg.IsAllZeros());
+				CHECK(seg.HasOnes());
+				CHECK_FALSE(seg.HasZeros());
+			}
+			{
+				auto seg = bs.Trailing(43);
+				CHECK_FALSE(seg.IsAllOnes());
+				CHECK_FALSE(seg.IsAllZeros());
+				CHECK(seg.HasOnes());
+				CHECK(seg.HasZeros());
+			}
+			{
+				auto seg = bs.Segment(42, 1);
+				CHECK_FALSE(seg.IsAllOnes());
+				CHECK(seg.IsAllZeros());
+				CHECK_FALSE(seg.HasOnes());
+				CHECK(seg.HasZeros());
+			}
+		}
+	}
+
+	SECTION("Random samples")
+	{
+		const std::size_t size = GENERATE(42, 69, 73, 420);
+		const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+		const auto bitString = RandomBitString(size, seed);
+		DynamicBitset bs(size);
+		std::transform(bitString.rbegin(), bitString.rend(), bs.begin(), [](const char c) { return c != '0'; });
+
+		{
+			auto seg = bs.Segment(bs.Size() / 2, 4);
+			CHECK(seg.IsAllOnes() == std::all_of(seg.begin(), seg.end(), [](const bool b) { return b; }));
+			CHECK(seg.IsAllZeros() == std::none_of(seg.begin(), seg.end(), [](const bool b) { return b; }));
+		}
+	}
+}
