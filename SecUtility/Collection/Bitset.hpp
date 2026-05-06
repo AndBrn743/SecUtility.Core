@@ -21,6 +21,12 @@
 #define SEC_NOEXCEPT noexcept
 #endif
 
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Winvalid-constexpr"
+#endif
+
 namespace SecUtility
 {
 	template <typename Derived>
@@ -1030,3 +1036,7 @@ namespace SecUtility
 		static constexpr bool IsNestedByRef = false;
 	};
 }
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
