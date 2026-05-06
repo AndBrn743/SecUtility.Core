@@ -174,14 +174,34 @@ namespace SecUtility
 			return AsDerived().Block(index);
 		}
 
-		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const SEC_NOEXCEPT  // corresponds to trailing
 		{
-			return AsDerived().HeadPadding();
+			const auto padding = AsDerived().HeadPadding();
+			SEC_ASSERT(padding < 64);
+			return padding;
 		}
 
 		constexpr std::size_t TailPadding() const noexcept  // corresponds to leading
 		{
-			return BlockCount() * Detail::Bitset::BitsPerBlock - (Size() + HeadPadding());
+			const auto padding = BlockCount() * Detail::Bitset::BitsPerBlock - (Size() + HeadPadding());
+			SEC_ASSERT(padding < 64);
+			return padding;
+		}
+
+		constexpr void RestPaddingBitsOfZerothBlock() noexcept
+		{
+			if (const std::size_t size = Size(); size != 0)
+			{
+				Block(BlockCount() - 1) &= ~Detail::Bitset::LastBlockMask(HeadPadding());
+			}
+		}
+
+		constexpr void RestPaddingBitsOfLastBlock() noexcept
+		{
+			if (const std::size_t paddedSize = Size() + HeadPadding(); paddedSize != 0)
+			{
+				Block(BlockCount() - 1) &= Detail::Bitset::LastBlockMask(paddedSize);
+			}
 		}
 
 	public:
@@ -330,6 +350,25 @@ namespace SecUtility
 			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), 0}};
 		}
 
+		auto rcbegin() const noexcept  // NOLINT
+		{
+			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), 0}};
+		}
+
+		auto rend() noexcept
+		{
+			return std::reverse_iterator{SubscriptBasedIterator<Derived>{AsDerived(), Size()}};
+		}
+
+		auto rend() const noexcept
+		{
+			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), Size()}};
+		}
+
+		auto rcend() const noexcept  // NOLINT
+		{
+			return std::reverse_iterator{SubscriptBasedIterator<const Derived>{AsDerived(), Size()}};
+		}
 
 #if false
 		// ----------------------------------------------------------
@@ -545,28 +584,29 @@ namespace SecUtility
 			return m_Data[index];
 		}
 
-		constexpr void SanitizeLastBlock() SEC_NOEXCEPT
-		{
-			if (const std::size_t size = Size(); size != 0)
-			{
-				m_Data.back() &= Detail::Bitset::LastBlockMask(size);
-			}
-		}
-
 	public:
 		// ----------------------------------------------------------
 		//  Ctors
 		// ----------------------------------------------------------
-		constexpr Bitset() SEC_NOEXCEPT : m_Data{}
+		constexpr Bitset(const Bitset& other) noexcept = default;
+		constexpr Bitset(Bitset&& other) noexcept = default;
+		constexpr Bitset& operator=(const Bitset& other) noexcept = default;
+		constexpr Bitset& operator=(Bitset&& other) noexcept = default;
+		~Bitset() noexcept = default;
+
+		explicit Bitset(const bool value = false) noexcept : m_Data{}
 		{
-			/* NO CODE */
+			if (value)
+			{
+				for (auto& block : m_Data)
+				{
+					block = ~std::uint64_t{0};
+				}
+
+				Base::RestPaddingBitsOfLastBlock();
+			}
 		}
 
-		constexpr Bitset(const Bitset& other) SEC_NOEXCEPT = default;
-		constexpr Bitset(Bitset&& other) SEC_NOEXCEPT = default;
-		constexpr Bitset& operator=(const Bitset& other) SEC_NOEXCEPT = default;
-		constexpr Bitset& operator=(Bitset&& other) SEC_NOEXCEPT = default;
-		~Bitset() SEC_NOEXCEPT = default;
 
 #if false
 		template <typename OtherDerived>
@@ -619,16 +659,8 @@ namespace SecUtility
 	{
 		using Base = BitsetBase;
 		friend Base;
-		template <typename>
-		friend class BitsetBase;  // allow ExtractRange
-
-		constexpr void SanitizeLastBlock() SEC_NOEXCEPT
-		{
-			if (const std::size_t size = Size(); size != 0)
-			{
-				m_Data.back() &= Detail::Bitset::LastBlockMask(size);
-			}
-		}
+		// template <typename>
+		// friend class BitsetBase;  // allow ExtractRange
 
 		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
 		{
@@ -696,7 +728,7 @@ namespace SecUtility
 		{
 			if (value)
 			{
-				SanitizeLastBlock();
+				RestPaddingBitsOfLastBlock();
 			}
 		}
 
