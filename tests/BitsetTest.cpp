@@ -823,7 +823,7 @@ TEST_CASE(".ToString() and operator<<")
 	CHECK(string == bitString);
 }
 
-TEST_CASE(".SetAll(...)")
+TEST_CASE("SetAll, ResetAll, and FlipAll")
 {
 	const std::size_t size = GENERATE(42, 69, 73, 420);
 	const auto seed = GENERATE(0, 1, 42, 69, 73, 420);
@@ -842,6 +842,18 @@ TEST_CASE(".SetAll(...)")
 	{
 		bs.SetAll(false);
 		CHECK(std::none_of(bs.begin(), bs.end(), [](const bool b) { return b; }));
+	}
+
+	SECTION("FlipAll()")
+	{
+		bs.FlipAll();
+
+		auto bi = bs.begin();
+		auto sri = bitString.rbegin();
+		for (/* NO CODE */; sri != bitString.rend(); ++sri, ++bi)
+		{
+			CHECK(*bi != *sri);
+		}
 	}
 
 	auto seg0 = bs.Segment(0, 10);
@@ -866,5 +878,21 @@ TEST_CASE(".SetAll(...)")
 		REQUIRE(seg0.ToString() == ss0);
 		REQUIRE(seg2.ToString() == ss2);
 		CHECK(std::none_of(seg1.begin(), seg1.end(), [](const bool b) { return b; }));
+	}
+
+	SECTION("seg.FlipAll()")
+	{
+		const auto ss0 = seg0.ToString();
+		const auto ss2 = seg2.ToString();
+		seg1.FlipAll();
+		REQUIRE(seg0.ToString() == ss0);
+		REQUIRE(seg2.ToString() == ss2);
+
+		auto bi = seg1.begin();
+		auto sri = bitString.rbegin() + 15;
+		for (/* NO CODE */; bi != seg1.end(); ++sri, ++bi)
+		{
+			CHECK(*bi != *sri);
+		}
 	}
 }

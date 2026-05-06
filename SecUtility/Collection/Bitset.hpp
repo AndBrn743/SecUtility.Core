@@ -456,9 +456,18 @@ namespace SecUtility
 			SetAll(false);
 		}
 
-#if false
-		void FlipAll() noexcept;
+		void FlipAll() noexcept
+		{
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				const auto mask = MaskOfBlock(i);
+				const auto block = Block(i);
+				const auto flipped = ~block & mask;
+				Block(i) = (block & ~mask) | flipped;
+			}
+		}
 
+#if false
 		bool IsAllOnes() const noexcept;
 
 		bool IsAllZeros() const noexcept;
