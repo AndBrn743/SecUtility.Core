@@ -573,7 +573,7 @@ namespace SecUtility
 			return count;
 		}
 
-		std::size_t TrailingOneCount() const noexcept
+		constexpr std::size_t TrailingOneCount() const noexcept
 		{
 			if (Size() == 0)
 			{
