@@ -26,9 +26,10 @@
 #include <catch2/generators/catch_generators_range.hpp>
 
 #include <algorithm>
-#include <sstream>
 #include <cstdint>
+#include <iostream>
 #include <random>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -820,4 +821,50 @@ TEST_CASE(".ToString() and operator<<")
 	}
 	std::reverse(string.begin(), string.end());
 	CHECK(string == bitString);
+}
+
+TEST_CASE(".SetAll(...)")
+{
+	const std::size_t size = GENERATE(42, 69, 73, 420);
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420);
+
+	const auto bitString = RandomBitString(size, seed);
+	DynamicBitset bs(size);
+	std::transform(bitString.rbegin(), bitString.rend(), bs.begin(), [](const char c) { return c != '0'; });
+
+	SECTION("SetAll(true)")
+	{
+		bs.SetAll(true);
+		CHECK(std::all_of(bs.begin(), bs.end(), [](const bool b) { return b; }));
+	}
+
+	SECTION("SetAll(false)")
+	{
+		bs.SetAll(false);
+		CHECK(std::none_of(bs.begin(), bs.end(), [](const bool b) { return b; }));
+	}
+
+	auto seg0 = bs.Segment(0, 10);
+	auto seg1 = bs.Segment(10, size - 10 - 15);
+	auto seg2 = bs.Segment(size - 15, 15);
+
+	SECTION("seg.SetAll(true)")
+	{
+		const auto ss0 = seg0.ToString();
+		const auto ss2 = seg2.ToString();
+		seg1.SetAll(true);
+		REQUIRE(seg0.ToString() == ss0);
+		REQUIRE(seg2.ToString() == ss2);
+		CHECK(std::all_of(seg1.begin(), seg1.end(), [](const bool b) { return b; }));
+	}
+
+	SECTION("seg.ResetAll()")
+	{
+		const auto ss0 = seg0.ToString();
+		const auto ss2 = seg2.ToString();
+		seg1.ResetAll();
+		REQUIRE(seg0.ToString() == ss0);
+		REQUIRE(seg2.ToString() == ss2);
+		CHECK(std::none_of(seg1.begin(), seg1.end(), [](const bool b) { return b; }));
+	}
 }

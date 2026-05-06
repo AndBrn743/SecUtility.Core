@@ -190,7 +190,7 @@ namespace SecUtility
 			return padding;
 		}
 
-		constexpr std::size_t TailPadding() const noexcept  // corresponds to leading
+		constexpr std::size_t TailPadding() const SEC_NOEXCEPT  // corresponds to leading
 		{
 			const auto padding = BlockCount() * Detail::Bitset::BitsPerBlock - (Size() + HeadPadding());
 			SEC_ASSERT(padding < Detail::Bitset::BitsPerBlock);
@@ -412,17 +412,66 @@ namespace SecUtility
 		}
 
 
-#if false
 		// ----------------------------------------------------------
 		//  Whole-set operations
 		// ----------------------------------------------------------
-		void SetAll(const bool value = true) noexcept;
+		void SetAll(const bool value = true) SEC_NOEXCEPT
+		{
+			if (BlockCount() == 1)
+			{
+				const auto mask = (HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding()))
+								& Detail::Bitset::LastBlockMask(HeadPadding() + Size());
+
+				if (value)
+				{
+					Block(0) |= mask;
+				}
+				else
+				{
+					Block(0) &= ~mask;
+				}
+
+				return;
+			}
+
+			if (BlockCount() > 1)
+			{
+				const auto mask = HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding());
+				if (value)
+				{
+					Block(0) |= mask;
+				}
+				else
+				{
+					Block(0) &= ~mask;
+				}
+			}
+
+			for (std::size_t index = 1; index + 1 < BlockCount(); ++index)
+			{
+				Block(index) = value ? ~std::uint64_t{0} : std::uint64_t{0};
+			}
+
+			if (BlockCount() > 1 && TailPadding() != 0)
+			{
+				const auto mask = Detail::Bitset::LastBlockMask(HeadPadding() + Size());
+				if (value)
+				{
+					Block(BlockCount() - 1) |= mask;
+				}
+				else
+				{
+					Block(BlockCount() - 1) &= ~mask;
+				}
+			}
+		}
 
 		void ResetAll() noexcept
 		{
 			SetAll(false);
 		}
 
+#if false
 		void FlipAll() noexcept;
 
 		bool IsAllOnes() const noexcept;
@@ -563,6 +612,39 @@ namespace SecUtility
 			return os << bs.ToString(os.iword(BitOrderFlag()) == 0);
 		}
 
+
+	protected:
+		template <typename Fn>
+		void ApplyToAll(Fn fn) SEC_NOEXCEPT
+		{
+			if (Size() == 0)
+			{
+				return;
+			}
+
+			std::size_t bitIdx = HeadPadding(), remain = Size();
+			while (remain > 0)
+			{
+				const std::size_t blkIdx = bitIdx / Detail::Bitset::BitsPerBlock;
+				const std::size_t bitInBlk = bitIdx % Detail::Bitset::BitsPerBlock;
+				const std::size_t bitsNow = std::min(Detail::Bitset::BitsPerBlock - bitInBlk, remain);
+				const std::uint64_t mask = bitsNow == Detail::Bitset::BitsPerBlock
+				                                   ? ~std::uint64_t{0}
+				                                   : ((std::uint64_t{1} << bitsNow) - 1u) << bitInBlk;
+				fn(Block(bitIdx), mask);
+				bitIdx += bitsNow;
+				remain -= bitsNow;
+			}
+		}
+
+		// const overload: casts away const so we can reuse the mutable version,
+		// but the lambda must only read.
+		template <typename Fn>
+		constexpr void ApplyToAll(Fn fn) const noexcept(noexcept(fn(std::uint64_t{}, std::uint64_t{})))
+		{
+			const_cast<BitsetBase*>(this)->ApplyToAll([&fn](const std::uint64_t block, const std::uint64_t mask)
+			                                          { fn(block, mask); });
+		}
 
 	private:
 		static constexpr std::size_t BitsPerBlock = Detail::Bitset::BitsPerBlock;
