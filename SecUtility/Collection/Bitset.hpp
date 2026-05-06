@@ -13,7 +13,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ostream>
+#include <string>
 #include <vector>
+
 
 #if !defined(SEC_ASSERT)
 #define SEC_ASSERT(expr) assert(expr)
@@ -214,14 +217,6 @@ namespace SecUtility
 			return padding;
 		}
 
-		constexpr void RestPaddingBitsOfZerothBlock() noexcept
-		{
-			if (const std::size_t size = Size(); size != 0)
-			{
-				Block(BlockCount() - 1) &= ~Detail::Bitset::LastBlockMask(HeadPadding());
-			}
-		}
-
 		constexpr std::uint64_t MaskOfBlock(const std::size_t index) const SEC_NOEXCEPT
 		{
 			if (BlockCount() == 1)
@@ -241,6 +236,14 @@ namespace SecUtility
 			}
 
 			return ~std::uint64_t{0};
+		}
+
+		constexpr void RestPaddingBitsOfZerothBlock() noexcept
+		{
+			if (const std::size_t size = Size(); size != 0)
+			{
+				Block(0) &= ~Detail::Bitset::LastBlockMask(HeadPadding());
+			}
 		}
 
 		constexpr void RestPaddingBitsOfLastBlock() noexcept
@@ -282,7 +285,8 @@ namespace SecUtility
 			// ReSharper disable once CppNonExplicitConversionOperator
 			constexpr operator bool() const noexcept
 			{
-				return static_cast<bool>(std::as_const(r_Derived).Block(m_PaddedIndex / Detail::Bitset::BitsPerBlock) & m_Mask);
+				return static_cast<bool>(std::as_const(r_Derived).Block(m_PaddedIndex / Detail::Bitset::BitsPerBlock)
+				                         & m_Mask);
 			}
 
 			// ReSharper disable once CppMemberFunctionMayBeConst
