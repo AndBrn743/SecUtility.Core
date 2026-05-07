@@ -21,6 +21,8 @@
 
 #include <SecUtility/Collection/Bitset.hpp>
 
+#include "cmake-build-debug-wsl-gcc/_deps/catch2-src/src/catch2/catch_template_test_macros.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
@@ -1603,5 +1605,59 @@ TEST_CASE("IndexOfNextOne, IndexOfNextZero, IndexOfPreviousOne, and IndexOfPrevi
 		CHECK(bs.IndexOfNextZero(10) == 11);
 		CHECK(bs.IndexOfPreviousOne(10) == 223);
 		CHECK(bs.IndexOfPreviousZero(10) == 9);
+	}
+}
+
+TEMPLATE_TEST_CASE("Cross assignment",
+                   "[template]",
+                   (Bitset<0>),
+                   (Bitset<4>),
+                   (Bitset<8>),
+                   (Bitset<42>),
+                   (Bitset<64>),
+                   (Bitset<142>))
+{
+	const std::size_t seed = GENERATE(0, 1, 2, 3, 4, 5, 6, 7);
+	const std::size_t size = TestType{}.Size();
+
+	const auto bitString = RandomBitString(size, seed);
+
+	TestType sbs{};
+	std::transform(bitString.begin(), bitString.end(), std::begin(sbs), [](const char c) { return c != '0'; });
+
+	{
+		DynamicBitset dbs(size);
+		dbs = sbs;
+		CHECK(dbs.ToString() == sbs.ToString());
+
+		dbs.FlipAll();
+		if (size != 0)
+		{
+			CHECK(dbs.ToString() != sbs.ToString());
+		}
+		sbs = dbs;
+		CHECK(dbs.ToString() == sbs.ToString());
+	}
+	{
+		DynamicBitset dbs(size * 2);
+
+		dbs.Leading(size) = sbs;
+		CHECK(dbs.Leading(size).ToString() == sbs.ToString());
+		dbs.Trailing(size) = ~dbs.Leading(size);
+		CHECK(dbs.Trailing(size).ToString() == (~sbs).ToString());
+
+		dbs.Segment(size / 2, size) = sbs;
+		CHECK(dbs.Leading(size / 2).ToString() == sbs.Leading(size / 2).ToString());
+		CHECK(dbs.Trailing(size / 2).ToString() == (~sbs).Trailing(size / 2).ToString());
+		CHECK(dbs.Segment(size / 2, size).ToString() == sbs.ToString());
+
+		sbs = dbs.Segment(size / 3, size);
+		CHECK(sbs.ToString() == dbs.Segment(size / 3, size).ToString());
+	}
+
+	{
+		DynamicBitset dbs(size + 2);
+		REQUIRE_THROWS([&] { dbs = sbs; }());
+		REQUIRE_THROWS([&] { sbs = dbs; }());
 	}
 }

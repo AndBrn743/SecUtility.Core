@@ -1075,6 +1075,8 @@ namespace SecUtility
 		constexpr Bitset& operator=(Bitset&& other) noexcept = default;
 		~Bitset() noexcept = default;
 
+		using Base::operator=;
+
 		explicit Bitset(const bool value = false) noexcept : m_Data{}
 		{
 			if (value)
@@ -1182,6 +1184,8 @@ namespace SecUtility
 		DynamicBitset& operator=(const DynamicBitset& other) = default;
 		DynamicBitset& operator=(DynamicBitset&& other) noexcept = default;
 		~DynamicBitset() noexcept = default;
+
+		using Base::operator=;
 
 #if false
 		template <typename OtherDerived>
@@ -1360,6 +1364,21 @@ namespace SecUtility
 		/* CRTP VIRTUAL */ constexpr std::size_t Size() const noexcept
 		{
 			return m_Size;
+		}
+
+		using Base::operator=;
+
+		BitsetSegmentExpr() = delete;
+		constexpr BitsetSegmentExpr(const BitsetSegmentExpr&) noexcept = default;
+		constexpr BitsetSegmentExpr(BitsetSegmentExpr&&) noexcept = default;
+		constexpr BitsetSegmentExpr& operator=(BitsetSegmentExpr&&) = delete;
+		~BitsetSegmentExpr() noexcept = default;
+
+		constexpr BitsetSegmentExpr& operator=(const BitsetSegmentExpr& other) noexcept(
+		        noexcept(Base::operator=(other)))
+		{
+			Base::operator=(other);
+			return *this;
 		}
 
 
