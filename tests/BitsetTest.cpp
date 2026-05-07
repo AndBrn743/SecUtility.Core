@@ -426,7 +426,7 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 		}();
 
 		std::vector<bool> collected;
-		for (auto it = bs.rcbegin(); it != bs.rcend(); ++it)
+		for (auto it = bs.crbegin(); it != bs.crend(); ++it)
 		{
 			collected.push_back(*it);
 		}
@@ -1233,13 +1233,13 @@ TEST_CASE("LeadingZeroCount and LeadingOneCount")
 			const auto tzc = bs.LeadingZeroCount();
 			CHECK(tzc
 			      == static_cast<std::size_t>(std::distance(
-			              bs.rcbegin(), std::find_if(bs.rcbegin(), bs.rcend(), [](const bool b) { return b; }))));
+			              bs.crbegin(), std::find_if(bs.crbegin(), bs.crend(), [](const bool b) { return b; }))));
 
 			bs.Leading(t).SetAll();
 			const auto toc = bs.LeadingOneCount();
 			CHECK(toc
 			      == static_cast<std::size_t>(std::distance(
-			              bs.rcbegin(), std::find_if(bs.rcbegin(), bs.rcend(), [](const bool b) { return !b; }))));
+			              bs.crbegin(), std::find_if(bs.crbegin(), bs.crend(), [](const bool b) { return !b; }))));
 		}
 
 		if (bs.Size() > 8 && bs.Size() > t + 8)
@@ -1251,13 +1251,13 @@ TEST_CASE("LeadingZeroCount and LeadingOneCount")
 
 			CHECK(tzc
 			      == static_cast<std::size_t>(std::distance(
-			              seg.rcbegin(), std::find_if(seg.rcbegin(), seg.rcend(), [](const bool b) { return b; }))));
+			              seg.crbegin(), std::find_if(seg.crbegin(), seg.crend(), [](const bool b) { return b; }))));
 
 			bs.Leading(t).SetAll();
 			const auto toc = seg.LeadingOneCount();
 			CHECK(toc
 			      == static_cast<std::size_t>(std::distance(
-			              seg.rcbegin(), std::find_if(seg.rcbegin(), seg.rcend(), [](const bool b) { return !b; }))));
+			              seg.crbegin(), std::find_if(seg.crbegin(), seg.crend(), [](const bool b) { return !b; }))));
 		}
 	}
 

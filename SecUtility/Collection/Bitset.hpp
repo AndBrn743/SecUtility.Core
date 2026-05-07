@@ -401,7 +401,7 @@ namespace SecUtility
 			return std::reverse_iterator{end()};
 		}
 
-		constexpr auto rcbegin() const noexcept
+		constexpr auto crbegin() const noexcept
 		{
 			return std::reverse_iterator{cend()};
 		}
@@ -416,7 +416,7 @@ namespace SecUtility
 			return std::reverse_iterator{begin()};
 		}
 
-		constexpr auto rcend() const noexcept
+		constexpr auto crend() const noexcept
 		{
 			return std::reverse_iterator{cbegin()};
 		}
