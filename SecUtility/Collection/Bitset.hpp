@@ -661,6 +661,161 @@ namespace SecUtility
 		RightShiftExpr<const Derived> operator>>(std::size_t shift) const;
 #endif
 
+		template <typename OtherDerived>
+		Derived& operator&=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
+		{
+			return BitwiseCombinationOp(other, std::bit_and<>{});
+#if false
+			SEC_ASSERT(Size() == other.Size());
+
+			if (HeadPadding() == other.HeadPadding())
+			{
+				for (std::size_t i = 0; i < BlockCount(); ++i)
+				{
+					const auto mask = MaskOfBlock(i);
+					const auto b0 = Block(i);
+					const auto b = b0 & other.Block(i);
+					const auto n = (b & mask) | ~mask;
+					Block(i) = (b0 & ~mask) | (n & mask);
+				}
+
+				return AsDerived();
+			}
+
+			const std::size_t thisHead = HeadPadding();
+			const std::size_t otherHead = other.HeadPadding();
+
+			// How many bits to shift other's raw data to align to *this.
+			// Positive = shift left, negative = shift right.
+			const std::ptrdiff_t shift = static_cast<std::ptrdiff_t>(thisHead) - static_cast<std::ptrdiff_t>(otherHead);
+
+			// Produce a shifted version of other's block `i` in *this's coordinate space.
+			// We may need to borrow bits from the adjacent other-block.
+			//
+			// shifted_other_block(i) reads from other.Block(i) and other.Block(i±1).
+
+			const auto shifted_other_block = [&, shift](std::size_t i) -> std::uint64_t
+			{
+				if (shift == 0)
+				{
+					return other.Block(i);
+				}
+				else if (shift > 0)
+				{
+					// Shift left: low bits come from Block(i), high bits come from Block(i-1)
+					const auto lshift = static_cast<std::size_t>(shift);
+					const std::uint64_t lo = other.Block(i) << lshift;
+					const std::uint64_t hi = i > 0 ? other.Block(i - 1) >> (BitsPerBlock - lshift) : std::uint64_t{0};
+					return hi | lo;
+				}
+				else
+				{
+					// Shift right: high bits come from Block(i), low bits come from Block(i+1)
+					const auto rshift = static_cast<std::size_t>(-shift);
+					const std::uint64_t hi = other.Block(i) >> rshift;
+					const std::uint64_t lo = i + 1 < other.BlockCount() ? other.Block(i + 1) << (BitsPerBlock - rshift)
+					                                                    : std::uint64_t{0};
+					return hi | lo;
+				}
+			};
+
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				const auto mask = MaskOfBlock(i);       // valid-bit mask for *this's block i
+				const auto b = Block(i);                // current block in *this
+				const auto o = shifted_other_block(i);  // other's bits aligned to *this
+				const auto result = b & o;              // AND of valid bits
+
+				// Preserve *this's padding bits (outside mask), write AND result inside mask.
+				Block(i) = (b & ~mask) | (result & mask);
+			}
+
+			return AsDerived();
+#endif
+		}
+
+		template <typename OtherDerived>
+		Derived& operator|=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
+		{
+			return BitwiseCombinationOp(other, std::bit_or<>{});
+		}
+
+		template <typename OtherDerived>
+		Derived& operator^=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
+		{
+			return BitwiseCombinationOp(other, std::bit_xor<>{});
+		}
+
+		template <typename OtherDerived, typename Op>
+		Derived& BitwiseCombinationOp(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
+		{
+			SEC_ASSERT(Size() == other.Size());
+
+			if (HeadPadding() == other.HeadPadding())
+			{
+				for (std::size_t i = 0; i < BlockCount(); ++i)
+				{
+					const auto mask = MaskOfBlock(i);
+					const auto b0 = Block(i);
+					const auto b = op(b0, other.Block(i));
+					const auto n = (b & mask) | ~mask;
+					Block(i) = (b0 & ~mask) | (n & mask);
+				}
+
+				return AsDerived();
+			}
+
+			const std::size_t thisHead = HeadPadding();
+			const std::size_t otherHead = other.HeadPadding();
+
+			// How many bits to shift other's raw data to align to *this.
+			// Positive = shift left, negative = shift right.
+			const std::ptrdiff_t shift = static_cast<std::ptrdiff_t>(thisHead) - static_cast<std::ptrdiff_t>(otherHead);
+
+			// Produce a shifted version of other's block `i` in *this's coordinate space.
+			// We may need to borrow bits from the adjacent other-block.
+			//
+			// shifted_other_block(i) reads from other.Block(i) and other.Block(i±1).
+
+			const auto shifted_other_block = [&, shift](std::size_t i) -> std::uint64_t
+			{
+				if (shift == 0)
+				{
+					return other.Block(i);
+				}
+				else if (shift > 0)
+				{
+					// Shift left: low bits come from Block(i), high bits come from Block(i-1)
+					const auto lshift = static_cast<std::size_t>(shift);
+					const std::uint64_t lo = other.Block(i) << lshift;
+					const std::uint64_t hi = i > 0 ? other.Block(i - 1) >> (BitsPerBlock - lshift) : std::uint64_t{0};
+					return hi | lo;
+				}
+				else
+				{
+					// Shift right: high bits come from Block(i), low bits come from Block(i+1)
+					const auto rshift = static_cast<std::size_t>(-shift);
+					const std::uint64_t hi = other.Block(i) >> rshift;
+					const std::uint64_t lo = i + 1 < other.BlockCount() ? other.Block(i + 1) << (BitsPerBlock - rshift)
+					                                                    : std::uint64_t{0};
+					return hi | lo;
+				}
+			};
+
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				const auto mask = MaskOfBlock(i);       // valid-bit mask for *this's block i
+				const auto b = Block(i);                // current block in *this
+				const auto o = shifted_other_block(i);  // other's bits aligned to *this
+				const auto result = op(Block(i), o);    // AND of valid bits
+
+				// Preserve *this's padding bits (outside mask), write AND result inside mask.
+				Block(i) = (b & ~mask) | (result & mask);
+			}
+
+			return AsDerived();
+		}
+
 		BitsetNotExpr<const Derived> operator~() const noexcept
 		{
 			return BitsetNotExpr<const Derived>{AsDerived()};

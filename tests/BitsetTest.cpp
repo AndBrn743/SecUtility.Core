@@ -1280,3 +1280,57 @@ TEST_CASE("LeadingZeroCount and LeadingOneCount")
 		CHECK(bs.IndexOfLastOne() == (bs.Size() == 0 ? 0 : bs.Size() - 1));
 	}
 }
+
+TEST_CASE("operator&=")
+{
+	const std::size_t size = GENERATE(42, 69, 73, 423);
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+	const auto bitString0 = RandomBitString(size, seed);
+	DynamicBitset bs0(size);
+	std::transform(bitString0.begin(), bitString0.end(), bs0.begin(), [](const char c) { return c != '0'; });
+
+	const auto bitString1 = RandomBitString(size, seed + 1);
+	DynamicBitset bs1(size);
+	std::transform(bitString1.begin(), bitString1.end(), bs1.begin(), [](const char c) { return c != '0'; });
+
+	auto seg0 = bs0.Trailing(12);
+	auto seg2 = bs0.Leading(19);
+
+	{
+		DynamicBitset bs2 = bs0;
+		bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12, size - seg0.Size() - seg2.Size());
+
+		REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+		REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+		for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+		{
+			CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 + i]));
+		}
+	}
+	{
+		DynamicBitset bs2 = bs0;
+		bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12 + 9, size - seg0.Size() - seg2.Size());
+
+		REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+		REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+		for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+		{
+			CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 + 9 + i]));
+		}
+	}
+	{
+		DynamicBitset bs2 = bs0;
+		bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12 - 9, size - seg0.Size() - seg2.Size());
+
+		REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+		REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+		for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+		{
+			CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 - 9 + i]));
+		}
+	}
+}
