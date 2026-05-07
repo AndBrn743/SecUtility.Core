@@ -744,6 +744,88 @@ namespace SecUtility
 			return BitsetNotExpr<const Derived>{AsDerived()};
 		}
 
+		constexpr Derived& operator<<=(const std::size_t n) SEC_NOEXCEPT
+		{
+			if (n == 0)
+			{
+				return AsDerived();
+			}
+
+			if (n >= Size())
+			{
+				ResetAll();
+				return AsDerived();
+			}
+
+			const std::size_t blockShift = n / BitsPerBlock;
+			const std::size_t bitShift = n % BitsPerBlock;
+
+			for (std::size_t i = BlockCount(); i-- > 0;)
+			{
+				const auto mask = MaskOfBlock(i);
+				const auto pad = Block(i) & ~mask;
+
+				std::uint64_t val = 0;
+
+				if (i >= blockShift)
+				{
+					const std::size_t src = i - blockShift;
+					val = (Block(src) & MaskOfBlock(src)) << bitShift;
+
+					if (bitShift > 0 && src > 0)
+					{
+						const std::size_t carriedSrc = src - 1;
+						val |= (Block(carriedSrc) & MaskOfBlock(carriedSrc)) >> (BitsPerBlock - bitShift);
+					}
+				}
+
+				Block(i) = pad | (val & mask);
+			}
+
+			return AsDerived();
+		}
+
+		constexpr Derived& operator>>=(const std::size_t n) SEC_NOEXCEPT
+		{
+			if (n == 0)
+			{
+				return AsDerived();
+			}
+
+			if (n >= Size())
+			{
+				ResetAll();
+				return AsDerived();
+			}
+
+			const std::size_t blockShift = n / BitsPerBlock;
+			const std::size_t bitShift = n % BitsPerBlock;
+			const std::size_t count = BlockCount();
+
+			for (std::size_t i = 0; i < count; ++i)
+			{
+				const auto mask = MaskOfBlock(i);
+				const auto pad = Block(i) & ~mask;
+
+				std::uint64_t val = 0;
+
+				if (const std::size_t src = i + blockShift; src < count)
+				{
+					val = (Block(src) & MaskOfBlock(src)) >> bitShift;
+
+					if (bitShift > 0 && src + 1 < count)
+					{
+						const std::size_t carriedSrc = src + 1;
+						val |= (Block(carriedSrc) & MaskOfBlock(carriedSrc)) << (BitsPerBlock - bitShift);
+					}
+				}
+
+				Block(i) = pad | (val & mask);
+			}
+
+			return AsDerived();
+		}
+
 		// ----------------------------------------------------------
 		//  Comparison
 		// ----------------------------------------------------------
