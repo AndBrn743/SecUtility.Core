@@ -134,7 +134,7 @@ namespace SecUtility
 		}
 
 		template <typename T>
-		std::size_t LeadingZeroCount(T) = delete;  // to prevent coversion
+		std::size_t LeadingZeroCount(T) = delete;  // to prevent conversion
 
 		template <typename>
 		struct is_fixed_size_bitset : std::false_type
@@ -426,17 +426,17 @@ namespace SecUtility
 			return SubscriptBasedIterator<const Derived>{AsDerived(), Size()};
 		}
 
-		constexpr auto rbegin() noexcept
+		constexpr auto rbegin() noexcept // NOLINT
 		{
 			return std::reverse_iterator{end()};
 		}
 
-		constexpr auto rbegin() const noexcept
+		constexpr auto rbegin() const noexcept // NOLINT
 		{
 			return std::reverse_iterator{end()};
 		}
 
-		constexpr auto crbegin() const noexcept
+		constexpr auto crbegin() const noexcept // NOLINT
 		{
 			return std::reverse_iterator{cend()};
 		}
@@ -451,7 +451,7 @@ namespace SecUtility
 			return std::reverse_iterator{begin()};
 		}
 
-		constexpr auto crend() const noexcept
+		constexpr auto crend() const noexcept // NOLINT
 		{
 			return std::reverse_iterator{cbegin()};
 		}
@@ -1045,11 +1045,13 @@ namespace SecUtility
 		        (N + Detail::Bitset::BitsPerBlock - 1) / Detail::Bitset::BitsPerBlock;
 
 
+		// ReSharper disable once CppMemberFunctionMayBeStatic
 		/* CRTP OVERRIDE */ constexpr std::size_t BlockCount() const noexcept
 		{
 			return kBlockCount;
 		}
 
+		// ReSharper disable once CppMemberFunctionMayBeStatic
 		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
 		{
 			return 0;
@@ -1091,7 +1093,7 @@ namespace SecUtility
 		}
 
 		template <typename OtherDerived>
-		Bitset(const BitsetBase<OtherDerived>& other) : m_Data{}
+		/* IMPLICIT */ Bitset(const BitsetBase<OtherDerived>& other) : m_Data{}
 		{
 			Base::operator=(other);
 		}
@@ -1099,6 +1101,7 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		//  Size / capacity
 		// ----------------------------------------------------------
+		// ReSharper disable once CppMemberFunctionMayBeStatic
 		/* CRTP OVERRIDE */ constexpr std::size_t Size() const noexcept
 		{
 			return kN;
@@ -1123,7 +1126,8 @@ namespace SecUtility
 		using Base = BitsetBase;
 		friend Base;
 
-		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		// ReSharper disable once CppMemberFunctionMayBeStatic
+		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing NOLINT(*-convert-member-functions-to-static)
 		{
 			return 0;
 		}
@@ -1162,7 +1166,7 @@ namespace SecUtility
 		using Base::operator=;
 
 		template <typename OtherDerived>
-		DynamicBitset(const BitsetBase<OtherDerived>& other)
+		/* IMPLICIT */ DynamicBitset(const BitsetBase<OtherDerived>& other)
 		    : m_Size(other.Size()), m_Data(Detail::Bitset::BlocksFor(m_Size))
 		{
 			Base::operator=(other);
@@ -1391,6 +1395,7 @@ namespace SecUtility
 			return static_cast<BaseOfNested&>(m_Nested).BlockCount();
 		}
 
+		//NOLINTNEXTLINE(*-use-equals-delete)
 		/* CRTP VIRTUAL */ constexpr std::uint64_t& Block(std::size_t index) noexcept = delete;
 
 		/* CRTP VIRTUAL */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
