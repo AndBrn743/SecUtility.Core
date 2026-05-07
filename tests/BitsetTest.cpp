@@ -1281,7 +1281,7 @@ TEST_CASE("LeadingZeroCount and LeadingOneCount")
 	}
 }
 
-TEST_CASE("operator&=")
+TEST_CASE("operator&=, operator|=, and operator^=")
 {
 	const std::size_t size = GENERATE(42, 69, 73, 423);
 	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
@@ -1297,40 +1297,123 @@ TEST_CASE("operator&=")
 	auto seg0 = bs0.Trailing(12);
 	auto seg2 = bs0.Leading(19);
 
+	SECTION("operator&=")
 	{
-		DynamicBitset bs2 = bs0;
-		bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12, size - seg0.Size() - seg2.Size());
-
-		REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
-		REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
-
-		for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
 		{
-			CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 + i]));
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 + i]));
+			}
+		}
+		{
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12 + 9, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 + 9 + i]));
+			}
+		}
+		{
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12 - 9, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 - 9 + i]));
+			}
 		}
 	}
+
+	SECTION("operator|=")
 	{
-		DynamicBitset bs2 = bs0;
-		bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12 + 9, size - seg0.Size() - seg2.Size());
-
-		REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
-		REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
-
-		for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
 		{
-			CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 + 9 + i]));
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) |= bs1.Segment(12, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] || bs1[12 + i]));
+			}
+		}
+		{
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) |= bs1.Segment(12 + 9, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] || bs1[12 + 9 + i]));
+			}
+		}
+		{
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) |= bs1.Segment(12 - 9, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] || bs1[12 - 9 + i]));
+			}
 		}
 	}
+
+	SECTION("operator^=")
 	{
-		DynamicBitset bs2 = bs0;
-		bs2.Segment(12, size - seg0.Size() - seg2.Size()) &= bs1.Segment(12 - 9, size - seg0.Size() - seg2.Size());
-
-		REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
-		REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
-
-		for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
 		{
-			CHECK(bs2[12 + i] == (bs0[12 + i] && bs1[12 - 9 + i]));
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) ^= bs1.Segment(12, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] != bs1[12 + i]));
+			}
+		}
+		{
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) ^= bs1.Segment(12 + 9, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] != bs1[12 + 9 + i]));
+			}
+		}
+		{
+			DynamicBitset bs2 = bs0;
+			bs2.Segment(12, size - seg0.Size() - seg2.Size()) ^= bs1.Segment(12 - 9, size - seg0.Size() - seg2.Size());
+
+			REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+			REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+
+			for (std::size_t i = 0; i < size - seg0.Size() - seg2.Size(); ++i)
+			{
+				CHECK(bs2[12 + i] == (bs0[12 + i] != bs1[12 - 9 + i]));
+			}
 		}
 	}
 }
