@@ -1161,7 +1161,7 @@ namespace SecUtility
 
 		/* CRTP VIRTUAL */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
 		{
-			return static_cast<BaseOfNested&>(m_Nested).Block(index + m_BlockIndexOffset);
+			return static_cast<const BaseOfNested&>(m_Nested).Block(index + m_BlockIndexOffset);
 		}
 
 		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
