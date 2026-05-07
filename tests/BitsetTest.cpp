@@ -311,9 +311,9 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 		bs.Set(0).Set(3).Set(7).Set(15);
 
 		std::vector<bool> collected;
-		for (auto it = bs.begin(); it != bs.end(); ++it)
+		for (auto&& b : bs)
 		{
-			collected.push_back(*it);
+			collected.push_back(b);
 		}
 
 		REQUIRE(collected.size() == 16);
@@ -356,9 +356,9 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 		}();
 
 		std::vector<bool> collected;
-		for (auto it = bs.cbegin(); it != bs.cend(); ++it)
+		for (bool b : std::as_const(bs))
 		{
-			collected.push_back(*it);
+			collected.push_back(b);
 		}
 
 		REQUIRE(collected.size() == 8);
@@ -380,9 +380,9 @@ TEST_CASE("Iterators", "[bitset][iterator]")
 		const Bitset<10>& cbs = bs;
 		std::vector<bool> collected;
 
-		for (auto it = cbs.begin(); it != cbs.end(); ++it)
+		for (bool cb : cbs)
 		{
-			collected.push_back(*it);
+			collected.push_back(cb);
 		}
 
 		REQUIRE(collected.size() == 10);
