@@ -1640,6 +1640,9 @@ TEMPLATE_TEST_CASE("Cross assignment",
 
 		DynamicBitset dbs2{sbs};
 		CHECK(dbs2.ToString() == sbs.ToString());
+
+		DynamicBitset dbs3 = sbs;
+		CHECK(dbs3.ToString() == sbs.ToString());
 	}
 	{
 		DynamicBitset dbs(size * 2);
@@ -1659,6 +1662,9 @@ TEMPLATE_TEST_CASE("Cross assignment",
 
 		TestType sbs2{dbs.Segment(size / 3, size)};
 		CHECK(sbs2.ToString() == dbs.Segment(size / 3, size).ToString());
+
+		TestType sbs3 = dbs.Segment(size / 3, size);
+		CHECK(sbs3.ToString() == dbs.Segment(size / 3, size).ToString());
 	}
 
 	{

@@ -1091,7 +1091,7 @@ namespace SecUtility
 		}
 
 		template <typename OtherDerived>
-		explicit Bitset(const BitsetBase<OtherDerived>& other) : m_Data{}
+		Bitset(const BitsetBase<OtherDerived>& other) : m_Data{}
 		{
 			Base::operator=(other);
 		}
@@ -1162,7 +1162,7 @@ namespace SecUtility
 		using Base::operator=;
 
 		template <typename OtherDerived>
-		explicit DynamicBitset(const BitsetBase<OtherDerived>& other)
+		DynamicBitset(const BitsetBase<OtherDerived>& other)
 		    : m_Size(other.Size()), m_Data(Detail::Bitset::BlocksFor(m_Size))
 		{
 			Base::operator=(other);
