@@ -1649,6 +1649,73 @@ TEST_CASE("operator&, operator|, and operator^")
 			}
 		}
 	}
+
+	SECTION("operator^")
+	{
+		{
+			Bitset<42> bs0{};
+			SetRandom(bs0, seed);
+
+			Bitset<42> bs1{};
+			SetRandom(bs1, seed + 10);
+
+			const auto bn = bs0 ^ bs1;
+			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
+
+			for (std::size_t i = 0; i < 42; ++i)
+			{
+				CHECK(bn[i] == (bs0[i] != bs1[i]));
+			}
+		}
+
+		{
+			Bitset<42> bs0{};
+			SetRandom(bs0, seed);
+
+			DynamicBitset bs1{42};
+			SetRandom(bs1, seed + 10);
+
+			const auto bn = bs0 ^ bs1;
+			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
+
+			for (std::size_t i = 0; i < 42; ++i)
+			{
+				CHECK(bn[i] == (bs0[i] != bs1[i]));
+			}
+		}
+
+		{
+			DynamicBitset bs0{42};
+			SetRandom(bs0, seed);
+
+			Bitset<42> bs1{};
+			SetRandom(bs1, seed + 10);
+
+			const auto bn = bs0 ^ bs1;
+			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
+
+			for (std::size_t i = 0; i < 42; ++i)
+			{
+				CHECK(bn[i] == (bs0[i] != bs1[i]));
+			}
+		}
+
+		{
+			DynamicBitset bs0{42};
+			SetRandom(bs0, seed);
+
+			DynamicBitset bs1{42};
+			SetRandom(bs1, seed + 10);
+
+			const auto bn = bs0 ^ bs1;
+			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, DynamicBitset>);
+
+			for (std::size_t i = 0; i < 42; ++i)
+			{
+				CHECK(bn[i] == (bs0[i] != bs1[i]));
+			}
+		}
+	}
 }
 
 TEST_CASE("operator<<= and operator>>=")
