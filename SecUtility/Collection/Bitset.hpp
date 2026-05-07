@@ -674,9 +674,10 @@ namespace SecUtility
 			std::size_t blockIdx = startBit / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitInBlk = startBit % Detail::Bitset::BitsPerBlock;
 
-			if (const std::uint64_t blk = (Block(blockIdx) & MaskOfBlock(blockIdx)) >> bitInBlk; blk != 0)
+			if (const std::uint64_t blk = Block(blockIdx) >> bitInBlk; blk != 0)
 			{
 				const std::size_t idx = startBit + Detail::Bitset::TrailingZeroCount(blk) - HeadPadding();
+				// guards against over-counting caused by padding-bits leak into payload-bits segment
 				return idx < Size() ? idx : Size();
 			}
 
@@ -686,6 +687,7 @@ namespace SecUtility
 				{
 					const std::size_t idx = blockIdx * Detail::Bitset::BitsPerBlock
 					                        + Detail::Bitset::TrailingZeroCount(blk) - HeadPadding();
+					// guards against over-counting caused by padding-bits leak into payload-bits segment
 					return idx < Size() ? idx : Size();
 				}
 			}
@@ -708,12 +710,11 @@ namespace SecUtility
 			std::size_t blockIdx = endBit / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitInBlk = endBit % Detail::Bitset::BitsPerBlock;
 
-			if (const std::uint64_t blk = (Block(blockIdx) & MaskOfBlock(blockIdx))
-			                              << (Detail::Bitset::BitsPerBlock - bitInBlk - 1);
-			    blk != 0)
+			if (const std::uint64_t blk = Block(blockIdx) << (Detail::Bitset::BitsPerBlock - bitInBlk - 1); blk != 0)
 			{
 				const auto idx = blockIdx * Detail::Bitset::BitsPerBlock + bitInBlk
 				                 - Detail::Bitset::LeadingZeroCount(blk) - HeadPadding();
+				// guards against over-counting caused by padding-bits leak into payload-bits segment
 				return idx < Size() ? idx : Size();
 			}
 
@@ -724,6 +725,7 @@ namespace SecUtility
 					const auto idx = blockIdx * Detail::Bitset::BitsPerBlock
 					                 + (Detail::Bitset::BitsPerBlock - 1 - Detail::Bitset::LeadingZeroCount(blk))
 					                 - HeadPadding();
+					// guards against over-counting caused by padding-bits leak into payload-bits segment
 					return idx < Size() ? idx : Size();
 				}
 			}
