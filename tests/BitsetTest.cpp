@@ -1488,6 +1488,64 @@ TEST_CASE("operator<<= and operator>>=")
 			}
 		}
 	}
+
+	SECTION("operator<<")
+	{
+		DynamicBitset bs2 = bs0;
+		const auto seg = bs2.Segment(12, size - seg0.Size() - seg2.Size());
+		const auto shifted = seg << shiftSize;
+
+		REQUIRE(shifted.Size() == seg.Size());
+		REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+		REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+		REQUIRE(seg1.ToString() == seg.ToString());
+
+		if (shiftSize == 0)
+		{
+			REQUIRE(shifted.ToString() == seg1.ToString());
+		}
+		else if (shiftSize >= seg.Size())
+		{
+			REQUIRE(shifted.IsAllZeros());
+		}
+		else
+		{
+			CHECK(shifted.Trailing(shiftSize).IsAllZeros());
+			for (std::size_t i = 0; i + shiftSize < seg.Size(); ++i)
+			{
+				CHECK(shifted[i + shiftSize] == seg1[i]);
+			}
+		}
+	}
+
+	SECTION("operator>>")
+	{
+		DynamicBitset bs2 = bs0;
+		const auto seg = bs2.Segment(12, size - seg0.Size() - seg2.Size());
+		const auto shifted = seg >> shiftSize;
+
+		REQUIRE(shifted.Size() == seg.Size());
+		REQUIRE(seg0.ToString() == bs2.Trailing(12).ToString());
+		REQUIRE(seg2.ToString() == bs2.Leading(19).ToString());
+		REQUIRE(seg1.ToString() == seg.ToString());
+
+		if (shiftSize == 0)
+		{
+			REQUIRE(shifted.ToString() == seg1.ToString());
+		}
+		else if (shiftSize >= seg.Size())
+		{
+			REQUIRE(shifted.IsAllZeros());
+		}
+		else
+		{
+			CHECK(shifted.Leading(shiftSize).IsAllZeros());
+			for (std::size_t i = 0; i + shiftSize < seg.Size(); ++i)
+			{
+				CHECK(shifted[i] == seg1[i + shiftSize]);
+			}
+		}
+	}
 }
 
 TEST_CASE("IndexOfNextOne, IndexOfNextZero, IndexOfPreviousOne, and IndexOfPreviousZero")

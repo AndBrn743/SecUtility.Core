@@ -426,17 +426,17 @@ namespace SecUtility
 			return SubscriptBasedIterator<const Derived>{AsDerived(), Size()};
 		}
 
-		constexpr auto rbegin() noexcept // NOLINT
+		constexpr auto rbegin() noexcept  // NOLINT
 		{
 			return std::reverse_iterator{end()};
 		}
 
-		constexpr auto rbegin() const noexcept // NOLINT
+		constexpr auto rbegin() const noexcept  // NOLINT
 		{
 			return std::reverse_iterator{end()};
 		}
 
-		constexpr auto crbegin() const noexcept // NOLINT
+		constexpr auto crbegin() const noexcept  // NOLINT
 		{
 			return std::reverse_iterator{cend()};
 		}
@@ -451,7 +451,7 @@ namespace SecUtility
 			return std::reverse_iterator{begin()};
 		}
 
-		constexpr auto crend() const noexcept // NOLINT
+		constexpr auto crend() const noexcept  // NOLINT
 		{
 			return std::reverse_iterator{cbegin()};
 		}
@@ -1115,6 +1115,7 @@ namespace SecUtility
 	struct Traits<Bitset<N>>
 	{
 		static constexpr bool IsNestedByRef = true;
+		using EvaluatedType = Bitset<N>;
 	};
 
 
@@ -1127,7 +1128,8 @@ namespace SecUtility
 		friend Base;
 
 		// ReSharper disable once CppMemberFunctionMayBeStatic
-		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing NOLINT(*-convert-member-functions-to-static)
+		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding()
+		        const noexcept  // corresponds to trailing NOLINT(*-convert-member-functions-to-static)
 		{
 			return 0;
 		}
@@ -1273,6 +1275,7 @@ namespace SecUtility
 	struct Traits<DynamicBitset>
 	{
 		static constexpr bool IsNestedByRef = true;
+		using EvaluatedType = DynamicBitset;
 	};
 
 
@@ -1362,6 +1365,7 @@ namespace SecUtility
 	struct Traits<BitsetSegmentExpr<Nested>>
 	{
 		static constexpr bool IsNestedByRef = false;
+		using EvaluatedType = DynamicBitset;
 	};
 
 	// ============================================================
@@ -1395,7 +1399,7 @@ namespace SecUtility
 			return static_cast<BaseOfNested&>(m_Nested).BlockCount();
 		}
 
-		//NOLINTNEXTLINE(*-use-equals-delete)
+		// NOLINTNEXTLINE(*-use-equals-delete)
 		/* CRTP VIRTUAL */ constexpr std::uint64_t& Block(std::size_t index) noexcept = delete;
 
 		/* CRTP VIRTUAL */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
@@ -1430,7 +1434,52 @@ namespace SecUtility
 	struct Traits<BitsetNotExpr<Nested>>
 	{
 		static constexpr bool IsNestedByRef = false;
+		using EvaluatedType = typename Traits<std::remove_const_t<Nested>>::EvaluatedType;
 	};
+
+
+	// ============================================================
+	//  Binary bitwise operators
+	// ============================================================
+	template <typename Derived>
+	auto operator<<(const BitsetBase<Derived>& bs, const std::size_t size)
+	{
+		typename Traits<Derived>::EvaluatedType r = bs;
+		r <<= size;
+		return r;
+	}
+
+	template <typename Derived>
+	auto operator>>(const BitsetBase<Derived>& bs, const std::size_t size)
+	{
+		typename Traits<Derived>::EvaluatedType r = bs;
+		r >>= size;
+		return r;
+	}
+
+#define SEC_DEFINE_BITSET_BITWISE_BINARY_OP(OP)                                                                        \
+	template <typename Lhs, typename Rhs>                                                                              \
+	constexpr auto operator OP(const BitsetBase<Lhs>& lhs, const BitsetBase<Rhs>& rhs) SEC_NOEXCEPT                    \
+	{                                                                                                                  \
+		if constexpr (Detail::Bitset::is_fixed_size_bitset<Rhs>::value)                                                \
+		{                                                                                                              \
+			typename Traits<Rhs>::EvaluatedType r{rhs};                                                                \
+			r OP## = lhs;                                                                                              \
+			return r;                                                                                                  \
+		}                                                                                                              \
+		else                                                                                                           \
+		{                                                                                                              \
+			typename Traits<Lhs>::EvaluatedType r{lhs};                                                                \
+			r OP## = rhs;                                                                                              \
+			return r;                                                                                                  \
+		}                                                                                                              \
+	}
+
+	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(&)
+	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(|)
+	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(^)
+
+#undef SEC_DEFINE_BITSET_BITWISE_BINARY_OP
 }
 
 #if defined(__GNUC__) && !defined(__clang__)
