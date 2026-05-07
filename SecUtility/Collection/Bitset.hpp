@@ -1445,6 +1445,12 @@ namespace SecUtility
 			return m_Nested.Size();
 		}
 
+		BitsetNotExpr() = delete;
+		constexpr BitsetNotExpr(const BitsetNotExpr&) noexcept = default;
+		constexpr BitsetNotExpr(BitsetNotExpr&&) noexcept = default;
+		BitsetNotExpr& operator=(const BitsetNotExpr&) = delete;
+		BitsetNotExpr* operator=(BitsetNotExpr&&) = delete;
+		~BitsetNotExpr() noexcept = default;
 
 	private:
 		std::conditional_t<Traits<std::decay_t<Nested>>::IsNestedByRef, Nested&, Nested> m_Nested;
