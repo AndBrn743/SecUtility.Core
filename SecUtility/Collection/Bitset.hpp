@@ -1067,7 +1067,7 @@ namespace SecUtility
 
 	public:
 		// ----------------------------------------------------------
-		//  Ctors
+		//  Special functions
 		// ----------------------------------------------------------
 		constexpr Bitset(const Bitset& other) noexcept = default;
 		constexpr Bitset(Bitset&& other) noexcept = default;
@@ -1090,37 +1090,11 @@ namespace SecUtility
 			}
 		}
 
-
-#if false
 		template <typename OtherDerived>
 		explicit Bitset(const BitsetBase<OtherDerived>& other) : m_Data{}
 		{
-			SEC_ASSERT(other.Size() == N);
-			for (std::size_t i = 0; i < kBlockCount; ++i)
-			{
-				m_Data[i] = other.Data()[i];
-			}
-			SanitizeLastBlock();
+			Base::operator=(other);
 		}
-
-		template <typename OtherDerived>
-		constexpr Bitset& operator=(const BitsetBase<OtherDerived>& other)
-		{
-			SEC_ASSERT(other.Size() == N);
-			for (std::size_t i = 0; i < kBlockCount; ++i)
-			{
-				m_Data[i] = other.Data()[i];
-			}
-			SanitizeLastBlock();
-			return *this;
-		}
-
-		template <typename OtherDerived>
-		constexpr Bitset& operator=(BitsetBase<OtherDerived>&& other)
-		{
-			return *this = static_cast<const BitsetBase<OtherDerived>&>(other);
-		}
-#endif
 
 		// ----------------------------------------------------------
 		//  Size / capacity
@@ -1187,25 +1161,16 @@ namespace SecUtility
 
 		using Base::operator=;
 
-#if false
 		template <typename OtherDerived>
 		explicit DynamicBitset(const BitsetBase<OtherDerived>& other)
-		    : m_Size(other.Size()), m_Data(other.Data(), other.Data() + other.BlockCount())
+		    : m_Size(other.Size()), m_Data(Detail::Bitset::BlocksFor(m_Size))
 		{
-			SanitizeLastBlock();
+			Base::operator=(other);
 		}
 
-		template <typename OtherDerived>
-		constexpr DynamicBitset& operator=(const BitsetBase<OtherDerived>& other)
-		{
-			m_Size = other.Size();
-			m_Data.assign(other.Data(), other.Data() + other.BlockCount());
-			SanitizeLastBlock();
-			return *this;
-		}
-#endif
-
-		template <typename Integer>
+		template <typename Integer,
+		          typename...,
+		          typename = std::enable_if_t<std::is_integral_v<std::decay_t<Integer>>, void>>
 		explicit DynamicBitset(const Integer size, const bool value = false)
 		    : m_Size(
 		              [size]
