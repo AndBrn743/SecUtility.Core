@@ -1497,6 +1497,8 @@ TEST_CASE("IndexOfNextOne, IndexOfNextZero, IndexOfPreviousOne, and IndexOfPrevi
 	DynamicBitset bs(size);
 	std::transform(bitString0.begin(), bitString0.end(), bs.begin(), [](const char c) { return c != '0'; });
 
+	const auto seg = bs.Segment(62, 8);
+
 	SECTION("IndexOfNextOne")
 	{
 		const unsigned pos = GENERATE(0, 8, 42, 63, 64, 65, 69, 73, 127, 128, 222);
@@ -1531,11 +1533,75 @@ TEST_CASE("IndexOfNextOne, IndexOfNextZero, IndexOfPreviousOne, and IndexOfPrevi
 		REQUIRE(!bs.Segment(actual + 1, pos - (actual + 1)).HasZeros());
 	}
 
+	SECTION("IndexOfNextOne w/ Segment")
+	{
+		const unsigned pos = GENERATE(0, 1, 2, 3, 4, 5, 6, 7);
+		const auto expected = static_cast<std::size_t>(std::distance(
+		        seg.begin(), std::find_if(seg.begin() + pos + 1, seg.end(), [](const bool b) { return b; })));
+		const auto actual = seg.IndexOfNextOne(pos);
+
+		CHECK(actual == expected);
+	}
+
+	SECTION("IndexOfNextZero w/ Segment")
+	{
+		const unsigned pos = GENERATE(0, 1, 2, 3, 4, 5, 6, 7);
+		const auto expected = static_cast<std::size_t>(std::distance(
+		        seg.begin(), std::find_if(seg.begin() + pos + 1, seg.end(), [](const bool b) { return !b; })));
+		const auto actual = seg.IndexOfNextZero(pos);
+		CHECK(actual == expected);
+	}
+
+	SECTION("IndexOfPreviousOne w/ Segment")
+	{
+		const unsigned pos = GENERATE(1, 2, 3, 4, 5, 6, 7);
+		const auto actual = seg.IndexOfPreviousOne(pos);
+
+		if (actual == seg.Size())
+		{
+			REQUIRE(!seg.Segment(0, pos - 1).HasOnes());
+		}
+		else
+		{
+			REQUIRE(seg[actual] == true);
+			REQUIRE(!seg.Segment(actual + 1, pos - (actual + 1)).HasOnes());
+		}
+	}
+
+	SECTION("IndexOfPreviousZero w/ Segment")
+	{
+		const unsigned pos = GENERATE(1, 2, 3, 4, 5, 6, 7);
+		const auto actual = seg.IndexOfPreviousZero(pos);
+
+		if (actual == seg.Size())
+		{
+			REQUIRE(!seg.Segment(0, pos - 1).HasZeros());
+		}
+		else
+		{
+			REQUIRE(seg[actual] == false);
+			REQUIRE(!seg.Segment(actual + 1, pos - (actual + 1)).HasZeros());
+		}
+	}
+
+
 	SECTION("Edge case")
 	{
 		CHECK(bs.IndexOfNextOne(222) == 223);
 		CHECK(bs.IndexOfNextZero(222) == 223);
 		CHECK(bs.IndexOfPreviousOne(0) == 223);
 		CHECK(bs.IndexOfPreviousZero(0) == 223);
+
+		bs.SetAll();
+		CHECK(bs.IndexOfNextOne(10) == 11);
+		CHECK(bs.IndexOfNextZero(10) == 223);
+		CHECK(bs.IndexOfPreviousOne(10) == 9);
+		CHECK(bs.IndexOfPreviousZero(10) == 223);
+
+		bs.ResetAll();
+		CHECK(bs.IndexOfNextOne(10) == 223);
+		CHECK(bs.IndexOfNextZero(10) == 11);
+		CHECK(bs.IndexOfPreviousOne(10) == 223);
+		CHECK(bs.IndexOfPreviousZero(10) == 9);
 	}
 }

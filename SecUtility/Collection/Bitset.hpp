@@ -5,6 +5,7 @@
 
 #include <SecUtility/Collection/SubscriptBasedIterator.hpp>
 #include <SecUtility/IO/BitOrder.hpp>
+#include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Meta/TypeTrait.hpp>
 
@@ -188,22 +189,23 @@ namespace SecUtility
 		~BitsetBase() noexcept = default;
 
 		// Forwarding helpers
-		/* CRTP VIRTUAL */ constexpr std::size_t BlockCount() const noexcept
+		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::size_t BlockCount() const noexcept
 		{
 			return AsDerived().BlockCount();
 		}
 
-		/* CRTP VIRTUAL */ constexpr std::uint64_t& Block(const std::size_t index) noexcept
+		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::uint64_t& Block(const std::size_t index) noexcept
 		{
 			return AsDerived().Block(index);
 		}
 
-		/* CRTP VIRTUAL */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
+		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::uint64_t Block(const std::size_t index) const noexcept
 		{
 			return AsDerived().Block(index);
 		}
 
-		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const SEC_NOEXCEPT  // corresponds to trailing
+		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::size_t HeadPadding() const
+		        SEC_NOEXCEPT  // corresponds to trailing
 		{
 			const auto padding = AsDerived().HeadPadding();
 			SEC_ASSERT(padding < Detail::Bitset::BitsPerBlock);
@@ -217,7 +219,7 @@ namespace SecUtility
 			return padding;
 		}
 
-		constexpr std::uint64_t MaskOfBlock(const std::size_t index) const SEC_NOEXCEPT
+		SEC_FORCE_INLINE constexpr std::uint64_t MaskOfBlock(const std::size_t index) const SEC_NOEXCEPT
 		{
 			if (BlockCount() == 1)
 			{
@@ -325,9 +327,20 @@ namespace SecUtility
 
 	public:
 		// ----------------------------------------------------------
+		//  Conversion from other derived
+		// ----------------------------------------------------------
+		template <typename OtherDerived>
+		Derived& operator=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
+		{
+			SEC_ASSERT(Size() == other.Size());
+			BitwiseCombinationOp(other, [](std::uint64_t, const std::uint64_t rhs) { return rhs; });
+			return AsDerived();
+		}
+
+		// ----------------------------------------------------------
 		//  Size / capacity
 		// ----------------------------------------------------------
-		constexpr std::size_t Size() const noexcept
+		SEC_FORCE_INLINE constexpr std::size_t Size() const noexcept
 		{
 			return AsDerived().Size();
 		}
@@ -506,7 +519,7 @@ namespace SecUtility
 			const auto masks = MakeBlockMaskCaches();
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				const auto mask = masks	(i);
+				const auto mask = masks(i);
 				const auto block = Block(i);
 				const auto flipped = ~block & mask;
 				Block(i) = (block & ~mask) | flipped;
@@ -659,10 +672,11 @@ namespace SecUtility
 
 			const std::size_t startBit = HeadPadding() + pos + 1;
 			std::size_t blockIdx = startBit / Detail::Bitset::BitsPerBlock;
+			const std::size_t bitInBlk = startBit % Detail::Bitset::BitsPerBlock;
 
-			if (const std::uint64_t blk = Block(blockIdx) >> (startBit % Detail::Bitset::BitsPerBlock); blk != 0)
+			if (const std::uint64_t blk = (Block(blockIdx) & MaskOfBlock(blockIdx)) >> bitInBlk; blk != 0)
 			{
-				const std::size_t idx = startBit + Detail::Bitset::TrailingZeroCount(blk);
+				const std::size_t idx = startBit + Detail::Bitset::TrailingZeroCount(blk) - HeadPadding();
 				return idx < Size() ? idx : Size();
 			}
 
@@ -670,8 +684,8 @@ namespace SecUtility
 			{
 				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
 				{
-					const std::size_t idx =
-					        blockIdx * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(blk);
+					const std::size_t idx = blockIdx * Detail::Bitset::BitsPerBlock
+					                        + Detail::Bitset::TrailingZeroCount(blk) - HeadPadding();
 					return idx < Size() ? idx : Size();
 				}
 			}
@@ -689,21 +703,28 @@ namespace SecUtility
 			{
 				return Size();
 			}
+
 			const std::size_t endBit = HeadPadding() + pos - 1;
 			std::size_t blockIdx = endBit / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitInBlk = endBit % Detail::Bitset::BitsPerBlock;
 
-			if (const std::uint64_t blk = Block(blockIdx) << (Detail::Bitset::BitsPerBlock - bitInBlk - 1); blk != 0)
+			if (const std::uint64_t blk = (Block(blockIdx) & MaskOfBlock(blockIdx))
+			                              << (Detail::Bitset::BitsPerBlock - bitInBlk - 1);
+			    blk != 0)
 			{
-				return blockIdx * Detail::Bitset::BitsPerBlock + bitInBlk - Detail::Bitset::LeadingZeroCount(blk);
+				const auto idx = blockIdx * Detail::Bitset::BitsPerBlock + bitInBlk
+				                 - Detail::Bitset::LeadingZeroCount(blk) - HeadPadding();
+				return idx < Size() ? idx : Size();
 			}
 
 			while (blockIdx-- > 0)
 			{
 				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
 				{
-					return blockIdx * Detail::Bitset::BitsPerBlock
-					       + (Detail::Bitset::BitsPerBlock - 1 - Detail::Bitset::LeadingZeroCount(blk));
+					const auto idx = blockIdx * Detail::Bitset::BitsPerBlock
+					                 + (Detail::Bitset::BitsPerBlock - 1 - Detail::Bitset::LeadingZeroCount(blk))
+					                 - HeadPadding();
+					return idx < Size() ? idx : Size();
 				}
 			}
 			return Size();
@@ -814,7 +835,7 @@ namespace SecUtility
 
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				const auto mask = masks(i);       // valid-bit mask for *this's block i
+				const auto mask = masks(i);             // valid-bit mask for *this's block i
 				const auto b = Block(i);                // current block in *this
 				const auto o = shifted_other_block(i);  // other's bits aligned to *this
 				const auto result = op(Block(i), o);    // AND of valid bits
@@ -1142,12 +1163,12 @@ namespace SecUtility
 			return m_Data.size();
 		}
 
-		/* CRTP OVERRIDE */ constexpr std::uint64_t& Block(const std::size_t index) noexcept
+		/* CRTP OVERRIDE */ SEC_FORCE_INLINE constexpr std::uint64_t& Block(const std::size_t index) noexcept
 		{
 			return m_Data[index];
 		}
 
-		/* CRTP OVERRIDE */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
+		/* CRTP OVERRIDE */ SEC_FORCE_INLINE constexpr std::uint64_t Block(const std::size_t index) const noexcept
 		{
 			return m_Data[index];
 		}
