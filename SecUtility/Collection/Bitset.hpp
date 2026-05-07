@@ -739,14 +739,6 @@ namespace SecUtility
 
 
 #if false
-		std::size_t IndexOfNextOne(const std::size_t pos) const noexcept;
-
-		std::size_t IndexOfNextZero(const std::size_t pos) const noexcept;
-
-		std::size_t IndexOfPreviousOne(const std::size_t pos) const noexcept;
-
-		std::size_t IndexOfPreviousZero(const std::size_t pos) const noexcept;
-
 		// ----------------------------------------------------------
 		//  Shift operations  (bit 0 == LSB of Data()[0])
 		//  <<  shifts bits toward higher indices ("left" in math notation)
