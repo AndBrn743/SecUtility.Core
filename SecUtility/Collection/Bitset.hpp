@@ -330,7 +330,7 @@ namespace SecUtility
 		//  Conversion from other derived
 		// ----------------------------------------------------------
 		template <typename OtherDerived>
-		Derived& operator=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
+		constexpr Derived& operator=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
 		{
 			SEC_ASSERT(Size() == other.Size());
 			BitwiseCombinationOp(other, [](std::uint64_t, const std::uint64_t rhs) { return rhs; });
@@ -1092,10 +1092,24 @@ namespace SecUtility
 			}
 		}
 
-		template <typename OtherDerived>
-		/* IMPLICIT */ Bitset(const BitsetBase<OtherDerived>& other) : m_Data{}
+		template <typename OtherDerived,
+		          typename...,
+		          typename = std::enable_if_t<!std::is_same_v<std::decay_t<OtherDerived>, Bitset>, void>>
+		/* IMPLICIT */ constexpr Bitset(const BitsetBase<OtherDerived>& other) noexcept(
+		        noexcept(Base::operator=(other)))
+		    : m_Data{}
 		{
 			Base::operator=(other);
+		}
+
+		/* IMPLICIT */ constexpr Bitset(const BitsetBase<Bitset>& other) noexcept : Bitset(other.AsDerived())
+		{
+			/* NO CODE */
+		}
+
+		/* IMPLICIT */ constexpr Bitset(BitsetBase<Bitset>&& other) noexcept : Bitset(std::move(other.AsDerived()))
+		{
+			/* NO CODE */
 		}
 
 		// ----------------------------------------------------------
@@ -1167,11 +1181,25 @@ namespace SecUtility
 
 		using Base::operator=;
 
-		template <typename OtherDerived>
+		template <typename OtherDerived,
+		          typename...,
+		          typename = std::enable_if_t<!std::is_same_v<std::decay_t<OtherDerived>, DynamicBitset>, void>>
 		/* IMPLICIT */ DynamicBitset(const BitsetBase<OtherDerived>& other)
 		    : m_Size(other.Size()), m_Data(Detail::Bitset::BlocksFor(m_Size))
 		{
 			Base::operator=(other);
+		}
+
+		/* IMPLICIT */ DynamicBitset(const BitsetBase& other) noexcept
+		    : m_Size(other.AsDerived().m_Size), m_Data(other.AsDerived().m_Data)
+		{
+			/* NO CODE */
+		}
+
+		/* IMPLICIT */ DynamicBitset(BitsetBase&& other) noexcept
+		    : m_Size(other.AsDerived().m_Size), m_Data(std::move(other.AsDerived().m_Data))
+		{
+			/* NO CODE */
 		}
 
 		template <typename Integer,
@@ -1461,7 +1489,7 @@ namespace SecUtility
 	template <typename Lhs, typename Rhs>                                                                              \
 	constexpr auto operator OP(const BitsetBase<Lhs>& lhs, const BitsetBase<Rhs>& rhs) SEC_NOEXCEPT                    \
 	{                                                                                                                  \
-		if constexpr (Detail::Bitset::is_fixed_size_bitset<Rhs>::value)                                                \
+		if constexpr (Detail::Bitset::is_fixed_size_bitset<typename Traits<Rhs>::EvaluatedType>::value)                \
 		{                                                                                                              \
 			typename Traits<Rhs>::EvaluatedType r{rhs};                                                                \
 			r OP## = lhs;                                                                                              \

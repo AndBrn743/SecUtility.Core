@@ -1420,6 +1420,193 @@ TEST_CASE("operator&=, operator|=, and operator^=")
 	}
 }
 
+TEST_CASE("Ctors")
+{
+	static constexpr auto SetRandom = [](auto& bitset, const auto seed)
+	{
+		const auto bitString0 = RandomBitString(bitset.Size(), seed);
+		std::transform(bitString0.begin(), bitString0.end(), bitset.begin(), [](const char c) { return c != '0'; });
+	};
+
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+	{
+		Bitset<42> bs0{};
+		SetRandom(bs0, seed);
+
+		{
+			Bitset<42> copy = Bitset<42>{bs0};
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			Bitset<42> copy = static_cast<Bitset<42>>(static_cast<BitsetBase<Bitset<42>>&>(bs0));
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			Bitset<42> copy = Bitset<42>{static_cast<BitsetBase<Bitset<42>>&>(bs0)};
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			Bitset<42> copy = static_cast<Bitset<42>>(static_cast<const BitsetBase<Bitset<42>>&>(bs0));
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			Bitset<42> copy = Bitset<42>{static_cast<const BitsetBase<Bitset<42>>&>(bs0)};
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			const auto expected = bs0.ToString();
+			Bitset<42> copy = Bitset<42>{static_cast<BitsetBase<Bitset<42>>&&>(bs0)};
+			CHECK(copy.ToString() == expected);
+		}
+	}
+
+	{
+		DynamicBitset bs0{42};
+		SetRandom(bs0, seed);
+
+		{
+			DynamicBitset copy = DynamicBitset{bs0};
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			DynamicBitset copy = static_cast<DynamicBitset>(static_cast<BitsetBase<DynamicBitset>&>(bs0));
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			DynamicBitset copy = DynamicBitset{static_cast<BitsetBase<DynamicBitset>&>(bs0)};
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			DynamicBitset copy = static_cast<DynamicBitset>(static_cast<const BitsetBase<DynamicBitset>&>(bs0));
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			DynamicBitset copy = DynamicBitset{static_cast<const BitsetBase<DynamicBitset>&>(bs0)};
+			CHECK(copy.ToString() == bs0.ToString());
+		}
+
+		{
+			const auto expected = bs0.ToString();
+			DynamicBitset copy = DynamicBitset{static_cast<BitsetBase<DynamicBitset>&&>(bs0)};
+			CHECK(copy.ToString() == expected);
+		}
+	}
+
+
+
+}
+
+TEST_CASE("operator&, operator|, and operator^")
+{
+	static constexpr auto SetRandom = [](auto& bitset, const auto seed)
+	{
+		const auto bitString0 = RandomBitString(bitset.Size(), seed);
+		std::transform(bitString0.begin(), bitString0.end(), bitset.begin(), [](const char c) { return c != '0'; });
+	};
+
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+	SECTION("operator&")
+	{
+		{
+			Bitset<42> bs0{};
+			SetRandom(bs0, seed);
+
+			// Bitset<42> bs1{};
+			// SetRandom(bs1, seed + 10);
+
+			{
+				Bitset<42> copy = Bitset<42>{bs0};
+				CHECK(copy.ToString() == bs0.ToString());
+			}
+
+			{
+				Bitset<42> copy = static_cast<Bitset<42>>(static_cast<BitsetBase<Bitset<42>>&>(bs0));
+				CHECK(copy.ToString() == bs0.ToString());
+			}
+
+			{
+				Bitset<42> copy = Bitset<42>{static_cast<BitsetBase<Bitset<42>>&>(bs0)};
+				CHECK(copy.ToString() == bs0.ToString());
+			}
+
+			{
+				Bitset<42> copy = static_cast<Bitset<42>>(static_cast<const BitsetBase<Bitset<42>>&>(bs0));
+				CHECK(copy.ToString() == bs0.ToString());
+			}
+
+			{
+				Bitset<42> copy = Bitset<42>{static_cast<const BitsetBase<Bitset<42>>&>(bs0)};
+				CHECK(copy.ToString() == bs0.ToString());
+			}
+
+			// const auto bn = bs0 & bs1;
+			// STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
+			//
+			// for (std::size_t i = 0; i < 42; ++i)
+			// {
+			// 	if (bn[i] != (bs0[i] && bs1[i]))
+			// 	{
+			// 		std::string b0 = bs0.ToString();
+			// 		std::string b1 = bs1.ToString();
+			// 		std::string b01 = bn.ToString();
+			//
+			// 		const auto _bn = bs0 & bs1;
+			// 	}
+			// 	CHECK(bn[i] == (bs0[i] && bs1[i]));
+			// }
+		}
+
+		// {
+		// 	Bitset<42> bs0{};
+		// 	SetRandom(bs0, seed);
+		//
+		// 	DynamicBitset bs1{42};
+		// 	SetRandom(bs1, seed + 10);
+		//
+		// 	const auto bn01 = bs0 & bs1;
+		// 	const auto bn10 = bs1 & bs0;
+		// 	STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn01)>, Bitset<42>>);
+		// 	STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn10)>, Bitset<42>>);
+		//
+		// 	for (std::size_t i = 0; i < 42; ++i)
+		// 	{
+		// 		CHECK(bn01[i] == (bs0[i] && bs1[i]));
+		// 		CHECK(bn10[i] == (bs0[i] && bs1[i]));
+		// 	}
+		// }
+		//
+		// {
+		// 	DynamicBitset bs0{42};
+		// 	SetRandom(bs0, seed);
+		//
+		// 	DynamicBitset bs1{42};
+		// 	SetRandom(bs1, seed + 10);
+		//
+		// 	const auto bn01 = bs0 & bs1;
+		// 	const auto bn10 = bs1 & bs0;
+		// 	STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn01)>, DynamicBitset>);
+		// 	STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn10)>, DynamicBitset>);
+		//
+		// 	for (std::size_t i = 0; i < 42; ++i)
+		// 	{
+		// 		CHECK(bn01[i] == (bs0[i] && bs1[i]));
+		// 		CHECK(bn10[i] == (bs0[i] && bs1[i]));
+		// 	}
+		// }
+	}
+}
+
 TEST_CASE("operator<<= and operator>>=")
 {
 	const std::size_t size = GENERATE(42, 69, 73, 423);
