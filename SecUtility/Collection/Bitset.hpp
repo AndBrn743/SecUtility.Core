@@ -650,6 +650,71 @@ namespace SecUtility
 			return loc == Size() ? Size() : Size() - 1 - loc;
 		}
 
+		constexpr std::size_t IndexOfNextOne(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			if (pos + 1 >= Size())
+			{
+				return Size();
+			}
+
+			const std::size_t startBit = HeadPadding() + pos + 1;
+			std::size_t blockIdx = startBit / Detail::Bitset::BitsPerBlock;
+
+			if (const std::uint64_t blk = Block(blockIdx) >> (startBit % Detail::Bitset::BitsPerBlock); blk != 0)
+			{
+				const std::size_t idx = startBit + Detail::Bitset::TrailingZeroCount(blk);
+				return idx < Size() ? idx : Size();
+			}
+
+			for (++blockIdx; blockIdx < BlockCount(); ++blockIdx)
+			{
+				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
+				{
+					const std::size_t idx =
+					        blockIdx * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(blk);
+					return idx < Size() ? idx : Size();
+				}
+			}
+			return Size();
+		}
+
+		constexpr std::size_t IndexOfNextZero(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			return (~AsDerived()).IndexOfNextOne(pos);
+		}
+
+		constexpr std::size_t IndexOfPreviousOne(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			if (pos == 0)
+			{
+				return Size();
+			}
+			const std::size_t endBit = HeadPadding() + pos - 1;
+			std::size_t blockIdx = endBit / Detail::Bitset::BitsPerBlock;
+			const std::size_t bitInBlk = endBit % Detail::Bitset::BitsPerBlock;
+
+			if (const std::uint64_t blk = Block(blockIdx) << (Detail::Bitset::BitsPerBlock - bitInBlk - 1); blk != 0)
+			{
+				return blockIdx * Detail::Bitset::BitsPerBlock + bitInBlk - Detail::Bitset::LeadingZeroCount(blk);
+			}
+
+			while (blockIdx-- > 0)
+			{
+				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
+				{
+					return blockIdx * Detail::Bitset::BitsPerBlock
+					       + (Detail::Bitset::BitsPerBlock - 1 - Detail::Bitset::LeadingZeroCount(blk));
+				}
+			}
+			return Size();
+		}
+
+		constexpr std::size_t IndexOfPreviousZero(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			return (~AsDerived()).IndexOfPreviousOne(pos);
+		}
+
+
 #if false
 		std::size_t IndexOfNextOne(const std::size_t pos) const noexcept;
 

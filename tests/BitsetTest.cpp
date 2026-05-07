@@ -1487,3 +1487,55 @@ TEST_CASE("operator<<= and operator>>=")
 		}
 	}
 }
+
+TEST_CASE("IndexOfNextOne, IndexOfNextZero, IndexOfPreviousOne, and IndexOfPreviousZero")
+{
+	constexpr std::size_t size = 223;
+	const auto seed = GENERATE(0, 1, 42, 69, 73, 420, 4242, 6969, 66872);
+
+	const auto bitString0 = RandomBitString(size, seed);
+	DynamicBitset bs(size);
+	std::transform(bitString0.begin(), bitString0.end(), bs.begin(), [](const char c) { return c != '0'; });
+
+	SECTION("IndexOfNextOne")
+	{
+		const unsigned pos = GENERATE(0, 8, 42, 63, 64, 65, 69, 73, 127, 128, 222);
+		const auto expected = static_cast<std::size_t>(std::distance(
+		        bs.begin(), std::find_if(bs.begin() + pos + 1, bs.end(), [](const bool b) { return b; })));
+		const auto actual = bs.IndexOfNextOne(pos);
+		CHECK(expected == actual);
+	}
+
+	SECTION("IndexOfNextZero")
+	{
+		const unsigned pos = GENERATE(0, 8, 42, 63, 64, 65, 69, 73, 127, 128, 222);
+		const auto expected = static_cast<std::size_t>(std::distance(
+		        bs.begin(), std::find_if(bs.begin() + pos + 1, bs.end(), [](const bool b) { return !b; })));
+		const auto actual = bs.IndexOfNextZero(pos);
+		CHECK(expected == actual);
+	}
+
+	SECTION("IndexOfPreviousOne")
+	{
+		const unsigned pos = GENERATE(8, 42, 63, 64, 65, 69, 73, 127, 128, 222);
+		const auto actual = bs.IndexOfPreviousOne(pos);
+		REQUIRE(bs[actual] == true);
+		REQUIRE(!bs.Segment(actual + 1, pos - (actual + 1)).HasOnes());
+	}
+
+	SECTION("IndexOfPreviousZero")
+	{
+		const unsigned pos = GENERATE(8, 42, 63, 64, 65, 69, 73, 127, 128, 222);
+		const auto actual = bs.IndexOfPreviousZero(pos);
+		REQUIRE(bs[actual] == false);
+		REQUIRE(!bs.Segment(actual + 1, pos - (actual + 1)).HasZeros());
+	}
+
+	SECTION("Edge case")
+	{
+		CHECK(bs.IndexOfNextOne(222) == 223);
+		CHECK(bs.IndexOfNextZero(222) == 223);
+		CHECK(bs.IndexOfPreviousOne(0) == 223);
+		CHECK(bs.IndexOfPreviousZero(0) == 223);
+	}
+}
