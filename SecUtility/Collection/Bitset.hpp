@@ -238,6 +238,28 @@ namespace SecUtility
 			return ~std::uint64_t{0};
 		}
 
+		constexpr auto MakeBlockMaskCaches() const SEC_NOEXCEPT
+		{
+			const auto head = MaskOfBlock(0);
+			const auto backIndex = BlockCount() - 1;
+			const auto tail = backIndex == 0 ? head : MaskOfBlock(backIndex);
+			return [head, tail, backIndex](const std::size_t index)
+			{
+				if (index == 0)
+				{
+					return head;
+				}
+				if (index == backIndex)
+				{
+					return tail;
+				}
+				else
+				{
+					return ~std::uint64_t{0};
+				}
+			};
+		}
+
 		constexpr void RestPaddingBitsOfZerothBlock() noexcept
 		{
 			if (const std::size_t size = Size(); size != 0)
@@ -460,15 +482,16 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		constexpr void SetAll(const bool value = true) SEC_NOEXCEPT
 		{
+			const auto masks = MakeBlockMaskCaches();
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
 				if (value)
 				{
-					Block(i) |= MaskOfBlock(i);
+					Block(i) |= masks(i);
 				}
 				else
 				{
-					Block(i) &= ~MaskOfBlock(i);
+					Block(i) &= ~masks(i);
 				}
 			}
 		}
@@ -480,9 +503,10 @@ namespace SecUtility
 
 		constexpr void FlipAll() noexcept
 		{
+			const auto masks = MakeBlockMaskCaches();
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				const auto mask = MaskOfBlock(i);
+				const auto mask = masks	(i);
 				const auto block = Block(i);
 				const auto flipped = ~block & mask;
 				Block(i) = (block & ~mask) | flipped;
@@ -640,10 +664,6 @@ namespace SecUtility
 		//  <<  shifts bits toward higher indices ("left" in math notation)
 		//  >>  shifts bits toward lower  indices
 		// ----------------------------------------------------------
-		Derived& operator<<=(const std::size_t shift);
-
-		Derived& operator>>=(const std::size_t shift);
-
 		LeftShiftExpr<const Derived> operator<<(std::size_t shift) const;
 
 		RightShiftExpr<const Derived> operator>>(std::size_t shift) const;
@@ -675,11 +695,13 @@ namespace SecUtility
 		{
 			SEC_ASSERT(Size() == other.Size());
 
+			const auto masks = MakeBlockMaskCaches();
+
 			if (HeadPadding() == other.HeadPadding())
 			{
 				for (std::size_t i = 0; i < BlockCount(); ++i)
 				{
-					const auto mask = MaskOfBlock(i);
+					const auto mask = masks(i);
 					const auto b0 = Block(i);
 					const auto b = op(b0, other.Block(i));
 					const auto n = (b & mask) | ~mask;
@@ -727,7 +749,7 @@ namespace SecUtility
 
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				const auto mask = MaskOfBlock(i);       // valid-bit mask for *this's block i
+				const auto mask = masks(i);       // valid-bit mask for *this's block i
 				const auto b = Block(i);                // current block in *this
 				const auto o = shifted_other_block(i);  // other's bits aligned to *this
 				const auto result = op(Block(i), o);    // AND of valid bits
@@ -759,10 +781,11 @@ namespace SecUtility
 
 			const std::size_t blockShift = n / BitsPerBlock;
 			const std::size_t bitShift = n % BitsPerBlock;
+			const auto masks = MakeBlockMaskCaches();
 
 			for (std::size_t i = BlockCount(); i-- > 0;)
 			{
-				const auto mask = MaskOfBlock(i);
+				const auto mask = masks(i);
 				const auto pad = Block(i) & ~mask;
 
 				std::uint64_t val = 0;
@@ -770,12 +793,12 @@ namespace SecUtility
 				if (i >= blockShift)
 				{
 					const std::size_t src = i - blockShift;
-					val = (Block(src) & MaskOfBlock(src)) << bitShift;
+					val = (Block(src) & masks(src)) << bitShift;
 
 					if (bitShift > 0 && src > 0)
 					{
 						const std::size_t carriedSrc = src - 1;
-						val |= (Block(carriedSrc) & MaskOfBlock(carriedSrc)) >> (BitsPerBlock - bitShift);
+						val |= (Block(carriedSrc) & masks(carriedSrc)) >> (BitsPerBlock - bitShift);
 					}
 				}
 
@@ -801,22 +824,23 @@ namespace SecUtility
 			const std::size_t blockShift = n / BitsPerBlock;
 			const std::size_t bitShift = n % BitsPerBlock;
 			const std::size_t count = BlockCount();
+			const auto masks = MakeBlockMaskCaches();
 
 			for (std::size_t i = 0; i < count; ++i)
 			{
-				const auto mask = MaskOfBlock(i);
+				const auto mask = masks(i);
 				const auto pad = Block(i) & ~mask;
 
 				std::uint64_t val = 0;
 
 				if (const std::size_t src = i + blockShift; src < count)
 				{
-					val = (Block(src) & MaskOfBlock(src)) >> bitShift;
+					val = (Block(src) & masks(src)) >> bitShift;
 
 					if (bitShift > 0 && src + 1 < count)
 					{
 						const std::size_t carriedSrc = src + 1;
-						val |= (Block(carriedSrc) & MaskOfBlock(carriedSrc)) << (BitsPerBlock - bitShift);
+						val |= (Block(carriedSrc) & masks(carriedSrc)) << (BitsPerBlock - bitShift);
 					}
 				}
 
