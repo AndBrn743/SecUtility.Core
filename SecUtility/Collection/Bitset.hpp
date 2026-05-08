@@ -19,7 +19,6 @@
 // clang-format on
 #undef SEC_BITSET_DETAIL
 
-
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
