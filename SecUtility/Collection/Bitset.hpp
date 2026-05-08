@@ -825,9 +825,6 @@ namespace SecUtility
 			const std::ptrdiff_t shift = static_cast<std::ptrdiff_t>(thisHead) - static_cast<std::ptrdiff_t>(otherHead);
 			SEC_ASSERT(shift != 0);
 
-			// Produce a shifted version of other's block `i` in *this's coordinate space.
-			// We may need to borrow bits from the adjacent other-block.
-
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
 				const auto mask = masks(i);                   // valid-bit mask for *this's block i
