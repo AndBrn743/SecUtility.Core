@@ -13,7 +13,7 @@
 #endif
 
 
-namespace Detail::Bitset
+namespace SecUtility::Detail::Bitset
 {
 	inline constexpr std::size_t BitsPerBlock = 64;
 

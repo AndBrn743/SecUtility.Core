@@ -3,6 +3,13 @@
 
 #pragma once
 
+#include <SecUtility/Collection/Detail/Bitset.Forward.hpp>
+#include <SecUtility/Collection/Detail/Bitset.Utility.hpp>
+#include <SecUtility/Collection/Detail/BitsetBase.hpp>
+#include <SecUtility/Collection/Detail/Bitset.Impl.hpp>
+
+#if false
+
 #include <SecUtility/Collection/SubscriptBasedIterator.hpp>
 #include <SecUtility/IO/BitOrder.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
@@ -50,6 +57,9 @@ namespace SecUtility
 	class BitsetBinaryExpr;
 
 	class DynamicBitset;
+
+	template <>
+	struct Traits<DynamicBitset>;
 
 	// ============================================================
 	//  Internal helpers
@@ -1570,4 +1580,6 @@ namespace SecUtility
 
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
+#endif
+
 #endif

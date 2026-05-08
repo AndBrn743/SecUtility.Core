@@ -1527,8 +1527,8 @@ TEST_CASE("operator&, operator|, and operator^")
 
 			const auto bn = bs0 & bs1;
 
-			const auto bnn = BitsetBinaryExpr<std::bit_and<>, Bitset<42>, Bitset<42>>{bs0, bs1};
-			const auto bnnn = BitsetBinaryExpr<std::bit_and<>, Bitset<42>, Bitset<42>>{bs0, bs1, 2};
+			const auto bnn = Detail::Bitset::BitsetBinaryExpr<std::bit_and<>, Bitset<42>, Bitset<42>>{bs0, bs1};
+			const auto bnnn = Detail::Bitset::BitsetBinaryExpr<std::bit_and<>, Bitset<42>, Bitset<42>>{bs0, bs1, 2};
 
 			Bitset<42> bs2 = bnn;
 			Bitset<42> bs3 = bnnn;
