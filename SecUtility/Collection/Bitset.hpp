@@ -188,10 +188,9 @@ namespace SecUtility
 		constexpr BitsetBase& operator=(BitsetBase&&) noexcept = default;
 		~BitsetBase() noexcept = default;
 
-		// Forwarding helpers
-		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::size_t BlockCount() const noexcept
+		SEC_FORCE_INLINE constexpr std::size_t BlockCount() const noexcept
 		{
-			return AsDerived().BlockCount();
+			return Detail::Bitset::BlocksFor(AsDerived().HeadPadding() + AsDerived().Size());
 		}
 
 		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::uint64_t& Block(const std::size_t index) noexcept
@@ -1044,13 +1043,6 @@ namespace SecUtility
 		static constexpr std::size_t kBlockCount =
 		        (N + Detail::Bitset::BitsPerBlock - 1) / Detail::Bitset::BitsPerBlock;
 
-
-		// ReSharper disable once CppMemberFunctionMayBeStatic
-		/* CRTP OVERRIDE */ constexpr std::size_t BlockCount() const noexcept
-		{
-			return kBlockCount;
-		}
-
 		// ReSharper disable once CppMemberFunctionMayBeStatic
 		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
 		{
@@ -1146,11 +1138,6 @@ namespace SecUtility
 		        const noexcept  // corresponds to trailing NOLINT(*-convert-member-functions-to-static)
 		{
 			return 0;
-		}
-
-		/* CRTP OVERRIDE */ constexpr std::size_t BlockCount() const SEC_NOEXCEPT
-		{
-			return m_Data.size();
 		}
 
 		/* CRTP OVERRIDE */ SEC_FORCE_INLINE constexpr std::uint64_t& Block(const std::size_t index) noexcept
@@ -1338,11 +1325,6 @@ namespace SecUtility
 			SEC_ASSERT(start + size <= nested.Size());
 		}
 
-		/* CRTP VIRTUAL */ constexpr std::size_t BlockCount() const noexcept
-		{
-			return (m_HeadPadding + m_Size + Detail::Bitset::BitsPerBlock - 1) / Detail::Bitset::BitsPerBlock;
-		}
-
 		template <typename..., bool IsConst = std::is_const_v<Nested>>
 		/* CRTP VIRTUAL */ constexpr std::enable_if_t<!IsConst, std::uint64_t&> Block(const std::size_t index) noexcept
 		{
@@ -1420,11 +1402,6 @@ namespace SecUtility
 		explicit constexpr BitsetNotExpr(const Nested& nested) noexcept : m_Nested(nested)
 		{
 			/* NO CODE */
-		}
-
-		/* CRTP VIRTUAL */ constexpr std::size_t BlockCount() const noexcept
-		{
-			return static_cast<BaseOfNested&>(m_Nested).BlockCount();
 		}
 
 		// NOLINTNEXTLINE(*-use-equals-delete)
