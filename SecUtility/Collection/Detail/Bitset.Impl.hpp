@@ -288,9 +288,8 @@ namespace SecUtility
 
 		constexpr BitsetSegmentExpr(Nested& nested, const std::size_t start, const std::size_t size) SEC_NOEXCEPT
 		    : m_Nested(nested),
-		      m_HeadPadding((start + static_cast<BaseOfNested&>(nested).HeadPadding()) % Detail::Bitset::BitsPerBlock),
-		      m_BlockIndexOffset((start + static_cast<BaseOfNested&>(nested).HeadPadding())
-		                         / Detail::Bitset::BitsPerBlock),
+		      m_HeadPadding((start + static_cast<BaseOfNested&>(nested).HeadPadding()) % BitsPerBlock),
+		      m_BlockIndexOffset((start + static_cast<BaseOfNested&>(nested).HeadPadding()) / BitsPerBlock),
 		      m_Size(size)
 		{
 			SEC_ASSERT(start + size <= nested.Size());
