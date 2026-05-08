@@ -1435,33 +1435,33 @@ TEST_CASE("Ctors")
 		SetRandom(bs0, seed);
 
 		{
-			Bitset<42> copy = Bitset<42>{bs0};
+			auto copy = Bitset<42>{bs0};
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
-			Bitset<42> copy = static_cast<Bitset<42>>(static_cast<BitsetBase<Bitset<42>>&>(bs0));
+			auto copy = static_cast<Bitset<42>>(static_cast<BitsetBase<Bitset<42>>&>(bs0));
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
-			Bitset<42> copy = Bitset<42>{static_cast<BitsetBase<Bitset<42>>&>(bs0)};
+			auto copy = Bitset<42>{static_cast<BitsetBase<Bitset<42>>&>(bs0)};
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
-			Bitset<42> copy = static_cast<Bitset<42>>(static_cast<const BitsetBase<Bitset<42>>&>(bs0));
+			auto copy = static_cast<Bitset<42>>(static_cast<const BitsetBase<Bitset<42>>&>(bs0));
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
-			Bitset<42> copy = Bitset<42>{static_cast<const BitsetBase<Bitset<42>>&>(bs0)};
+			auto copy = Bitset<42>{static_cast<const BitsetBase<Bitset<42>>&>(bs0)};
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
 			const auto expected = bs0.ToString();
-			Bitset<42> copy = Bitset<42>{static_cast<BitsetBase<Bitset<42>>&&>(bs0)};
+			auto copy = Bitset<42>{static_cast<BitsetBase<Bitset<42>>&&>(bs0)};
 			CHECK(copy.ToString() == expected);
 		}
 	}
@@ -1471,33 +1471,33 @@ TEST_CASE("Ctors")
 		SetRandom(bs0, seed);
 
 		{
-			DynamicBitset copy = DynamicBitset{bs0};
+			auto copy = DynamicBitset{bs0};
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
-			DynamicBitset copy = static_cast<DynamicBitset>(static_cast<BitsetBase<DynamicBitset>&>(bs0));
+			auto copy = static_cast<DynamicBitset>(static_cast<BitsetBase<DynamicBitset>&>(bs0));
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
-			DynamicBitset copy = DynamicBitset{static_cast<BitsetBase<DynamicBitset>&>(bs0)};
+			auto copy = DynamicBitset{static_cast<BitsetBase<DynamicBitset>&>(bs0)};
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
-			DynamicBitset copy = static_cast<DynamicBitset>(static_cast<const BitsetBase<DynamicBitset>&>(bs0));
+			auto copy = static_cast<DynamicBitset>(static_cast<const BitsetBase<DynamicBitset>&>(bs0));
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
-			DynamicBitset copy = DynamicBitset{static_cast<const BitsetBase<DynamicBitset>&>(bs0)};
+			auto copy = DynamicBitset{static_cast<const BitsetBase<DynamicBitset>&>(bs0)};
 			CHECK(copy.ToString() == bs0.ToString());
 		}
 
 		{
 			const auto expected = bs0.ToString();
-			DynamicBitset copy = DynamicBitset{static_cast<BitsetBase<DynamicBitset>&&>(bs0)};
+			auto copy = DynamicBitset{static_cast<BitsetBase<DynamicBitset>&&>(bs0)};
 			CHECK(copy.ToString() == expected);
 		}
 	}
