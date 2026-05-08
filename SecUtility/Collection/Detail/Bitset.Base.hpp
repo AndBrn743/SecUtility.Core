@@ -148,7 +148,7 @@ namespace SecUtility
 			return AsDerived().AlignedTo_Impl(headPadding);
 		}
 
-		/* CRTP VIRTUAL */ constexpr Derived AlignedTo_Impl(const std::size_t headPadding) noexcept = delete;
+		/* CRTP VIRTUAL */ constexpr Derived AlignedTo_Impl(std::size_t headPadding) noexcept = delete;
 
 		constexpr void RestPaddingBitsOfZerothBlock() noexcept
 		{
@@ -703,49 +703,6 @@ namespace SecUtility
 			return BitwiseCombinationOp(other, std::bit_xor<>{});
 		}
 
-		template <typename OtherDerived, typename Op>
-		Derived& BitwiseCombinationOp(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
-		{
-			SEC_ASSERT(Size() == other.Size());
-
-			const auto masks = MakeBlockMaskCaches();
-
-			if (HeadPadding() == other.HeadPadding())
-			{
-				for (std::size_t i = 0; i < BlockCount(); ++i)
-				{
-					const auto mask = masks(i);
-					const auto b0 = Block(i);
-					const auto b = op(b0, other.Block(i));
-					const auto n = (b & mask) | ~mask;
-					Block(i) = (b0 & ~mask) | (n & mask);
-				}
-
-				return AsDerived();
-			}
-
-			const std::size_t thisHead = HeadPadding();
-			const std::size_t otherHead = other.HeadPadding();
-
-			// How many bits to shift other's raw data to align to *this.
-			// Positive = shift left, negative = shift right.
-			const std::ptrdiff_t shift = static_cast<std::ptrdiff_t>(thisHead) - static_cast<std::ptrdiff_t>(otherHead);
-			SEC_ASSERT(shift != 0);
-
-			for (std::size_t i = 0; i < BlockCount(); ++i)
-			{
-				const auto mask = masks(i);                   // valid-bit mask for *this's block i
-				const auto b = Block(i);                      // current block in *this
-				const auto o = other.ShiftedBlock(shift, i);  // other's bits aligned to *this
-				const auto result = op(b, o);                 // AND/OR/XOR the valid bits
-
-				// Preserve *this's padding bits (outside mask), write AND result inside mask.
-				Block(i) = (b & ~mask) | (result & mask);
-			}
-
-			return AsDerived();
-		}
-
 		auto operator~() const noexcept
 		{
 			return Detail::Bitset::BitsetNotExpr<const Derived>{AsDerived()};
@@ -995,6 +952,74 @@ namespace SecUtility
 
 
 	private:
-		// static constexpr std::size_t BitsPerBlock = Detail::Bitset::BitsPerBlock;
+		template <typename OtherDerived, typename Op>
+		Derived& BitwiseCombinationOp(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
+		{
+			SEC_ASSERT(Size() == other.Size());
+
+			const auto masks = MakeBlockMaskCaches();
+
+			if (HeadPadding() == other.HeadPadding())
+			{
+				return BitwiseCombinationOp_AssumeAligned(other, op);
+			}
+			else if constexpr (Traits<OtherDerived>::IsCheaplyRealignable)
+			{
+				return BitwiseCombinationOp_AssumeAligned(other.AlignedTo(HeadPadding()), op);
+			}
+			else if constexpr (Traits<Derived>::IsCheaplyRealignable)
+			{
+				return AlignedTo(other.HeadPadding()).BitwiseCombinationOp_AssumeAligned(other, op);
+			}
+			else
+			{
+				return BitwiseCombinationOp_AssumeMisaligned(other, op);
+			}
+		}
+
+		template <typename OtherDerived, typename Op>
+		Derived& BitwiseCombinationOp_AssumeAligned(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
+		{
+			const auto masks = MakeBlockMaskCaches();
+				for (std::size_t i = 0; i < BlockCount(); ++i)
+				{
+					const auto mask = masks(i);
+					const auto b0 = Block(i);
+					const auto b = op(b0, other.Block(i));
+					const auto n = (b & mask) | ~mask;
+					Block(i) = (b0 & ~mask) | (n & mask);
+				}
+
+				return AsDerived();
+		}
+
+		template <typename OtherDerived, typename Op>
+		Derived& BitwiseCombinationOp_AssumeMisaligned(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
+		{
+			SEC_ASSERT(Size() == other.Size());
+
+			const auto masks = MakeBlockMaskCaches();
+
+			const std::size_t thisHead = HeadPadding();
+			const std::size_t otherHead = other.HeadPadding();
+
+			// How many bits to shift other's raw data to align to *this.
+			// Positive = shift left, negative = shift right.
+			const std::ptrdiff_t shift = static_cast<std::ptrdiff_t>(thisHead) - static_cast<std::ptrdiff_t>(otherHead);
+			SEC_ASSERT(shift != 0);
+
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				const auto mask = masks(i);                   // valid-bit mask for *this's block i
+				const auto b = Block(i);                      // current block in *this
+				const auto o = other.ShiftedBlock(shift, i);  // other's bits aligned to *this
+				const auto result = op(b, o);                 // AND/OR/XOR the valid bits
+
+				// Preserve *this's padding bits (outside mask), write AND result inside mask.
+				Block(i) = (b & ~mask) | (result & mask);
+			}
+
+			return AsDerived();
+		}
 	};
 }
