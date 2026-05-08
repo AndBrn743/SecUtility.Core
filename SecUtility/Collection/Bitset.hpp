@@ -301,7 +301,7 @@ namespace SecUtility
 				        i + 1 < BlockCount() ? Block(i + 1) << (BitsPerBlock - rshift) : std::uint64_t{0};
 				return hi | lo;
 			}
-		};
+		}
 
 
 	public:
