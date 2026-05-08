@@ -90,6 +90,12 @@ namespace SecUtility
 
 		SEC_FORCE_INLINE constexpr std::uint64_t MaskOfBlock(const std::size_t index) const SEC_NOEXCEPT
 		{
+			return AsDerived().MaskOfBlock_Impl(index);
+		}
+
+		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::uint64_t MaskOfBlock_Impl(const std::size_t index) const
+		        SEC_NOEXCEPT
+		{
 			if (BlockCount() == 1)
 			{
 				return (HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding()))
@@ -110,6 +116,11 @@ namespace SecUtility
 		}
 
 		constexpr auto MakeBlockMaskCaches() const SEC_NOEXCEPT
+		{
+			return AsDerived().MakeBlockMaskCaches_Impl();
+		}
+
+		/* CRTP VIRTUAL */ constexpr auto MakeBlockMaskCaches_Impl() const SEC_NOEXCEPT
 		{
 			const auto head = MaskOfBlock(0);
 			const auto backIndex = BlockCount() - 1;
@@ -758,8 +769,7 @@ namespace SecUtility
 					const auto pad = Block(i) & ~mask;
 
 					const std::size_t src = i - blockShift;
-					// no need for mask `Block(src)` since we'll clear the trailing later
-					const std::uint64_t val = Block(src) << bitShift;
+					const std::uint64_t val = Block(src);
 
 					Block(i) = pad | (val & mask);
 				}
@@ -816,27 +826,49 @@ namespace SecUtility
 			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
 			const std::size_t count = BlockCount();
 			const auto masks = MakeBlockMaskCaches();
+			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
-			for (std::size_t i = 0; i < count; ++i)
+			if (bitShift == 0)
 			{
-				const auto mask = masks(i);
-				const auto pad = Block(i) & ~mask;
-
-				std::uint64_t val = 0;
-
-				if (const std::size_t src = i + blockShift; src < count)
+				for (std::size_t i = 0; i <= count - blockShift - 1; i++)
 				{
-					val = (Block(src) & masks(src)) >> bitShift;
+					const auto mask = masks(i);
+					const auto pad = Block(i) & ~mask;
 
-					if (bitShift > 0 && src + 1 < count)
-					{
-						const std::size_t carriedSrc = src + 1;
-						val |= (Block(carriedSrc) & masks(carriedSrc)) << (Detail::Bitset::BitsPerBlock - bitShift);
-					}
+					const std::size_t src = i + blockShift;
+					const std::uint64_t val = Block(src);
+
+					Block(i) = pad | (val & mask);
+				}
+			}
+			else
+			{
+				for (std::size_t i = 0; i < count - blockShift - 1; ++i)
+				{
+					const auto mask = masks(i);
+					const auto pad = Block(i) & ~mask;
+
+					const std::size_t src = i + blockShift;
+					std::uint64_t val = Block(src) >> bitShift;
+					const std::size_t carriedSrc = src + 1;
+					val |= Block(carriedSrc) << (Detail::Bitset::BitsPerBlock - bitShift);
+
+					Block(i) = pad | (val & mask);
 				}
 
-				Block(i) = pad | (val & mask);
+				{
+					const std::size_t i = count - blockShift - 1;
+					const auto mask = masks(i);
+					const auto pad = Block(i) & ~mask;
+
+					const std::size_t src = i + blockShift;
+					const std::uint64_t val = Block(src) >> bitShift;
+
+					Block(i) = pad | (val & mask);
+				}
 			}
+
+			Leading(n).ResetAll();
 
 			return AsDerived();
 		}
