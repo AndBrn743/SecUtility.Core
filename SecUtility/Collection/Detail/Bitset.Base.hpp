@@ -142,6 +142,14 @@ namespace SecUtility
 			};
 		}
 
+		constexpr decltype(auto) AlignedTo(const std::size_t headPadding) SEC_NOEXCEPT
+		{
+			SEC_ASSERT(headPadding < Detail::Bitset::BitsPerBlock);
+			return AsDerived().AlignedTo_Impl(headPadding);
+		}
+
+		/* CRTP VIRTUAL */ constexpr Derived AlignedTo_Impl(const std::size_t headPadding) noexcept = delete;
+
 		constexpr void RestPaddingBitsOfZerothBlock() noexcept
 		{
 			if (const std::size_t size = Size(); size != 0)

@@ -98,6 +98,7 @@ namespace SecUtility
 	struct Traits<Bitset<N>>
 	{
 		static constexpr bool IsNestedByRef = true;
+		static constexpr bool IsCheaplyRealignable = false;
 		using EvaluatedType = Bitset<N>;
 	};
 
@@ -264,6 +265,7 @@ namespace SecUtility
 	struct Traits<DynamicBitset>
 	{
 		static constexpr bool IsNestedByRef = true;
+		static constexpr bool IsCheaplyRealignable = false;
 		using EvaluatedType = DynamicBitset;
 	};
 
@@ -345,6 +347,7 @@ namespace SecUtility
 	struct Traits<Detail::Bitset::BitsetSegmentExpr<Nested>>
 	{
 		static constexpr bool IsNestedByRef = false;
+		static constexpr bool IsCheaplyRealignable = false;
 		using EvaluatedType = DynamicBitset;
 	};
 
@@ -407,6 +410,7 @@ namespace SecUtility
 	struct Traits<Detail::Bitset::BitsetNotExpr<Nested>>
 	{
 		static constexpr bool IsNestedByRef = false;
+		static constexpr bool IsCheaplyRealignable = false;
 		using EvaluatedType = typename Traits<std::remove_const_t<Nested>>::EvaluatedType;
 	};
 
@@ -423,6 +427,9 @@ namespace SecUtility
 
 		friend Lhs;
 		friend BitsetBase<Lhs>;
+
+		template <typename>
+		friend class BitsetBase;
 
 		using BaseOfLhs =
 		        std::conditional_t<std::is_const_v<Lhs>, const BitsetBase<std::remove_const_t<Lhs>>, BitsetBase<Lhs>>;
@@ -442,9 +449,9 @@ namespace SecUtility
 
 	private:
 		// NOLINTNEXTLINE(*-use-equals-delete)
-		/* CRTP VIRTUAL */ constexpr std::uint64_t& Block(std::size_t index) noexcept = delete;
+		/* CRTP OVERRIDE */ constexpr std::uint64_t& Block(std::size_t index) noexcept = delete;
 
-		/* CRTP VIRTUAL */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
+		/* CRTP OVERRIDE */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
 		{
 			const auto& l = static_cast<const BaseOfLhs&>(m_Lhs);
 			const auto& r = static_cast<const BaseOfRhs&>(m_Rhs);
@@ -452,13 +459,18 @@ namespace SecUtility
 			            r.ShiftedBlock(m_HeadPadding - r.HeadPadding(), index));
 		}
 
-		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
 		{
 			return m_HeadPadding;
 		}
 
+		/* CRTP OVERRIDE */ constexpr BitsetBinaryExpr AlignedTo_Impl(const std::size_t headPadding = 0) noexcept
+		{
+			return BitsetBinaryExpr{m_Lhs, m_Rhs, headPadding};
+		}
+
 	public:
-		/* CRTP VIRTUAL */ constexpr std::size_t Size() const noexcept
+		/* CRTP OVERRIDE */ constexpr std::size_t Size() const noexcept
 		{
 			return m_Lhs.Size();
 		}
@@ -480,6 +492,7 @@ namespace SecUtility
 	struct Traits<Detail::Bitset::BitsetBinaryExpr<Op, Lhs, Rhs>>
 	{
 		static constexpr bool IsNestedByRef = false;
+		static constexpr bool IsCheaplyRealignable = false;
 		using EvaluatedType = std::conditional_t<Detail::Bitset::is_fixed_size_bitset<std::decay_t<Rhs>>::value,
 		                                         typename Traits<std::remove_const_t<Rhs>>::EvaluatedType,
 		                                         typename Traits<std::remove_const_t<Lhs>>::EvaluatedType>;
