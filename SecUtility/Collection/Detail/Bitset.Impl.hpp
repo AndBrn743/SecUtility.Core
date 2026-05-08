@@ -1,0 +1,8 @@
+//
+// Created by Andy on 5/8/2026.
+//
+
+#ifndef SECUTILITY_CORE_BITSET_IMPL_HPP
+#define SECUTILITY_CORE_BITSET_IMPL_HPP
+
+#endif  // SECUTILITY_CORE_BITSET_IMPL_HPP
