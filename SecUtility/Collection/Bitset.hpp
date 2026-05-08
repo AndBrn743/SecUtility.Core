@@ -16,6 +16,7 @@
 #include <cstring>
 #include <ostream>
 #include <string>
+#include <text_encoding>
 #include <vector>
 
 
@@ -276,6 +277,32 @@ namespace SecUtility
 				Block(BlockCount() - 1) &= Detail::Bitset::LastBlockMask(paddedSize);
 			}
 		}
+
+		constexpr std::uint64_t ShiftedBlock(const int shift, const std::size_t i) const SEC_NOEXCEPT
+		{
+			if (shift == 0)
+			{
+				return Block(i);
+			}
+			if (shift > 0)
+			{
+				// Shift left: low bits come from Block(i), high bits come from Block(i-1)
+				const auto lshift = static_cast<std::size_t>(shift);
+				const std::uint64_t lo = Block(i) << lshift;
+				const std::uint64_t hi = i > 0 ? Block(i - 1) >> (BitsPerBlock - lshift) : std::uint64_t{0};
+				return hi | lo;
+			}
+			else
+			{
+				// Shift right: high bits come from Block(i), low bits come from Block(i+1)
+				const auto rshift = static_cast<std::size_t>(-shift);
+				const std::uint64_t hi = Block(i) >> rshift;
+				const std::uint64_t lo =
+				        i + 1 < BlockCount() ? Block(i + 1) << (BitsPerBlock - rshift) : std::uint64_t{0};
+				return hi | lo;
+			}
+		};
+
 
 	public:
 		// ----------------------------------------------------------
@@ -800,38 +827,13 @@ namespace SecUtility
 
 			// Produce a shifted version of other's block `i` in *this's coordinate space.
 			// We may need to borrow bits from the adjacent other-block.
-			//
-			// shifted_other_block(i) reads from other.Block(i) and other.Block(i±1).
-
-			const auto shifted_other_block = [&, shift](const std::size_t i) -> std::uint64_t
-			{
-				SEC_ASSERT(shift != 0);
-
-				if (shift > 0)
-				{
-					// Shift left: low bits come from Block(i), high bits come from Block(i-1)
-					const auto lshift = static_cast<std::size_t>(shift);
-					const std::uint64_t lo = other.Block(i) << lshift;
-					const std::uint64_t hi = i > 0 ? other.Block(i - 1) >> (BitsPerBlock - lshift) : std::uint64_t{0};
-					return hi | lo;
-				}
-				else
-				{
-					// Shift right: high bits come from Block(i), low bits come from Block(i+1)
-					const auto rshift = static_cast<std::size_t>(-shift);
-					const std::uint64_t hi = other.Block(i) >> rshift;
-					const std::uint64_t lo = i + 1 < other.BlockCount() ? other.Block(i + 1) << (BitsPerBlock - rshift)
-					                                                    : std::uint64_t{0};
-					return hi | lo;
-				}
-			};
 
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				const auto mask = masks(i);             // valid-bit mask for *this's block i
-				const auto b = Block(i);                // current block in *this
-				const auto o = shifted_other_block(i);  // other's bits aligned to *this
-				const auto result = op(Block(i), o);    // AND of valid bits
+				const auto mask = masks(i);                   // valid-bit mask for *this's block i
+				const auto b = Block(i);                      // current block in *this
+				const auto o = other.ShiftedBlock(shift, i);  // other's bits aligned to *this
+				const auto result = op(b, o);                 // AND/OR/XOR the valid bits
 
 				// Preserve *this's padding bits (outside mask), write AND result inside mask.
 				Block(i) = (b & ~mask) | (result & mask);
