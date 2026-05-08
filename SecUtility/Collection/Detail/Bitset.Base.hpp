@@ -776,21 +776,27 @@ namespace SecUtility
 			}
 			else
 			{
-				for (std::size_t i = BlockCount() - 1; i > blockShift; i--)
+				if (const std::size_t i = BlockCount() - 1; i > blockShift)
 				{
 					const auto mask = masks(i);
 					const auto pad = Block(i) & ~mask;
 
 					const std::size_t src = i - blockShift;
-					// no need for mask `Block(src)` since we'll clear the trailing later
 					std::uint64_t val = Block(src) << bitShift;
 					const std::size_t carriedSrc = src - 1;
-					// no need for mask `Block(carriedSrc)` since we'll clear the trailing later
 					val |= Block(carriedSrc) >> (Detail::Bitset::BitsPerBlock - bitShift);
 
 					Block(i) = pad | (val & mask);
 				}
-				// peel off the last pass for better performance
+
+				for (std::size_t i = BlockCount() - 2; BlockCount() >= 2 && i > blockShift; i--)
+				{
+					const std::size_t src = i - blockShift;
+					const std::size_t carriedSrc = src - 1;
+					Block(i) =
+					        (Block(src) << bitShift) | (Block(carriedSrc) >> (Detail::Bitset::BitsPerBlock - bitShift));
+				}
+
 				{
 					const std::size_t i = blockShift;
 					const auto mask = masks(i);
@@ -824,26 +830,29 @@ namespace SecUtility
 
 			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
-			const std::size_t count = BlockCount();
 			const auto masks = MakeBlockMaskCaches();
 			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
 			if (bitShift == 0)
 			{
-				for (std::size_t i = 0; i <= count - blockShift - 1; i++)
 				{
-					const auto mask = masks(i);
-					const auto pad = Block(i) & ~mask;
+					const auto mask = MaskOfBlock(0);
+					const auto pad = Block(0) & ~mask;
 
-					const std::size_t src = i + blockShift;
+					const std::size_t src = 0 + blockShift;
 					const std::uint64_t val = Block(src);
 
-					Block(i) = pad | (val & mask);
+					Block(0) = pad | (val & mask);
+				}
+				for (std::size_t i = 1; i + blockShift + 1 <= BlockCount(); i++)
+				{
+					const std::size_t src = i + blockShift;
+					Block(i) = Block(src);
 				}
 			}
 			else
 			{
-				for (std::size_t i = 0; i < count - blockShift - 1; ++i)
+				if (const std::size_t i = 0; i + blockShift + 1 < BlockCount())
 				{
 					const auto mask = masks(i);
 					const auto pad = Block(i) & ~mask;
@@ -856,9 +865,17 @@ namespace SecUtility
 					Block(i) = pad | (val & mask);
 				}
 
+				for (std::size_t i = 1; i + blockShift + 1 < BlockCount(); ++i)
 				{
-					const std::size_t i = count - blockShift - 1;
-					const auto mask = masks(i);
+					const std::size_t src = i + blockShift;
+					const std::size_t carriedSrc = src + 1;
+					Block(i) =
+					        (Block(src) >> bitShift) | (Block(carriedSrc) << (Detail::Bitset::BitsPerBlock - bitShift));
+				}
+
+				{
+					const std::size_t i = BlockCount() - blockShift - 1;
+					const auto mask = MaskOfBlock(i);
 					const auto pad = Block(i) & ~mask;
 
 					const std::size_t src = i + blockShift;
