@@ -763,8 +763,8 @@ namespace SecUtility
 
 			if (bitShift == 0)
 			{
-				for (std::size_t i = BlockCount(); i-- > blockShift;)
 				{
+					const std::size_t i = BlockCount() - 1;
 					const auto mask = masks(i);
 					const auto pad = Block(i) & ~mask;
 
@@ -772,6 +772,12 @@ namespace SecUtility
 					const std::uint64_t val = Block(src);
 
 					Block(i) = pad | (val & mask);
+				}
+
+				for (std::size_t i = BlockCount() - 1; BlockCount() >= 2 && i-- > blockShift;)
+				{
+					const std::size_t src = i - blockShift;
+					Block(i) = Block(src);
 				}
 			}
 			else
@@ -852,7 +858,7 @@ namespace SecUtility
 			}
 			else
 			{
-				if (const std::size_t i = 0; i + blockShift + 1 < BlockCount())
+				if (constexpr std::size_t i = 0; i + blockShift + 1 < BlockCount())
 				{
 					const auto mask = masks(i);
 					const auto pad = Block(i) & ~mask;
