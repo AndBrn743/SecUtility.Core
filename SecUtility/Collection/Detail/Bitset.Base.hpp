@@ -748,28 +748,53 @@ namespace SecUtility
 			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
 			const auto masks = MakeBlockMaskCaches();
+			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
-			for (std::size_t i = BlockCount(); i-- > 0;)
+			if (bitShift == 0)
 			{
-				const auto mask = masks(i);
-				const auto pad = Block(i) & ~mask;
-
-				std::uint64_t val = 0;
-
-				if (i >= blockShift)
+				for (std::size_t i = BlockCount(); i-- > blockShift;)
 				{
+					const auto mask = masks(i);
+					const auto pad = Block(i) & ~mask;
+
 					const std::size_t src = i - blockShift;
-					val = (Block(src) & masks(src)) << bitShift;
+					// no need for mask `Block(src)` since we'll clear the trailing later
+					const std::uint64_t val = Block(src) << bitShift;
 
-					if (bitShift > 0 && src > 0)
-					{
-						const std::size_t carriedSrc = src - 1;
-						val |= (Block(carriedSrc) & masks(carriedSrc)) >> (Detail::Bitset::BitsPerBlock - bitShift);
-					}
+					Block(i) = pad | (val & mask);
 				}
-
-				Block(i) = pad | (val & mask);
 			}
+			else
+			{
+				for (std::size_t i = BlockCount() - 1; i > blockShift; i--)
+				{
+					const auto mask = masks(i);
+					const auto pad = Block(i) & ~mask;
+
+					const std::size_t src = i - blockShift;
+					// no need for mask `Block(src)` since we'll clear the trailing later
+					std::uint64_t val = Block(src) << bitShift;
+					const std::size_t carriedSrc = src - 1;
+					// no need for mask `Block(carriedSrc)` since we'll clear the trailing later
+					val |= Block(carriedSrc) >> (Detail::Bitset::BitsPerBlock - bitShift);
+
+					Block(i) = pad | (val & mask);
+				}
+				// peel off the last pass for better performance
+				{
+					const std::size_t i = blockShift;
+					const auto mask = masks(i);
+					const auto pad = Block(i) & ~mask;
+
+					const std::size_t src = i - blockShift;
+					// no need for mask `Block(src)` since we'll clear the trailing later
+					const std::uint64_t val = Block(src) << bitShift;
+
+					Block(i) = pad | (val & mask);
+				}
+			}
+
+			Trailing(n).ResetAll();
 
 			return AsDerived();
 		}
