@@ -1416,7 +1416,7 @@ namespace SecUtility
 		constexpr BitsetNotExpr(const BitsetNotExpr&) noexcept = default;
 		constexpr BitsetNotExpr(BitsetNotExpr&&) noexcept = default;
 		BitsetNotExpr& operator=(const BitsetNotExpr&) = delete;
-		BitsetNotExpr* operator=(BitsetNotExpr&&) = delete;
+		BitsetNotExpr& operator=(BitsetNotExpr&&) = delete;
 		~BitsetNotExpr() noexcept = default;
 
 	private:
