@@ -16,7 +16,6 @@
 #include <cstring>
 #include <ostream>
 #include <string>
-#include <text_encoding>
 #include <vector>
 
 
@@ -46,6 +45,9 @@ namespace SecUtility
 
 	template <typename Nested>
 	class BitsetNotExpr;
+
+	template <typename Op, typename Lhs, typename Rhs>
+	class BitsetBinaryExpr;
 
 	class DynamicBitset;
 
@@ -172,15 +174,8 @@ namespace SecUtility
 		friend BitsetNotExpr<Derived>;
 		friend BitsetNotExpr<const Derived>;
 
-		constexpr const Derived& AsDerived() const noexcept
-		{
-			return static_cast<const Derived&>(*this);
-		}
-
-		constexpr Derived& AsDerived() noexcept
-		{
-			return static_cast<Derived&>(*this);
-		}
+		template <typename, typename, typename>
+		friend class BitsetBinaryExpr;
 
 		constexpr BitsetBase() noexcept = default;
 		constexpr BitsetBase(const BitsetBase&) noexcept = default;
@@ -352,6 +347,16 @@ namespace SecUtility
 		};
 
 	public:
+		constexpr const Derived& AsDerived() const noexcept
+		{
+			return static_cast<const Derived&>(*this);
+		}
+
+		constexpr Derived& AsDerived() noexcept
+		{
+			return static_cast<Derived&>(*this);
+		}
+
 		// ----------------------------------------------------------
 		//  Conversion from other derived
 		// ----------------------------------------------------------
@@ -1012,6 +1017,11 @@ namespace SecUtility
 			return os << bs.ToString(os.iword(BitOrderFlag()) == 0);
 		}
 
+		// typename Traits<Derived>::EvaluatedType Eval() const
+		// {
+		// 	return static_cast<typename Traits<Derived>::EvaluatedType>(AsDerived());
+		// }
+
 
 	private:
 		static constexpr std::size_t BitsPerBlock = Detail::Bitset::BitsPerBlock;
@@ -1430,6 +1440,78 @@ namespace SecUtility
 		using EvaluatedType = typename Traits<std::remove_const_t<Nested>>::EvaluatedType;
 	};
 
+	// ============================================================
+	//  BitsetAndExpr  --  bitwise and
+	// ============================================================
+	template <typename Op, typename Lhs, typename Rhs>
+	class BitsetBinaryExpr : public BitsetBase<BitsetBinaryExpr<Op, Lhs, Rhs>>
+	{
+		using Base = BitsetBase<BitsetBinaryExpr>;
+		friend Base;
+
+		friend BitsetBase<BitsetBinaryExpr<Op, std::remove_const_t<Lhs>, Rhs>>;
+		friend BitsetBase<BitsetBinaryExpr<Op, Lhs, std::remove_const_t<Rhs>>>;
+		friend BitsetBase<BitsetBinaryExpr<Op, std::remove_const_t<Lhs>, std::remove_const_t<Rhs>>>;
+
+		friend Lhs;
+		friend BitsetBase<Lhs>;
+
+		using BaseOfLhs =
+		        std::conditional_t<std::is_const_v<Lhs>, const BitsetBase<std::remove_const_t<Lhs>>, BitsetBase<Lhs>>;
+		using BaseOfRhs =
+		        std::conditional_t<std::is_const_v<Rhs>, const BitsetBase<std::remove_const_t<Rhs>>, BitsetBase<Rhs>>;
+
+	public:
+		explicit constexpr BitsetBinaryExpr(const Lhs& lhs, const Rhs& rhs, const std::size_t headPadding = 0) SEC_NOEXCEPT
+		    : m_HeadPadding(headPadding), m_Lhs(lhs.AsDerived()), m_Rhs(rhs.AsDerived())
+		{
+			SEC_ASSERT(lhs.Size() == rhs.Size());
+		}
+
+	private:
+		// NOLINTNEXTLINE(*-use-equals-delete)
+		/* CRTP VIRTUAL */ constexpr std::uint64_t& Block(std::size_t index) noexcept = delete;
+
+		/* CRTP VIRTUAL */ constexpr std::uint64_t Block(const std::size_t index) const noexcept
+		{
+			const auto& l = static_cast<const BaseOfLhs&>(m_Lhs);
+			const auto& r = static_cast<const BaseOfRhs&>(m_Rhs);
+			return Op{}(l.ShiftedBlock(m_HeadPadding - l.HeadPadding(), index),
+			            r.ShiftedBlock(m_HeadPadding - r.HeadPadding(), index));
+		}
+
+		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		{
+			return m_HeadPadding;
+		}
+
+	public:
+		/* CRTP VIRTUAL */ constexpr std::size_t Size() const noexcept
+		{
+			return m_Lhs.Size();
+		}
+
+		BitsetBinaryExpr() = delete;
+		constexpr BitsetBinaryExpr(const BitsetBinaryExpr&) noexcept = default;
+		constexpr BitsetBinaryExpr(BitsetBinaryExpr&&) noexcept = default;
+		BitsetBinaryExpr& operator=(const BitsetBinaryExpr&) = delete;
+		BitsetBinaryExpr& operator=(BitsetBinaryExpr&&) = delete;
+		~BitsetBinaryExpr() noexcept = default;
+
+	private:
+		std::size_t m_HeadPadding{};
+		std::conditional_t<Traits<std::decay_t<Lhs>>::IsNestedByRef, const Lhs&, Lhs> m_Lhs;
+		std::conditional_t<Traits<std::decay_t<Rhs>>::IsNestedByRef, const Rhs&, Rhs> m_Rhs;
+	};
+
+	template <typename Op, typename Lhs, typename Rhs>
+	struct Traits<BitsetBinaryExpr<Op, Lhs, Rhs>>
+	{
+		static constexpr bool IsNestedByRef = false;
+		using EvaluatedType = std::conditional_t<Detail::Bitset::is_fixed_size_bitset<std::decay_t<Rhs>>::value,
+		                                         typename Traits<std::remove_const_t<Rhs>>::EvaluatedType,
+		                                         typename Traits<std::remove_const_t<Lhs>>::EvaluatedType>;
+	};
 
 	// ============================================================
 	//  Binary bitwise operators

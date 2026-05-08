@@ -1526,11 +1526,23 @@ TEST_CASE("operator&, operator|, and operator^")
 			SetRandom(bs1, seed + 10);
 
 			const auto bn = bs0 & bs1;
+
+			const auto bnn = BitsetBinaryExpr<std::bit_and<>, Bitset<42>, Bitset<42>>{bs0, bs1};
+			const auto bnnn = BitsetBinaryExpr<std::bit_and<>, Bitset<42>, Bitset<42>>{bs0, bs1, 2};
+
+			Bitset<42> bs2 = bnn;
+			Bitset<42> bs3 = bnnn;
+
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
 
 			for (std::size_t i = 0; i < 42; ++i)
 			{
 				CHECK(bn[i] == (bs0[i] && bs1[i]));
+
+				CHECK(bnn[i] == (bs0[i] && bs1[i]));
+				CHECK(bnnn[i] == (bs0[i] && bs1[i]));
+				CHECK(bs2[i] == (bs0[i] && bs1[i]));
+				CHECK(bs3[i] == (bs0[i] && bs1[i]));
 			}
 		}
 
