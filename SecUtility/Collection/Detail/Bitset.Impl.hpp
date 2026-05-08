@@ -3,15 +3,10 @@
 
 #pragma once
 
-// #include <SecUtility/Collection/Detail/Bitset.Forward.hpp>
-// #include <SecUtility/Collection/Detail/Bitset.Utility.hpp>
-// #include <SecUtility/Collection/Detail/BitsetBase.hpp>
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpragmas"
-#pragma GCC diagnostic ignored "-Winvalid-constexpr"
+#if !defined(SEC_BITSET_DETAIL)
+#error "Please do not directly include internal headers"
 #endif
+
 
 namespace SecUtility
 {
@@ -532,9 +527,3 @@ namespace SecUtility
 
 #undef SEC_DEFINE_BITSET_BITWISE_BINARY_OP
 }
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#pragma GCC diagnostic ignored "-Wpragmas"
-#pragma GCC diagnostic ignored "-Winvalid-constexpr"
-#endif

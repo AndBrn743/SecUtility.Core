@@ -3,8 +3,9 @@
 
 #pragma once
 
-// #include <SecUtility/Collection/Detail/Bitset.Forward.hpp>
-// #include <SecUtility/Collection/Detail/Bitset.Utility.hpp>
+#if !defined(SEC_BITSET_DETAIL)
+#error "Please do not directly include internal headers"
+#endif
 
 #include <SecUtility/Collection/SubscriptBasedIterator.hpp>
 #include <SecUtility/IO/BitOrder.hpp>
@@ -25,12 +26,6 @@
 #endif
 #if !defined(SEC_NOEXCEPT)
 #define SEC_NOEXCEPT noexcept
-#endif
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpragmas"
-#pragma GCC diagnostic ignored "-Winvalid-constexpr"
 #endif
 
 namespace SecUtility
@@ -915,7 +910,3 @@ namespace SecUtility
 		// static constexpr std::size_t BitsPerBlock = Detail::Bitset::BitsPerBlock;
 	};
 }
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif

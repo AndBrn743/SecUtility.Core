@@ -3,14 +3,12 @@
 
 #pragma once
 
+#if !defined(SEC_BITSET_DETAIL)
+#error "Please do not directly include internal headers"
+#endif
+
 #include <cinttypes>
 #include <cstddef>
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpragmas"
-#pragma GCC diagnostic ignored "-Winvalid-constexpr"
-#endif
 
 
 namespace SecUtility::Detail::Bitset
@@ -100,7 +98,3 @@ namespace SecUtility::Detail::Bitset
 	template <typename T>
 	std::size_t LeadingZeroCount(T) = delete;  // to prevent conversion
 }
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif

@@ -3,6 +3,10 @@
 
 #pragma once
 
+#if !defined(SEC_BITSET_DETAIL)
+#error "Please do not directly include internal headers"
+#endif
+
 #include <cstddef>
 #include <SecUtility/Meta/TypeTrait.hpp>
 
