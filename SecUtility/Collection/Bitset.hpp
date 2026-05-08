@@ -953,37 +953,26 @@ namespace SecUtility
 				return true;
 			}
 
-			std::size_t index = 0;
-			while (index < Size())
+			for (std::size_t i = 0; i < Detail::Bitset::BlocksFor(Size()); ++i)
 			{
-				constexpr auto ExtractAlignedChunk64 = [](const auto& bitset, const std::size_t bitIndex)
+				const auto l = ShiftedBlock(-HeadPadding(), i);
+				const auto r = other.ShiftedBlock(-other.HeadPadding(), i);
+
+				if (i + 1 == Detail::Bitset::BlocksFor(Size()))
 				{
-					const std::size_t paddedIndex = bitset.HeadPadding() + bitIndex;
-					const std::size_t blockIndex = paddedIndex / BitsPerBlock;
-					const std::size_t offset = paddedIndex % BitsPerBlock;
-					std::uint64_t chunk = bitset.Block(blockIndex) >> offset;
-					if (offset != 0 && blockIndex + 1 < bitset.BlockCount())
+					const auto mask = Detail::Bitset::LastBlockMask(Size());
+					if ((l & mask) != (r & mask))
 					{
-						chunk |= bitset.Block(blockIndex + 1) << (BitsPerBlock - offset);
+						return false;
 					}
-					return chunk;
-				};
-
-				const std::uint64_t lhsChunk = ExtractAlignedChunk64(*this, index);
-				const std::uint64_t rhsChunk = ExtractAlignedChunk64(other, index);
-
-
-				const std::size_t bitsProcessedInThisPass = std::min(BitsPerBlock, Size() - index);
-				const std::uint64_t mask = bitsProcessedInThisPass == BitsPerBlock
-				                                   ? ~std::uint64_t{0}
-				                                   : (std::uint64_t{1} << bitsProcessedInThisPass) - 1u;
-
-				if ((lhsChunk & mask) != (rhsChunk & mask))
-				{
-					return false;
 				}
-
-				index += bitsProcessedInThisPass;
+				else
+				{
+					if (l != r)
+					{
+						return false;
+					}
+				}
 			}
 
 			return true;
