@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <SecUtility/Meta/TypeTrait.hpp>
 
 
 namespace SecUtility
@@ -26,5 +27,17 @@ namespace SecUtility
 
 		template <typename Op, typename Lhs, typename Rhs>
 		class BitsetBinaryExpr;
+
+		template <typename>
+		struct is_fixed_size_bitset : std::false_type
+		{
+			/* NO CODE */
+		};
+
+		template <std::size_t N>
+		struct is_fixed_size_bitset<SecUtility::Bitset<N>> : std::true_type
+		{
+			/* NO CODE */
+		};
 	}
 }
