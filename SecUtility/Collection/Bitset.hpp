@@ -37,7 +37,7 @@ namespace SecUtility
 	template <typename Derived>
 	class BitsetBase;
 
-	template <std::size_t N>  // N to avoid shadowing the Size() method
+	template <std::size_t N>
 	class Bitset;
 
 	template <typename Nested>
@@ -298,6 +298,13 @@ namespace SecUtility
 			}
 		}
 
+		// just a cast to `typename Traits<Derived>::EvaluatedType`. template is use here for delay the instantiation
+		template <typename..., typename D = Derived>
+		constexpr typename Traits<D>::EvaluatedType EvalHelper() const
+				noexcept(noexcept(static_cast<typename Traits<D>::EvaluatedType>(AsDerived())))
+		{
+			return static_cast<typename Traits<D>::EvaluatedType>(AsDerived());
+		}
 
 	public:
 		// ----------------------------------------------------------
@@ -1017,10 +1024,10 @@ namespace SecUtility
 			return os << bs.ToString(os.iword(BitOrderFlag()) == 0);
 		}
 
-		// typename Traits<Derived>::EvaluatedType Eval() const
-		// {
-		// 	return static_cast<typename Traits<Derived>::EvaluatedType>(AsDerived());
-		// }
+		auto Eval() const
+		{
+			return EvalHelper();
+		}
 
 
 	private:
@@ -1462,8 +1469,12 @@ namespace SecUtility
 		        std::conditional_t<std::is_const_v<Rhs>, const BitsetBase<std::remove_const_t<Rhs>>, BitsetBase<Rhs>>;
 
 	public:
-		explicit constexpr BitsetBinaryExpr(const Lhs& lhs, const Rhs& rhs, const std::size_t headPadding = 0) SEC_NOEXCEPT
-		    : m_HeadPadding(headPadding), m_Lhs(lhs.AsDerived()), m_Rhs(rhs.AsDerived())
+		explicit constexpr BitsetBinaryExpr(const Lhs& lhs,
+		                                    const Rhs& rhs,
+		                                    const std::size_t headPadding = 0) SEC_NOEXCEPT
+		    : m_HeadPadding(headPadding),
+		      m_Lhs(lhs.AsDerived()),
+		      m_Rhs(rhs.AsDerived())
 		{
 			SEC_ASSERT(lhs.Size() == rhs.Size());
 		}
