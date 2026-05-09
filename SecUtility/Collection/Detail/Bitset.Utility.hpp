@@ -21,10 +21,16 @@ namespace SecUtility::Detail::Bitset
 	}
 
 	// Mask of the active bits in the last block.  Returns ~0ull when bits % 64 == 0.
-	constexpr std::uint64_t LastBlockMask(const std::size_t bits) noexcept
+	constexpr std::uint64_t TailMask(const std::size_t bits) noexcept
 	{
 		const std::size_t remainder = bits % BitsPerBlock;
 		return remainder == 0 ? ~std::uint64_t{0} : (std::uint64_t{1} << remainder) - 1u;
+	}
+
+	constexpr std::uint64_t HeadMask(const std::size_t paddingBitsCount) SEC_NOEXCEPT
+	{
+		SEC_ASSERT(paddingBitsCount < 64);
+		return ~((std::uint64_t{1} << paddingBitsCount) - 1u);
 	}
 
 	constexpr std::size_t PopCount(std::uint64_t v) noexcept

@@ -99,18 +99,17 @@ namespace SecUtility
 		{
 			if (BlockCount() == 1)
 			{
-				return (HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding()))
-				       & Detail::Bitset::LastBlockMask(HeadPadding() + Size());
+				return Detail::Bitset::HeadMask(HeadPadding()) & Detail::Bitset::TailMask(HeadPadding() + Size());
 			}
 
 			if (BlockCount() > 1 && index == 0)
 			{
-				return HeadPadding() == 0 ? ~std::uint64_t{0} : ~Detail::Bitset::LastBlockMask(HeadPadding());
+				return Detail::Bitset::HeadMask(HeadPadding());
 			}
 
 			if (BlockCount() > 1 && index + 1 == BlockCount() && TailPadding() != 0)
 			{
-				return Detail::Bitset::LastBlockMask(HeadPadding() + Size());
+				return Detail::Bitset::TailMask(HeadPadding() + Size());
 			}
 
 			return ~std::uint64_t{0};
@@ -155,7 +154,7 @@ namespace SecUtility
 		{
 			if (const std::size_t size = Size(); size != 0)
 			{
-				Block(0) &= ~Detail::Bitset::LastBlockMask(HeadPadding());
+				Block(0) &= Detail::Bitset::HeadMask(HeadPadding());
 			}
 		}
 
@@ -163,7 +162,7 @@ namespace SecUtility
 		{
 			if (const std::size_t paddedSize = Size() + HeadPadding(); paddedSize != 0)
 			{
-				Block(BlockCount() - 1) &= Detail::Bitset::LastBlockMask(paddedSize);
+				Block(BlockCount() - 1) &= Detail::Bitset::TailMask(paddedSize);
 			}
 		}
 
@@ -1071,7 +1070,7 @@ namespace SecUtility
 
 				if (i + 1 == Detail::Bitset::BlocksFor(Size()))
 				{
-					const auto mask = Detail::Bitset::LastBlockMask(Size());
+					const auto mask = Detail::Bitset::TailMask(Size());
 					if ((l & mask) != (r & mask))
 					{
 						return false;
