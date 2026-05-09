@@ -27,9 +27,8 @@ namespace SecUtility::Detail::Bitset
 		return remainder == 0 ? ~std::uint64_t{0} : (std::uint64_t{1} << remainder) - 1u;
 	}
 
-	constexpr std::uint64_t HeadMask(const std::size_t paddingBitsCount) SEC_NOEXCEPT
+	constexpr std::uint64_t HeadMask(const std::size_t paddingBitsCount) noexcept
 	{
-		SEC_ASSERT(paddingBitsCount < 64);
 		return ~((std::uint64_t{1} << paddingBitsCount) - 1u);
 	}
 
