@@ -462,7 +462,7 @@ namespace SecUtility
 			return m_HeadPadding;
 		}
 
-		/* CRTP OVERRIDE */ constexpr BitsetBinaryExpr AlignedTo_Impl(const std::size_t headPadding = 0) noexcept
+		/* CRTP OVERRIDE */ constexpr BitsetBinaryExpr AlignedTo_Impl(const std::size_t headPadding = 0) const noexcept
 		{
 			return BitsetBinaryExpr{m_Lhs, m_Rhs, headPadding};
 		}
@@ -490,7 +490,7 @@ namespace SecUtility
 	struct Traits<Detail::Bitset::BitsetBinaryExpr<Op, Lhs, Rhs>>
 	{
 		static constexpr bool IsNestedByRef = false;
-		static constexpr bool IsCheaplyRealignable = false;
+		static constexpr bool IsCheaplyRealignable = true;
 		using EvaluatedType = std::conditional_t<Detail::Bitset::is_fixed_size_bitset<std::decay_t<Rhs>>::value,
 		                                         typename Traits<std::remove_const_t<Rhs>>::EvaluatedType,
 		                                         typename Traits<std::remove_const_t<Lhs>>::EvaluatedType>;

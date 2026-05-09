@@ -1744,6 +1744,42 @@ TEST_CASE("operator&, operator|, and operator^")
 			}
 		}
 	}
+
+	SECTION("Alignment and realignment")
+	{
+		const auto size = GENERATE(36, 63, 64, 65, 95, 96, 97, 125, 521);
+		DynamicBitset bs0{size};
+		SetRandom(bs0, seed);
+
+		{
+			const auto t = bs0.Trailing(size * 2 / 3);
+			const auto l = bs0.Leading(size * 2 / 3);
+
+			const auto n = (l & t).Eval();
+			const auto o = (l | t).Eval();
+			const auto x = (l ^ t).Eval();
+
+			DynamicBitset destN{size * 2};
+			DynamicBitset destO{size * 2};
+			DynamicBitset destX{size * 2};
+			destN.Segment(size / 4, size * 2 / 3) = l & t;
+			destO.Segment(size / 4, size * 2 / 3) = l | t;
+			destX.Segment(size / 4, size * 2 / 3) = l ^ t;
+
+			CHECK((t.Eval() & l.Eval()).Eval().ToString() == (t & l).ToString());
+			CHECK((t.Eval() | l.Eval()).Eval().ToString() == (t | l).ToString());
+			CHECK((t.Eval() ^ l.Eval()).Eval().ToString() == (t ^ l).ToString());
+
+			CHECK((t.Eval() & l.Eval()).Eval().ToString() == n.ToString());
+			CHECK((t.Eval() | l.Eval()).Eval().ToString() == o.ToString());
+			CHECK((t.Eval() ^ l.Eval()).Eval().ToString() == x.ToString());
+
+			CHECK((t.Eval() & l.Eval()).Eval().ToString() == destN.Segment(size / 4, size * 2 / 3).ToString());
+			CHECK((t.Eval() | l.Eval()).Eval().ToString() == destO.Segment(size / 4, size * 2 / 3).ToString());
+			CHECK((t.Eval() ^ l.Eval()).Eval().ToString() == destX.Segment(size / 4, size * 2 / 3).ToString());
+		}
+
+	}
 }
 
 TEST_CASE("operator<<= and operator>>=")
