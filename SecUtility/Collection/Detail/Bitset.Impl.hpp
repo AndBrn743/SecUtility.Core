@@ -99,6 +99,7 @@ namespace SecUtility
 	{
 		static constexpr bool IsNestedByRef = true;
 		static constexpr bool IsCheaplyRealignable = false;
+		static constexpr bool IsMaskedForRead = true;
 		using EvaluatedType = Bitset<N>;
 	};
 
@@ -266,6 +267,7 @@ namespace SecUtility
 	{
 		static constexpr bool IsNestedByRef = true;
 		static constexpr bool IsCheaplyRealignable = false;
+		static constexpr bool IsMaskedForRead = true;
 		using EvaluatedType = DynamicBitset;
 	};
 
@@ -348,6 +350,7 @@ namespace SecUtility
 	{
 		static constexpr bool IsNestedByRef = false;
 		static constexpr bool IsCheaplyRealignable = false;
+		static constexpr bool IsMaskedForRead = false;
 		using EvaluatedType = DynamicBitset;
 	};
 
@@ -411,6 +414,7 @@ namespace SecUtility
 	{
 		static constexpr bool IsNestedByRef = false;
 		static constexpr bool IsCheaplyRealignable = false;
+		static constexpr bool IsMaskedForRead = false;
 		using EvaluatedType = typename Traits<std::remove_const_t<Nested>>::EvaluatedType;
 	};
 
@@ -491,6 +495,7 @@ namespace SecUtility
 	{
 		static constexpr bool IsNestedByRef = false;
 		static constexpr bool IsCheaplyRealignable = true;
+		static constexpr bool IsMaskedForRead = false;
 		using EvaluatedType = std::conditional_t<Detail::Bitset::is_fixed_size_bitset<std::decay_t<Rhs>>::value,
 		                                         typename Traits<std::remove_const_t<Rhs>>::EvaluatedType,
 		                                         typename Traits<std::remove_const_t<Lhs>>::EvaluatedType>;
