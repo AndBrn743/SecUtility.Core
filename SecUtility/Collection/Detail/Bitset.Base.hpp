@@ -895,41 +895,12 @@ namespace SecUtility
 
 			if (HeadPadding() == other.HeadPadding())
 			{
-				SEC_ASSERT(BlockCount() == other.BlockCount());
-				for (std::size_t i = 0; i < BlockCount(); ++i)
-				{
-					const auto mask = MaskOfBlock(i);
-					if ((Block(i) & mask) != (other.Block(i) & mask))
-					{
-						return false;
-					}
-				}
-				return true;
+				return OperatorEqualEqual_AssumeSameSizeAndAligned(other.AsDerived());
 			}
-
-			for (std::size_t i = 0; i < Detail::Bitset::BlocksFor(Size()); ++i)
+			else
 			{
-				const auto l = ShiftedBlock(-HeadPadding(), i);
-				const auto r = other.ShiftedBlock(-other.HeadPadding(), i);
-
-				if (i + 1 == Detail::Bitset::BlocksFor(Size()))
-				{
-					const auto mask = Detail::Bitset::LastBlockMask(Size());
-					if ((l & mask) != (r & mask))
-					{
-						return false;
-					}
-				}
-				else
-				{
-					if (l != r)
-					{
-						return false;
-					}
-				}
+				return OperatorEqualEqual_AssumeSameSizeAndMisaligned(other.AsDerived());
 			}
-
-			return true;
 		}
 
 		template <typename OtherDerived>
@@ -977,8 +948,6 @@ namespace SecUtility
 		Derived& BitwiseCombinationOp(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
 		{
 			SEC_ASSERT(Size() == other.Size());
-
-			const auto masks = MakeBlockMaskCaches();
 
 			if (HeadPadding() == other.HeadPadding())
 			{
@@ -1051,6 +1020,51 @@ namespace SecUtility
 			}
 
 			return AsDerived();
+		}
+
+		template <typename OtherDerived>
+		constexpr bool OperatorEqualEqual_AssumeSameSizeAndAligned(const BitsetBase<OtherDerived>& other) const
+		        SEC_NOEXCEPT
+		{
+			SEC_ASSERT(BlockCount() == other.BlockCount());
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				const auto mask = MaskOfBlock(i);
+				if ((Block(i) & mask) != (other.Block(i) & mask))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		template <typename OtherDerived>
+		constexpr bool OperatorEqualEqual_AssumeSameSizeAndMisaligned(const BitsetBase<OtherDerived>& other) const
+		        SEC_NOEXCEPT
+		{
+			for (std::size_t i = 0; i < Detail::Bitset::BlocksFor(Size()); ++i)
+			{
+				const auto l = ShiftedBlock(-HeadPadding(), i);
+				const auto r = other.ShiftedBlock(-other.HeadPadding(), i);
+
+				if (i + 1 == Detail::Bitset::BlocksFor(Size()))
+				{
+					const auto mask = Detail::Bitset::LastBlockMask(Size());
+					if ((l & mask) != (r & mask))
+					{
+						return false;
+					}
+				}
+				else
+				{
+					if (l != r)
+					{
+						return false;
+					}
+				}
+			}
+
+			return true;
 		}
 	};
 }
