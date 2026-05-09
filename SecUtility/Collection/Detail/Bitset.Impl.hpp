@@ -512,28 +512,4 @@ namespace SecUtility
 		r >>= size;
 		return r;
 	}
-
-	// #define SEC_DEFINE_BITSET_BITWISE_BINARY_OP(OP) \
-	// 	template <typename Lhs, typename Rhs> \
-	// 	constexpr auto operator OP(const BitsetBase<Lhs>& lhs, const BitsetBase<Rhs>& rhs) SEC_NOEXCEPT \
-	// 	{ \
-	// 		if constexpr (Detail::Bitset::is_fixed_size_bitset<typename Traits<Rhs>::EvaluatedType>::value) \
-	// 		{ \
-	// 			typename Traits<Rhs>::EvaluatedType r{rhs}; \
-	// 			r OP## = lhs; \
-	// 			return r; \
-	// 		} \
-	// 		else \
-	// 		{ \
-	// 			typename Traits<Lhs>::EvaluatedType r{lhs}; \
-	// 			r OP## = rhs; \
-	// 			return r; \
-	// 		} \
-	// 	}
-	//
-	// 	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(&)
-	// 	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(|)
-	// 	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(^)
-	//
-	// #undef SEC_DEFINE_BITSET_BITWISE_BINARY_OP
 }
