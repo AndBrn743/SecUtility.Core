@@ -1017,9 +1017,8 @@ namespace SecUtility
 			{
 				const auto mask = masks(i);
 				const auto b0 = Block(i);
-				const auto b = op(b0, other.Block(i));
-				const auto n = (b & mask) | ~mask;
-				Block(i) = (b0 & ~mask) | (n & mask);
+				const auto padding = b0 & ~mask;
+				Block(i) = padding | (op(b0, other.Block(i)) & mask);
 			}
 
 			return AsDerived();
