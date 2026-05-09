@@ -61,7 +61,7 @@ namespace SecUtility
 
 		SEC_FORCE_INLINE constexpr std::size_t BlockCount() const noexcept
 		{
-			return Detail::Bitset::BlocksFor(AsDerived().HeadPadding() + AsDerived().Size());
+			return Detail::Bitset::BlocksFor(AsDerived().HeadPaddingBitCount() + AsDerived().Size());
 		}
 
 		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::uint64_t& Block(const std::size_t index) noexcept
@@ -74,17 +74,17 @@ namespace SecUtility
 			return AsDerived().Block(index);
 		}
 
-		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::size_t HeadPadding() const
+		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::size_t HeadPaddingBitCount() const
 		        SEC_NOEXCEPT  // corresponds to trailing
 		{
-			const auto padding = AsDerived().HeadPadding();
+			const auto padding = AsDerived().HeadPaddingBitCount();
 			SEC_ASSERT(padding < Detail::Bitset::BitsPerBlock);
 			return padding;
 		}
 
-		constexpr std::size_t TailPadding() const SEC_NOEXCEPT  // corresponds to leading
+		constexpr std::size_t TailPaddingBitCount() const SEC_NOEXCEPT  // corresponds to leading
 		{
-			const auto padding = BlockCount() * Detail::Bitset::BitsPerBlock - (Size() + HeadPadding());
+			const auto padding = BlockCount() * Detail::Bitset::BitsPerBlock - (Size() + HeadPaddingBitCount());
 			SEC_ASSERT(padding < Detail::Bitset::BitsPerBlock);
 			return padding;
 		}
@@ -99,17 +99,18 @@ namespace SecUtility
 		{
 			if (BlockCount() == 1)
 			{
-				return Detail::Bitset::HeadMask(HeadPadding()) & Detail::Bitset::TailMask(HeadPadding() + Size());
+				return Detail::Bitset::HeadMask(HeadPaddingBitCount())
+				       & Detail::Bitset::TailMask(HeadPaddingBitCount() + Size());
 			}
 
 			if (BlockCount() > 1 && index == 0)
 			{
-				return Detail::Bitset::HeadMask(HeadPadding());
+				return Detail::Bitset::HeadMask(HeadPaddingBitCount());
 			}
 
-			if (BlockCount() > 1 && index + 1 == BlockCount() && TailPadding() != 0)
+			if (BlockCount() > 1 && index + 1 == BlockCount() && TailPaddingBitCount() != 0)
 			{
-				return Detail::Bitset::TailMask(HeadPadding() + Size());
+				return Detail::Bitset::TailMask(HeadPaddingBitCount() + Size());
 			}
 
 			return ~std::uint64_t{0};
@@ -154,13 +155,13 @@ namespace SecUtility
 		{
 			if (const std::size_t size = Size(); size != 0)
 			{
-				Block(0) &= Detail::Bitset::HeadMask(HeadPadding());
+				Block(0) &= Detail::Bitset::HeadMask(HeadPaddingBitCount());
 			}
 		}
 
 		constexpr void RestPaddingBitsOfLastBlock() noexcept
 		{
-			if (const std::size_t paddedSize = Size() + HeadPadding(); paddedSize != 0)
+			if (const std::size_t paddedSize = Size() + HeadPaddingBitCount(); paddedSize != 0)
 			{
 				Block(BlockCount() - 1) &= Detail::Bitset::TailMask(paddedSize);
 			}
@@ -208,7 +209,7 @@ namespace SecUtility
 		{
 			friend BitsetBase;
 			constexpr BitReference(BitsetBase& derived, const std::size_t index) noexcept
-			    : r_Derived(derived.AsDerived()), m_PaddedIndex(index + r_Derived.HeadPadding()),
+			    : r_Derived(derived.AsDerived()), m_PaddedIndex(index + r_Derived.HeadPaddingBitCount()),
 			      m_Mask(std::uint64_t{1} << (m_PaddedIndex % Detail::Bitset::BitsPerBlock))
 			{
 				/* NO CODE */
@@ -283,8 +284,8 @@ namespace SecUtility
 		constexpr bool operator[](const std::size_t index) const SEC_NOEXCEPT
 		{
 			SEC_ASSERT(index < Size());
-			return (Block((index + HeadPadding()) / Detail::Bitset::BitsPerBlock)
-			        >> ((index + HeadPadding()) % Detail::Bitset::BitsPerBlock))
+			return (Block((index + HeadPaddingBitCount()) / Detail::Bitset::BitsPerBlock)
+			        >> ((index + HeadPaddingBitCount()) % Detail::Bitset::BitsPerBlock))
 			       & 1u;
 		}
 
@@ -534,7 +535,8 @@ namespace SecUtility
 			{
 				if (const std::uint64_t block = Block(i) & MaskOfBlock(i); block != 0)
 				{
-					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(block) - HeadPadding();
+					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(block)
+					       - HeadPaddingBitCount();
 				}
 			}
 
@@ -558,7 +560,7 @@ namespace SecUtility
 				if (const std::uint64_t block = Block(i) & MaskOfBlock(i); block != 0)
 				{
 					return (BlockCount() - 1 - i) * Detail::Bitset::BitsPerBlock
-					       + Detail::Bitset::LeadingZeroCount(block) - TailPadding();
+					       + Detail::Bitset::LeadingZeroCount(block) - TailPaddingBitCount();
 				}
 			}
 
@@ -603,13 +605,13 @@ namespace SecUtility
 				return Size();
 			}
 
-			const std::size_t startBit = HeadPadding() + pos + 1;
+			const std::size_t startBit = HeadPaddingBitCount() + pos + 1;
 			std::size_t blockIdx = startBit / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitInBlk = startBit % Detail::Bitset::BitsPerBlock;
 
 			if (const std::uint64_t blk = Block(blockIdx) >> bitInBlk; blk != 0)
 			{
-				const std::size_t idx = startBit + Detail::Bitset::TrailingZeroCount(blk) - HeadPadding();
+				const std::size_t idx = startBit + Detail::Bitset::TrailingZeroCount(blk) - HeadPaddingBitCount();
 				// guards against over-counting caused by padding-bits leak into payload-bits segment
 				return idx < Size() ? idx : Size();
 			}
@@ -619,7 +621,7 @@ namespace SecUtility
 				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
 				{
 					const std::size_t idx = blockIdx * Detail::Bitset::BitsPerBlock
-					                        + Detail::Bitset::TrailingZeroCount(blk) - HeadPadding();
+					                        + Detail::Bitset::TrailingZeroCount(blk) - HeadPaddingBitCount();
 					// guards against over-counting caused by padding-bits leak into payload-bits segment
 					return idx < Size() ? idx : Size();
 				}
@@ -639,14 +641,14 @@ namespace SecUtility
 				return Size();
 			}
 
-			const std::size_t endBit = HeadPadding() + pos - 1;
+			const std::size_t endBit = HeadPaddingBitCount() + pos - 1;
 			std::size_t blockIdx = endBit / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitInBlk = endBit % Detail::Bitset::BitsPerBlock;
 
 			if (const std::uint64_t blk = Block(blockIdx) << (Detail::Bitset::BitsPerBlock - bitInBlk - 1); blk != 0)
 			{
 				const auto idx = blockIdx * Detail::Bitset::BitsPerBlock + bitInBlk
-				                 - Detail::Bitset::LeadingZeroCount(blk) - HeadPadding();
+				                 - Detail::Bitset::LeadingZeroCount(blk) - HeadPaddingBitCount();
 				// guards against over-counting caused by padding-bits leak into payload-bits segment
 				return idx < Size() ? idx : Size();
 			}
@@ -657,7 +659,7 @@ namespace SecUtility
 				{
 					const auto idx = blockIdx * Detail::Bitset::BitsPerBlock
 					                 + (Detail::Bitset::BitsPerBlock - 1 - Detail::Bitset::LeadingZeroCount(blk))
-					                 - HeadPadding();
+					                 - HeadPaddingBitCount();
 					// guards against over-counting caused by padding-bits leak into payload-bits segment
 					return idx < Size() ? idx : Size();
 				}
@@ -950,7 +952,7 @@ namespace SecUtility
 		{
 			SEC_ASSERT(self.Size() == other.Size());
 
-			if (self.HeadPadding() == other.HeadPadding())
+			if (self.HeadPaddingBitCount() == other.HeadPaddingBitCount())
 			{
 				return std::invoke(alignedOp, self.AsDerived(), other.AsDerived(), std::forward<Args>(args)...);
 			}
@@ -959,7 +961,7 @@ namespace SecUtility
 				if (self.BlockCount() > other.BlockCount())
 				{
 					return std::invoke(alignedOp,
-					                   self.AlignedTo(other.HeadPadding()),
+					                   self.AlignedTo(other.HeadPaddingBitCount()),
 					                   other.AsDerived(),
 					                   std::forward<Args>(args)...);
 				}
@@ -967,19 +969,23 @@ namespace SecUtility
 				{
 					return std::invoke(alignedOp,
 					                   self.AsDerived(),
-					                   other.AlignedTo(self.HeadPadding()),
+					                   other.AlignedTo(self.HeadPaddingBitCount()),
 					                   std::forward<Args>(args)...);
 				}
 			}
 			else if constexpr (Traits<OtherDerived>::IsCheaplyRealignable)
 			{
-				return std::invoke(
-				        alignedOp, self.AsDerived(), other.AlignedTo(self.HeadPadding()), std::forward<Args>(args)...);
+				return std::invoke(alignedOp,
+				                   self.AsDerived(),
+				                   other.AlignedTo(self.HeadPaddingBitCount()),
+				                   std::forward<Args>(args)...);
 			}
 			else if constexpr (Traits<Derived>::IsCheaplyRealignable)
 			{
-				return std::invoke(
-				        alignedOp, self.AlignedTo(other.HeadPadding()), other.AsDerived(), std::forward<Args>(args)...);
+				return std::invoke(alignedOp,
+				                   self.AlignedTo(other.HeadPaddingBitCount()),
+				                   other.AsDerived(),
+				                   std::forward<Args>(args)...);
 			}
 			else
 			{
@@ -1021,8 +1027,8 @@ namespace SecUtility
 
 			const auto masks = MakeBlockMaskCaches();
 
-			const std::size_t thisHead = HeadPadding();
-			const std::size_t otherHead = other.HeadPadding();
+			const std::size_t thisHead = HeadPaddingBitCount();
+			const std::size_t otherHead = other.HeadPaddingBitCount();
 
 			// How many bits to shift other's raw data to align to *this.
 			// Positive = shift left, negative = shift right.
@@ -1065,8 +1071,8 @@ namespace SecUtility
 		{
 			for (std::size_t i = 0; i < Detail::Bitset::BlocksFor(Size()); ++i)
 			{
-				const auto l = ShiftedBlock(-HeadPadding(), i);
-				const auto r = other.ShiftedBlock(-other.HeadPadding(), i);
+				const auto l = ShiftedBlock(-HeadPaddingBitCount(), i);
+				const auto r = other.ShiftedBlock(-other.HeadPaddingBitCount(), i);
 
 				if (i + 1 == Detail::Bitset::BlocksFor(Size()))
 				{

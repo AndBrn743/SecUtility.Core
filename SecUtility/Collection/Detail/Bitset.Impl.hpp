@@ -21,7 +21,7 @@ namespace SecUtility
 		        (N + Detail::Bitset::BitsPerBlock - 1) / Detail::Bitset::BitsPerBlock;
 
 		// ReSharper disable once CppMemberFunctionMayBeStatic
-		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		/* CRTP OVERRIDE */ constexpr std::size_t HeadPaddingBitCount() const noexcept  // corresponds to trailing
 		{
 			return 0;
 		}
@@ -109,7 +109,7 @@ namespace SecUtility
 		friend Base;
 
 		// ReSharper disable once CppMemberFunctionMayBeStatic
-		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding()
+		/* CRTP OVERRIDE */ constexpr std::size_t HeadPaddingBitCount()
 		        const noexcept  // corresponds to trailing NOLINT(*-convert-member-functions-to-static)
 		{
 			return 0;
@@ -290,8 +290,8 @@ namespace SecUtility
 
 		constexpr BitsetSegmentExpr(Nested& nested, const std::size_t start, const std::size_t size) SEC_NOEXCEPT
 		    : m_Nested(nested),
-		      m_HeadPadding((start + static_cast<BaseOfNested&>(nested).HeadPadding()) % BitsPerBlock),
-		      m_BlockIndexOffset((start + static_cast<BaseOfNested&>(nested).HeadPadding()) / BitsPerBlock),
+		      m_HeadPadding((start + static_cast<BaseOfNested&>(nested).HeadPaddingBitCount()) % BitsPerBlock),
+		      m_BlockIndexOffset((start + static_cast<BaseOfNested&>(nested).HeadPaddingBitCount()) / BitsPerBlock),
 		      m_Size(size)
 		{
 			SEC_ASSERT(start + size <= nested.Size());
@@ -308,7 +308,7 @@ namespace SecUtility
 			return static_cast<const BaseOfNested&>(m_Nested).Block(index + m_BlockIndexOffset);
 		}
 
-		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		/* CRTP VIRTUAL */ constexpr std::size_t HeadPaddingBitCount() const noexcept  // corresponds to trailing
 		{
 			return m_HeadPadding;
 		}
@@ -383,9 +383,9 @@ namespace SecUtility
 			return ~static_cast<BaseOfNested&>(m_Nested).Block(index);
 		}
 
-		/* CRTP VIRTUAL */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		/* CRTP VIRTUAL */ constexpr std::size_t HeadPaddingBitCount() const noexcept  // corresponds to trailing
 		{
-			return static_cast<BaseOfNested&>(m_Nested).HeadPadding();
+			return static_cast<BaseOfNested&>(m_Nested).HeadPaddingBitCount();
 		}
 
 
@@ -453,11 +453,11 @@ namespace SecUtility
 		{
 			const auto& l = static_cast<const BaseOfLhs&>(m_Lhs);
 			const auto& r = static_cast<const BaseOfRhs&>(m_Rhs);
-			return Op{}(l.ShiftedBlock(m_HeadPadding - l.HeadPadding(), index),
-			            r.ShiftedBlock(m_HeadPadding - r.HeadPadding(), index));
+			return Op{}(l.ShiftedBlock(m_HeadPadding - l.HeadPaddingBitCount(), index),
+			            r.ShiftedBlock(m_HeadPadding - r.HeadPaddingBitCount(), index));
 		}
 
-		/* CRTP OVERRIDE */ constexpr std::size_t HeadPadding() const noexcept  // corresponds to trailing
+		/* CRTP OVERRIDE */ constexpr std::size_t HeadPaddingBitCount() const noexcept  // corresponds to trailing
 		{
 			return m_HeadPadding;
 		}
