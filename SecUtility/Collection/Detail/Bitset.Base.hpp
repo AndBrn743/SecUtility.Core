@@ -17,6 +17,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -893,14 +894,11 @@ namespace SecUtility
 				return false;
 			}
 
-			if (HeadPadding() == other.HeadPadding())
-			{
-				return OperatorEqualEqual_AssumeSameSizeAndAligned(other.AsDerived());
-			}
-			else
-			{
-				return OperatorEqualEqual_AssumeSameSizeAndMisaligned(other.AsDerived());
-			}
+			return ExecuteBinaryOpByAlignment(
+			        *this,
+			        other,
+			        &BitsetBase::OperatorEqualEqual_AssumeSameSizeAndAligned<OtherDerived>,
+			        &BitsetBase::OperatorEqualEqual_AssumeSameSizeAndMisaligned<OtherDerived>);
 		}
 
 		template <typename OtherDerived>
@@ -944,42 +942,65 @@ namespace SecUtility
 
 
 	private:
-		template <typename OtherDerived, typename Op>
-		Derived& BitwiseCombinationOp(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
+		template <typename Self, typename OtherDerived, typename AlignedOp, typename MisalignedOp, typename... Args>
+		static decltype(auto) ExecuteBinaryOpByAlignment(Self&& self,
+		                                                 const BitsetBase<OtherDerived>& other,
+		                                                 AlignedOp&& alignedOp,
+		                                                 MisalignedOp&& misalignedOp,
+		                                                 Args&&... args) SEC_NOEXCEPT
 		{
-			SEC_ASSERT(Size() == other.Size());
+			SEC_ASSERT(self.Size() == other.Size());
 
-			if (HeadPadding() == other.HeadPadding())
+			if (self.HeadPadding() == other.HeadPadding())
 			{
-				return BitwiseCombinationOp_AssumeAligned(other, op);
+				return std::invoke(alignedOp, self.AsDerived(), other.AsDerived(), std::forward<Args>(args)...);
 			}
 			else if constexpr (Traits<Derived>::IsCheaplyRealignable && Traits<OtherDerived>::IsCheaplyRealignable)
 			{
-				if (BlockCount() > other.BlockCount())
+				if (self.BlockCount() > other.BlockCount())
 				{
-					return AlignedTo(other.HeadPadding()).BitwiseCombinationOp_AssumeAligned(other, op);
+					return std::invoke(alignedOp,
+					                   self.AlignedTo(other.HeadPadding()),
+					                   other.AsDerived(),
+					                   std::forward<Args>(args)...);
 				}
 				else
 				{
-					return BitwiseCombinationOp_AssumeAligned(other.AlignedTo(HeadPadding()), op);
+					return std::invoke(alignedOp,
+					                   self.AsDerived(),
+					                   other.AlignedTo(self.HeadPadding()),
+					                   std::forward<Args>(args)...);
 				}
 			}
 			else if constexpr (Traits<OtherDerived>::IsCheaplyRealignable)
 			{
-				return BitwiseCombinationOp_AssumeAligned(other.AlignedTo(HeadPadding()), op);
+				return std::invoke(
+				        alignedOp, self.AsDerived(), other.AlignedTo(self.HeadPadding()), std::forward<Args>(args)...);
 			}
 			else if constexpr (Traits<Derived>::IsCheaplyRealignable)
 			{
-				return AlignedTo(other.HeadPadding()).BitwiseCombinationOp_AssumeAligned(other, op);
+				return std::invoke(
+				        alignedOp, self.AlignedTo(other.HeadPadding()), other.AsDerived(), std::forward<Args>(args)...);
 			}
 			else
 			{
-				return BitwiseCombinationOp_AssumeMisaligned(other, op);
+				return std::invoke(misalignedOp, self.AsDerived(), other.AsDerived(), std::forward<Args>(args)...);
 			}
 		}
 
 		template <typename OtherDerived, typename Op>
-		Derived& BitwiseCombinationOp_AssumeAligned(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
+		Derived& BitwiseCombinationOp(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
+		{
+			return ExecuteBinaryOpByAlignment(*this,
+			                                  other,
+			                                  &BitsetBase::BitwiseCombinationOp_AssumeAligned<OtherDerived, Op>,
+			                                  &BitsetBase::BitwiseCombinationOp_AssumeMisaligned<OtherDerived, Op>,
+			                                  op);
+		}
+
+		template <typename OtherDerived, typename Op>
+		Derived& BitwiseCombinationOp_AssumeAligned(const BitsetBase<OtherDerived>& other,
+		                                            const Op op = {}) SEC_NOEXCEPT
 		{
 			const auto masks = MakeBlockMaskCaches();
 			for (std::size_t i = 0; i < BlockCount(); ++i)
@@ -994,7 +1015,8 @@ namespace SecUtility
 		}
 
 		template <typename OtherDerived, typename Op>
-		Derived& BitwiseCombinationOp_AssumeMisaligned(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
+		Derived& BitwiseCombinationOp_AssumeMisaligned(const BitsetBase<OtherDerived>& other,
+		                                               const Op op = {}) SEC_NOEXCEPT
 		{
 			SEC_ASSERT(Size() == other.Size());
 
