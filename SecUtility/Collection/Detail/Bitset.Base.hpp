@@ -103,12 +103,12 @@ namespace SecUtility
 				       & Detail::Bitset::TailMask(HeadPaddingBitCount() + Size());
 			}
 
-			if (BlockCount() > 1 && index == 0)
+			if (index == 0)
 			{
 				return Detail::Bitset::HeadMask(HeadPaddingBitCount());
 			}
 
-			if (BlockCount() > 1 && index + 1 == BlockCount() && TailPaddingBitCount() != 0)
+			if (index + 1 == BlockCount())
 			{
 				return Detail::Bitset::TailMask(HeadPaddingBitCount() + Size());
 			}
