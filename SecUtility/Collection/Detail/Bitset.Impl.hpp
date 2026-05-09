@@ -436,18 +436,16 @@ namespace SecUtility
 		using BaseOfRhs =
 		        std::conditional_t<std::is_const_v<Rhs>, const BitsetBase<std::remove_const_t<Rhs>>, BitsetBase<Rhs>>;
 
-	public:
 		explicit constexpr BitsetBinaryExpr(const Lhs& lhs,
 		                                    const Rhs& rhs,
 		                                    const std::size_t headPadding = 0) SEC_NOEXCEPT
 		    : m_HeadPadding(headPadding),
-		      m_Lhs(lhs.AsDerived()),
-		      m_Rhs(rhs.AsDerived())
+		      m_Lhs(lhs),
+		      m_Rhs(rhs)
 		{
 			SEC_ASSERT(lhs.Size() == rhs.Size());
 		}
 
-	private:
 		// NOLINTNEXTLINE(*-use-equals-delete)
 		/* CRTP OVERRIDE */ constexpr std::uint64_t& Block(std::size_t index) noexcept = delete;
 
@@ -515,27 +513,27 @@ namespace SecUtility
 		return r;
 	}
 
-#define SEC_DEFINE_BITSET_BITWISE_BINARY_OP(OP)                                                                        \
-	template <typename Lhs, typename Rhs>                                                                              \
-	constexpr auto operator OP(const BitsetBase<Lhs>& lhs, const BitsetBase<Rhs>& rhs) SEC_NOEXCEPT                    \
-	{                                                                                                                  \
-		if constexpr (Detail::Bitset::is_fixed_size_bitset<typename Traits<Rhs>::EvaluatedType>::value)                \
-		{                                                                                                              \
-			typename Traits<Rhs>::EvaluatedType r{rhs};                                                                \
-			r OP## = lhs;                                                                                              \
-			return r;                                                                                                  \
-		}                                                                                                              \
-		else                                                                                                           \
-		{                                                                                                              \
-			typename Traits<Lhs>::EvaluatedType r{lhs};                                                                \
-			r OP## = rhs;                                                                                              \
-			return r;                                                                                                  \
-		}                                                                                                              \
-	}
-
-	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(&)
-	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(|)
-	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(^)
-
-#undef SEC_DEFINE_BITSET_BITWISE_BINARY_OP
+	// #define SEC_DEFINE_BITSET_BITWISE_BINARY_OP(OP) \
+	// 	template <typename Lhs, typename Rhs> \
+	// 	constexpr auto operator OP(const BitsetBase<Lhs>& lhs, const BitsetBase<Rhs>& rhs) SEC_NOEXCEPT \
+	// 	{ \
+	// 		if constexpr (Detail::Bitset::is_fixed_size_bitset<typename Traits<Rhs>::EvaluatedType>::value) \
+	// 		{ \
+	// 			typename Traits<Rhs>::EvaluatedType r{rhs}; \
+	// 			r OP## = lhs; \
+	// 			return r; \
+	// 		} \
+	// 		else \
+	// 		{ \
+	// 			typename Traits<Lhs>::EvaluatedType r{lhs}; \
+	// 			r OP## = rhs; \
+	// 			return r; \
+	// 		} \
+	// 	}
+	//
+	// 	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(&)
+	// 	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(|)
+	// 	SEC_DEFINE_BITSET_BITWISE_BINARY_OP(^)
+	//
+	// #undef SEC_DEFINE_BITSET_BITWISE_BINARY_OP
 }

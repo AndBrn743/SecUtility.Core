@@ -1525,10 +1525,10 @@ TEST_CASE("operator&, operator|, and operator^")
 			Bitset<42> bs1{};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 & bs1;
+			const auto bn = (bs0 & bs1).Eval();
 
-			const auto bnn = Detail::Bitset::BitsetBinaryExpr<std::bit_and<>, Bitset<42>, Bitset<42>>{bs0, bs1};
-			const auto bnnn = Detail::Bitset::BitsetBinaryExpr<std::bit_and<>, Bitset<42>, Bitset<42>>{bs0, bs1, 2};
+			const auto bnn = bs0 & bs1;
+			const auto bnnn = std::as_const(bs0) & bs1;
 
 			Bitset<42> bs2 = bnn;
 			Bitset<42> bs3 = bnnn;
@@ -1553,7 +1553,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			DynamicBitset bs1{42};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 & bs1;
+			const auto bn = (bs0 & bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
 
 			for (std::size_t i = 0; i < 42; ++i)
@@ -1569,12 +1569,22 @@ TEST_CASE("operator&, operator|, and operator^")
 			Bitset<42> bs1{};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 & bs1;
+			const auto bn = (bs0 & bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
+
+			const auto bnn = bs0 & bs1;
+			const auto bnnn = bs0 & std::as_const(bs1);
+
+			Bitset<42> bs2 = bnn;
+			Bitset<42> bs3 = bnnn;
 
 			for (std::size_t i = 0; i < 42; ++i)
 			{
 				CHECK(bn[i] == (bs0[i] && bs1[i]));
+				CHECK(bnn[i] == (bs0[i] && bs1[i]));
+				CHECK(bnnn[i] == (bs0[i] && bs1[i]));
+				CHECK(bs2[i] == (bs0[i] && bs1[i]));
+				CHECK(bs3[i] == (bs0[i] && bs1[i]));
 			}
 		}
 
@@ -1585,13 +1595,19 @@ TEST_CASE("operator&, operator|, and operator^")
 			DynamicBitset bs1{42};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 & bs1;
+			const auto bn = (bs0 & bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, DynamicBitset>);
 
 			for (std::size_t i = 0; i < 42; ++i)
 			{
 				CHECK(bn[i] == (bs0[i] && bs1[i]));
 			}
+
+			const auto bnn = bs0.Leading(12) | bs1.Trailing(12);
+			const auto bnnn = bs0.Leading(12) | bs1.Trailing(12);
+			const auto bs2 = bnn.Eval();
+			const auto bs3 = bnnn.Eval();
+
 		}
 	}
 
@@ -1604,7 +1620,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			Bitset<42> bs1{};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 | bs1;
+			const auto bn = (bs0 | bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
 
 			for (std::size_t i = 0; i < 42; ++i)
@@ -1620,7 +1636,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			DynamicBitset bs1{42};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 | bs1;
+			const auto bn = (bs0 | bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
 
 			for (std::size_t i = 0; i < 42; ++i)
@@ -1636,7 +1652,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			Bitset<42> bs1{};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 | bs1;
+			const auto bn = (bs0 | bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
 
 			for (std::size_t i = 0; i < 42; ++i)
@@ -1652,7 +1668,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			DynamicBitset bs1{42};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 | bs1;
+			const auto bn = (bs0 | bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, DynamicBitset>);
 
 			for (std::size_t i = 0; i < 42; ++i)
@@ -1671,7 +1687,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			Bitset<42> bs1{};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 ^ bs1;
+			const auto bn = (bs0 ^ bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
 
 			for (std::size_t i = 0; i < 42; ++i)
@@ -1687,7 +1703,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			DynamicBitset bs1{42};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 ^ bs1;
+			const auto bn = (bs0 ^ bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
 
 			for (std::size_t i = 0; i < 42; ++i)
@@ -1703,7 +1719,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			Bitset<42> bs1{};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 ^ bs1;
+			const auto bn = (bs0 ^ bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, Bitset<42>>);
 
 			for (std::size_t i = 0; i < 42; ++i)
@@ -1719,7 +1735,7 @@ TEST_CASE("operator&, operator|, and operator^")
 			DynamicBitset bs1{42};
 			SetRandom(bs1, seed + 10);
 
-			const auto bn = bs0 ^ bs1;
+			const auto bn = (bs0 ^ bs1).Eval();
 			STATIC_CHECK(std::is_same_v<std::decay_t<decltype(bn)>, DynamicBitset>);
 
 			for (std::size_t i = 0; i < 42; ++i)

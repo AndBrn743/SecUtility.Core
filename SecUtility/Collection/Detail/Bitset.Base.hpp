@@ -703,6 +703,27 @@ namespace SecUtility
 			return BitwiseCombinationOp(other, std::bit_xor<>{});
 		}
 
+		template <typename OtherDerived>
+		auto operator&(const BitsetBase<OtherDerived>& other) const SEC_NOEXCEPT
+		{
+			return Detail::Bitset::BitsetBinaryExpr<std::bit_and<>, Derived, OtherDerived>(AsDerived(),
+			                                                                               other.AsDerived());
+		}
+
+		template <typename OtherDerived>
+		auto operator|(const BitsetBase<OtherDerived>& other) const SEC_NOEXCEPT
+		{
+			return Detail::Bitset::BitsetBinaryExpr<std::bit_or<>, Derived, OtherDerived>(AsDerived(),
+			                                                                              other.AsDerived());
+		}
+
+		template <typename OtherDerived>
+		auto operator^(const BitsetBase<OtherDerived>& other) const SEC_NOEXCEPT
+		{
+			return Detail::Bitset::BitsetBinaryExpr<std::bit_xor<>, Derived, OtherDerived>(AsDerived(),
+			                                                                               other.AsDerived());
+		}
+
 		auto operator~() const noexcept
 		{
 			return Detail::Bitset::BitsetNotExpr<const Derived>{AsDerived()};
@@ -963,6 +984,17 @@ namespace SecUtility
 			{
 				return BitwiseCombinationOp_AssumeAligned(other, op);
 			}
+			else if constexpr (Traits<Derived>::IsCheaplyRealignable && Traits<OtherDerived>::IsCheaplyRealignable)
+			{
+				if (BlockCount() > other.BlockCount())
+				{
+					return AlignedTo(other.HeadPadding()).BitwiseCombinationOp_AssumeAligned(other, op);
+				}
+				else
+				{
+					return BitwiseCombinationOp_AssumeAligned(other.AlignedTo(HeadPadding()), op);
+				}
+			}
 			else if constexpr (Traits<OtherDerived>::IsCheaplyRealignable)
 			{
 				return BitwiseCombinationOp_AssumeAligned(other.AlignedTo(HeadPadding()), op);
@@ -981,16 +1013,16 @@ namespace SecUtility
 		Derived& BitwiseCombinationOp_AssumeAligned(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
 		{
 			const auto masks = MakeBlockMaskCaches();
-				for (std::size_t i = 0; i < BlockCount(); ++i)
-				{
-					const auto mask = masks(i);
-					const auto b0 = Block(i);
-					const auto b = op(b0, other.Block(i));
-					const auto n = (b & mask) | ~mask;
-					Block(i) = (b0 & ~mask) | (n & mask);
-				}
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				const auto mask = masks(i);
+				const auto b0 = Block(i);
+				const auto b = op(b0, other.Block(i));
+				const auto n = (b & mask) | ~mask;
+				Block(i) = (b0 & ~mask) | (n & mask);
+			}
 
-				return AsDerived();
+			return AsDerived();
 		}
 
 		template <typename OtherDerived, typename Op>
