@@ -783,7 +783,7 @@ namespace SecUtility
 					const std::size_t carriedSrc = src - 1;
 					val |= Block(carriedSrc) >> (Detail::Bitset::BitsPerBlock - bitShift);
 
-					Block(i) = pad | (val & mask);
+					Block(i) = Traits<Derived>::IsMaskedForRead ? val & mask : pad | (val & mask);
 				}
 
 				for (std::size_t i = BlockCount() - 2; BlockCount() >= 2 && i > blockShift; i--)
@@ -803,7 +803,7 @@ namespace SecUtility
 					// no need for mask `Block(src)` since we'll clear the trailing later
 					const std::uint64_t val = Block(src) << bitShift;
 
-					Block(i) = pad | (val & mask);
+					Block(i) = Traits<Derived>::IsMaskedForRead ? val : pad | (val & mask);
 				}
 			}
 
@@ -834,12 +834,12 @@ namespace SecUtility
 			{
 				{
 					const auto mask = MaskOfBlock(0);
-					const auto pad = Traits<Derived>::IsMaskedForRead ? 0 : Block(0) & ~mask;
+					const auto pad = Block(0) & ~mask;
 
 					const std::size_t src = 0 + blockShift;
 					const std::uint64_t val = Traits<Derived>::IsMaskedForRead ? Block(src) : Block(src) & mask;
 
-					Block(0) = pad | val;
+					Block(0) = Traits<Derived>::IsMaskedForRead ? val : pad | val;
 				}
 				for (std::size_t i = 1; i + blockShift + 1 <= BlockCount(); i++)
 				{
@@ -852,14 +852,14 @@ namespace SecUtility
 				if (constexpr std::size_t i = 0; i + blockShift + 1 < BlockCount())
 				{
 					const auto mask = masks(i);
-					const auto pad = Traits<Derived>::IsMaskedForRead ? 0 : Block(i) & ~mask;
+					const auto pad = Block(i) & ~mask;
 
 					const std::size_t src = i + blockShift;
 					std::uint64_t val = Block(src) >> bitShift;
 					const std::size_t carriedSrc = src + 1;
 					val |= Block(carriedSrc) << (Detail::Bitset::BitsPerBlock - bitShift);
 
-					Block(i) = pad | (val & mask);
+					Block(i) = Traits<Derived>::IsMaskedForRead ? val & mask : pad | (val & mask);
 				}
 
 				for (std::size_t i = 1; i + blockShift + 1 < BlockCount(); ++i)
@@ -873,12 +873,12 @@ namespace SecUtility
 				{
 					const std::size_t i = BlockCount() - blockShift - 1;
 					const auto mask = MaskOfBlock(i);
-					const auto pad = Traits<Derived>::IsMaskedForRead ? 0 : Block(i) & ~mask;
+					const auto pad = Block(i) & ~mask;
 
 					const std::size_t src = i + blockShift;
 					const std::uint64_t val = Block(src) >> bitShift;
 
-					Block(i) = pad | (val & mask);
+					Block(i) = Traits<Derived>::IsMaskedForRead ? val : pad | (val & mask);
 				}
 			}
 
@@ -1014,9 +1014,9 @@ namespace SecUtility
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
 				const auto mask = masks(i);
-				const auto b0 = Block(i);
-				const auto padding = Traits<Derived>::IsMaskedForRead ? 0 : b0 & ~mask;
-				Block(i) = padding | (op(b0, other.Block(i)) & mask);
+				const auto b = Block(i);
+				const auto padding = Traits<Derived>::IsMaskedForRead ? 0 : b & ~mask;
+				Block(i) = padding | (op(b, other.Block(i)) & mask);
 			}
 
 			return AsDerived();
@@ -1061,7 +1061,8 @@ namespace SecUtility
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
 				const auto mask = MaskOfBlock(i);
-				if ((Block(i) & mask) != (other.Block(i) & mask))
+				if ((Traits<Derived>::IsMaskedForRead ? Block(i) : Block(i) & mask)
+				    != (Traits<OtherDerived>::IsMaskedForRead ? other.Block(i) : other.Block(i) & mask))
 				{
 					return false;
 				}
