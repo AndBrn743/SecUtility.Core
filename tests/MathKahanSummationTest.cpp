@@ -8,9 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <limits>
 #include <numeric>
 #include <random>
 #include <vector>
@@ -50,10 +48,11 @@ TEMPLATE_TEST_CASE("Kahan-like accumulator sums simple values correctly",
 	REQUIRE(accumulator.Sum() == 6.0);
 }
 
-TEMPLATE_TEST_CASE("Compensated summation handles cancellation",  "[template]",
-				   (KahanAccumulator<double>),
-				   (KahanBabushkaNeumaierAccumulator<double>),
-				   (KahanBabushkaKleinAccumulator<double>))
+TEMPLATE_TEST_CASE("Compensated summation handles cancellation",
+                   "[template]",
+                   (KahanAccumulator<double>),
+                   (KahanBabushkaNeumaierAccumulator<double>),
+                   (KahanBabushkaKleinAccumulator<double>))
 {
 	const std::vector<double> values = {10000.0, 3.14159, 2.71828};
 	const double naive = NaiveSum(values);
@@ -67,10 +66,11 @@ TEMPLATE_TEST_CASE("Compensated summation handles cancellation",  "[template]",
 	}
 }
 
-TEMPLATE_TEST_CASE("Compensated summation handles catastrophic cancellation", "[template]",
-				   // (KahanAccumulator<double>),  // <- this one will fail
-				   (KahanBabushkaNeumaierAccumulator<double>),
-				   (KahanBabushkaKleinAccumulator<double>))
+TEMPLATE_TEST_CASE("Compensated summation handles catastrophic cancellation",
+                   "[template]",
+                   // (KahanAccumulator<double>),  // <- this one will fail
+                   (KahanBabushkaNeumaierAccumulator<double>),
+                   (KahanBabushkaKleinAccumulator<double>))
 {
 	// Exact mathematical result:
 	//
@@ -226,4 +226,33 @@ TEMPLATE_TEST_CASE("Empty accumulator returns zero",
 {
 	TestType accumulator;
 	REQUIRE(accumulator.Sum() == 0.0);
+}
+
+
+TEST_CASE("Compensated summation's range adapter works")
+{
+	const std::vector<double> values = {10000.0, 3.14159, 2.71828};
+
+	SECTION("Sum with identity projection")
+	{
+		const double naive = NaiveSum(values);
+		const double kahan = KahanBabushkaNeumaierSum(values);
+		constexpr auto reference = 10005.85987;
+		REQUIRE(naive != reference);
+		REQUIRE(Abs(kahan - reference) < Abs(naive - reference));
+		REQUIRE(kahan == reference);
+	}
+
+	SECTION("Sum with non-identity projection")
+	{
+		const double naive = std::reduce(values.begin(),
+		                                 values.end(),
+		                                 double{0},
+		                                 [](const auto acc, const auto value) { return acc - value; });
+		const double kahan = KahanBabushkaNeumaierSum(values, std::negate<>{});
+		constexpr auto reference = -10005.85987;
+		REQUIRE(naive != reference);
+		REQUIRE(Abs(kahan - reference) < Abs(naive - reference));
+		REQUIRE(kahan == reference);
+	}
 }

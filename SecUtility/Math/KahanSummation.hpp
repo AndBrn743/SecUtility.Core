@@ -4,6 +4,8 @@
 #pragma once
 
 #include <SecUtility/Math/Core.hpp>
+#include <SecUtility/Meta/Identity.hpp>
+#include <functional>
 
 
 namespace SecUtility::Math
@@ -104,4 +106,33 @@ namespace SecUtility::Math
 		Scalar m_Cs = {};
 		Scalar m_Ccs = {};
 	};
+
+
+#define SEC_MATH_DEFINE_KAHAN_SUMMATION(TYPE)                                                                          \
+	template <typename ForwardIterator, typename Projection = SecUtility::Identity>                                    \
+	constexpr auto TYPE##Sum(ForwardIterator begin, const ForwardIterator end, Projection projection = {}) noexcept(   \
+	        noexcept(++begin) && noexcept(begin != end) && noexcept(std::invoke(projection, *begin)))                  \
+	{                                                                                                                  \
+		TYPE##Accumulator<std::decay_t<decltype(std::invoke(projection, *begin))>> accumulator{};                      \
+                                                                                                                       \
+		for (/* NO CODE */; begin != end; ++begin)                                                                     \
+		{                                                                                                              \
+			accumulator.AddTerm(std::invoke(projection, *begin));                                                      \
+		}                                                                                                              \
+                                                                                                                       \
+		return accumulator.Sum();                                                                                      \
+	}                                                                                                                  \
+                                                                                                                       \
+	template <typename Range, typename Projection = SecUtility::Identity>                                              \
+	constexpr auto TYPE##Sum(const Range& range, Projection projection = {}) noexcept(                                 \
+	        noexcept(TYPE##Sum(std::begin(range), std::end(range)), projection))                                       \
+	{                                                                                                                  \
+		return TYPE##Sum(std::begin(range), std::end(range), projection);                                              \
+	}
+
+	SEC_MATH_DEFINE_KAHAN_SUMMATION(Kahan)
+	SEC_MATH_DEFINE_KAHAN_SUMMATION(KahanBabushkaNeumaier)
+	SEC_MATH_DEFINE_KAHAN_SUMMATION(KahanBabushkaKlein)
+
+#undef SEC_MATH_DEFINE_KAHAN_SUMMATION
 }
