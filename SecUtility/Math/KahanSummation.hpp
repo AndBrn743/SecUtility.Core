@@ -5,84 +5,169 @@
 
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Meta/Identity.hpp>
+#include <SecUtility/Meta/TypeTrait.hpp>
 #include <functional>
 
 
 namespace SecUtility::Math
 {
-	template <typename Scalar>
-	class KahanAccumulator
-	{
-	public:
-		constexpr KahanAccumulator() noexcept = default;
-		KahanAccumulator(const KahanAccumulator&) = delete;
-		KahanAccumulator(KahanAccumulator&&) = delete;
-		KahanAccumulator& operator=(const KahanAccumulator&) = delete;
-		KahanAccumulator& operator=(KahanAccumulator&&) = delete;
-		~KahanAccumulator() noexcept = default;
+	template <typename Derived>
+	class CompensatedAccumulatorBase;
 
-		constexpr KahanAccumulator& AddTerm(const Scalar value) noexcept
+	template <typename Scalar>
+	class KahanAccumulator;
+
+	template <typename Scalar>
+	class KahanBabushkaNeumaierAccumulator;
+
+	template <typename Scalar>
+	class KahanBabushkaKleinAccumulator;
+}
+
+namespace SecUtility
+{
+	template <typename TScalar>
+	struct Traits<Math::KahanAccumulator<TScalar>>
+	{
+		using Scalar = TScalar;
+	};
+
+	template <typename TScalar>
+	struct Traits<Math::KahanBabushkaNeumaierAccumulator<TScalar>>
+	{
+		using Scalar = TScalar;
+	};
+
+	template <typename TScalar>
+	struct Traits<Math::KahanBabushkaKleinAccumulator<TScalar>>
+	{
+		using Scalar = TScalar;
+	};
+}
+
+namespace SecUtility::Math
+{
+	template <typename Derived>
+	class CompensatedAccumulatorBase
+	{
+		constexpr const Derived& AsDerived() const noexcept
+		{
+			return static_cast<const Derived&>(*this);
+		}
+
+		constexpr Derived& AsDerived() noexcept
+		{
+			return static_cast<Derived&>(*this);
+		}
+
+		constexpr CompensatedAccumulatorBase() noexcept = default;
+		constexpr CompensatedAccumulatorBase(const CompensatedAccumulatorBase&) noexcept = default;
+		constexpr CompensatedAccumulatorBase(CompensatedAccumulatorBase&&) noexcept = default;
+		constexpr CompensatedAccumulatorBase& operator=(const CompensatedAccumulatorBase&) noexcept = default;
+		constexpr CompensatedAccumulatorBase& operator=(CompensatedAccumulatorBase&&) noexcept = default;
+		~CompensatedAccumulatorBase() noexcept = default;
+
+		friend Derived;
+
+		using Scalar = typename Traits<Derived>::Scalar;
+
+	public:
+		constexpr Scalar Sum() const noexcept
+		{
+			return AsDerived().Sum_Impl();
+		}
+
+		constexpr Derived& AddTerm(Scalar term) noexcept
+		{
+			AsDerived().AddTerm_Impl(term);
+			return AsDerived();
+		}
+
+		template <typename... Args>
+		constexpr std::enable_if_t<(std::is_convertible_v<Args, Scalar> && ...), Derived&> AddTerms(Args... args)  //
+		        noexcept((noexcept(static_cast<Scalar>(args)) && ...))
+		{
+			(AsDerived().AddTerm_Impl(static_cast<Scalar>(args)), ...);
+			return AsDerived();
+		}
+
+		// clang-format off
+		template <typename ForwardIterator, typename Projector = SecUtility::Identity>
+		constexpr auto AddTerms(ForwardIterator begin, const ForwardIterator end, Projector projector = {})  //
+		        noexcept(noexcept(static_cast<Scalar>(std::invoke(projector, *++begin))))
+		                -> std::enable_if_t<std::is_same_v<std::void_t<decltype(static_cast<Scalar>(std::invoke(projector, *++begin)))>, void>, Derived&>
+		// clang-format on
+		{
+			for (/* NO CODE */; begin != end; ++begin)
+			{
+				AsDerived().AddTerm_Impl(std::invoke(projector, *begin));
+			}
+			return AsDerived();
+		}
+
+		// clang-format off
+		template <typename Range, typename Projector = SecUtility::Identity>
+		constexpr auto AddTerms(const Range& range, Projector projector = {})  //
+		        noexcept(noexcept(static_cast<Scalar>(std::invoke(projector, *++std::begin(range)))))
+		                -> std::enable_if_t<std::is_same_v<std::void_t<decltype(static_cast<Scalar>(std::invoke(projector, *++std::begin(range))))>, void>, Derived&>
+		// clang-format on
+		{
+			return AddTerms(std::begin(range), std::end(range), projector);
+		}
+	};
+
+	template <typename Scalar>
+	class KahanAccumulator : public CompensatedAccumulatorBase<KahanAccumulator<Scalar>>
+	{
+		using Base = CompensatedAccumulatorBase<KahanAccumulator>;
+		friend Base;
+
+		constexpr void AddTerm_Impl(const Scalar value) noexcept
 		{
 			const Scalar corrected = value - m_Compensation;
 			const Scalar next = m_Sum + corrected;
 			m_Compensation = (next - m_Sum) - corrected;
 			m_Sum = next;
-
-			return *this;
 		}
 
-		constexpr Scalar Sum() const noexcept
+		constexpr Scalar Sum_Impl() const noexcept
 		{
 			return m_Sum;
 		}
 
-	private:
 		Scalar m_Sum = {};
 		Scalar m_Compensation = {};
 	};
 
 	template <typename Scalar>
-	class KahanBabushkaNeumaierAccumulator
+	class KahanBabushkaNeumaierAccumulator : public CompensatedAccumulatorBase<KahanBabushkaNeumaierAccumulator<Scalar>>
 	{
-	public:
-		constexpr KahanBabushkaNeumaierAccumulator() noexcept = default;
-		KahanBabushkaNeumaierAccumulator(const KahanBabushkaNeumaierAccumulator&) = delete;
-		KahanBabushkaNeumaierAccumulator(KahanBabushkaNeumaierAccumulator&&) = delete;
-		KahanBabushkaNeumaierAccumulator& operator=(const KahanBabushkaNeumaierAccumulator&) = delete;
-		KahanBabushkaNeumaierAccumulator& operator=(KahanBabushkaNeumaierAccumulator&&) = delete;
-		~KahanBabushkaNeumaierAccumulator() noexcept = default;
+		using Base = CompensatedAccumulatorBase<KahanBabushkaNeumaierAccumulator>;
+		friend Base;
 
-		constexpr KahanBabushkaNeumaierAccumulator& AddTerm(const Scalar value) noexcept
+		constexpr void AddTerm_Impl(const Scalar value) noexcept
 		{
 			const auto t = m_Sum + value;
 			m_Compensation += Abs(m_Sum) >= Abs(value) ? (m_Sum - t) + value : (value - t) + m_Sum;
 			m_Sum = t;
-
-			return *this;
 		}
 
-		constexpr Scalar Sum() const noexcept
+		constexpr Scalar Sum_Impl() const noexcept
 		{
 			return m_Sum + m_Compensation;
 		}
 
-	private:
 		Scalar m_Sum = {};
 		Scalar m_Compensation = {};
 	};
 
 	template <typename Scalar>
-	class KahanBabushkaKleinAccumulator
+	class KahanBabushkaKleinAccumulator : public CompensatedAccumulatorBase<KahanBabushkaKleinAccumulator<Scalar>>
 	{
-	public:
-		constexpr KahanBabushkaKleinAccumulator() noexcept = default;
-		KahanBabushkaKleinAccumulator(const KahanBabushkaKleinAccumulator&) = delete;
-		KahanBabushkaKleinAccumulator(KahanBabushkaKleinAccumulator&&) = delete;
-		KahanBabushkaKleinAccumulator& operator=(const KahanBabushkaKleinAccumulator&) = delete;
-		KahanBabushkaKleinAccumulator& operator=(KahanBabushkaKleinAccumulator&&) = delete;
-		~KahanBabushkaKleinAccumulator() noexcept = default;
+		using Base = CompensatedAccumulatorBase<KahanBabushkaKleinAccumulator>;
+		friend Base;
 
-		constexpr KahanBabushkaKleinAccumulator& AddTerm(const Scalar term) noexcept
+		constexpr void AddTerm_Impl(const Scalar term) noexcept
 		{
 			const auto t1 = m_Sum + term;
 			const auto c = Abs(m_Sum) >= Abs(term) ? (m_Sum - t1) + term : (term - t1) + m_Sum;
@@ -92,16 +177,13 @@ namespace SecUtility::Math
 			const auto cc = Abs(m_Cs) >= Abs(c) ? (m_Cs - t2) + c : (c - t2) + m_Cs;
 			m_Cs = t2;
 			m_Ccs += cc;
-
-			return *this;
 		}
 
-		constexpr Scalar Sum() const noexcept
+		constexpr Scalar Sum_Impl() const noexcept
 		{
 			return m_Sum + (m_Cs + m_Ccs);
 		}
 
-	private:
 		Scalar m_Sum = {};
 		Scalar m_Cs = {};
 		Scalar m_Ccs = {};

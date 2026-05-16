@@ -44,7 +44,7 @@ TEMPLATE_TEST_CASE("Kahan-like accumulator sums simple values correctly",
                    (KahanBabushkaKleinAccumulator<double>))
 {
 	TestType accumulator;
-	accumulator.AddTerm(1.0).AddTerm(2.0).AddTerm(3.0);
+	accumulator.AddTerm(1.0).AddTerms(2.0, 3.0);
 	REQUIRE(accumulator.Sum() == 6.0);
 }
 
