@@ -195,14 +195,8 @@ namespace SecUtility::Math
 	constexpr auto TYPE##Sum(ForwardIterator begin, const ForwardIterator end, Projection projection = {}) noexcept(   \
 	        noexcept(++begin) && noexcept(begin != end) && noexcept(std::invoke(projection, *begin)))                  \
 	{                                                                                                                  \
-		TYPE##Accumulator<std::decay_t<decltype(std::invoke(projection, *begin))>> accumulator{};                      \
-                                                                                                                       \
-		for (/* NO CODE */; begin != end; ++begin)                                                                     \
-		{                                                                                                              \
-			accumulator.AddTerm(std::invoke(projection, *begin));                                                      \
-		}                                                                                                              \
-                                                                                                                       \
-		return accumulator.Sum();                                                                                      \
+		using Scalar = std::decay_t<decltype(std::invoke(projection, *begin))>;                                        \
+		return TYPE##Accumulator<Scalar>{}.AddTerms(begin, end, projection).Sum();                                     \
 	}                                                                                                                  \
                                                                                                                        \
 	template <typename Range, typename Projection = SecUtility::Identity>                                              \

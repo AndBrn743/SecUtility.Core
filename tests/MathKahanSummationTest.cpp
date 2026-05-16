@@ -30,7 +30,7 @@ namespace
 
 	double NaiveSum(const std::vector<double>& values)
 	{
-		return std::reduce(values.begin(), values.end());
+		return std::accumulate(values.begin(), values.end(), 0.0);
 	}
 }
 
@@ -245,11 +245,24 @@ TEST_CASE("Compensated summation's range adapter works")
 
 	SECTION("Sum with non-identity projection")
 	{
-		const double naive = std::reduce(values.begin(),
+		const double naive = std::accumulate(values.begin(),
 		                                 values.end(),
 		                                 double{0},
 		                                 [](const auto acc, const auto value) { return acc - value; });
 		const double kahan = KahanBabushkaNeumaierSum(values, std::negate<>{});
+		constexpr auto reference = -10005.85987;
+		REQUIRE(naive != reference);
+		REQUIRE(Abs(kahan - reference) < Abs(naive - reference));
+		REQUIRE(kahan == reference);
+	}
+
+	SECTION("Sum with non-identity projection 2")
+	{
+		const double naive = std::accumulate(values.begin(),
+		                                 values.end(),
+		                                 double{0},
+		                                 [](const auto acc, const auto value) { return acc - value; });
+		const double kahan = KahanBabushkaKleinAccumulator<double>{}.AddTerms(values, std::negate<>{}).Sum();
 		constexpr auto reference = -10005.85987;
 		REQUIRE(naive != reference);
 		REQUIRE(Abs(kahan - reference) < Abs(naive - reference));
