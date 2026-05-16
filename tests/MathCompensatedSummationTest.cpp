@@ -2,7 +2,7 @@
 // Created by Andy on 5/16/2026.
 //
 
-#include <SecUtility/Math/KahanSummation.hpp>
+#include <SecUtility/Math/CompensatedSummation.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
