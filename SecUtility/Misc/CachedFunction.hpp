@@ -148,4 +148,8 @@ namespace SecUtility
 		                   std::map<typename arg_storage<typename Traits::ArgTypeTuple>::type, Result>>
 		        m_Cache;
 	};
+
+
+	template <typename Callable>
+	CachedFunction(Callable) -> CachedFunction<Callable>;
 }

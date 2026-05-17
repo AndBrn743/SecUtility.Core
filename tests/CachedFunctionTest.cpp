@@ -50,7 +50,7 @@ TEST_CASE("CachedFunction - Basic caching with single argument")
 		cached(5);
 		CHECK(globalCallCount == 1);
 
-		cached(5);  // Should use cache
+		cached(5);                    // Should use cache
 		CHECK(globalCallCount == 1);  // No additional call
 
 		cached(5);  // Should use cache
@@ -65,7 +65,7 @@ TEST_CASE("CachedFunction - Basic caching with single argument")
 		cached(10);  // Different argument
 		CHECK(globalCallCount == 2);
 
-		cached(5);   // Should use cache
+		cached(5);  // Should use cache
 		CHECK(globalCallCount == 2);
 
 		cached(10);  // Should use cache
@@ -263,7 +263,8 @@ TEST_CASE("CachedFunction - Lambda functions")
 	SECTION("Lambda with capture")
 	{
 		int multiplier = 3;
-		auto lambda = [&multiplier](int x) {
+		auto lambda = [&multiplier](int x)
+		{
 			++globalCallCount;
 			return x * multiplier;
 		};
@@ -281,7 +282,8 @@ TEST_CASE("CachedFunction - Lambda functions")
 
 	SECTION("Stateless lambda")
 	{
-		auto lambda = [](int x) {
+		auto lambda = [](int x)
+		{
 			++globalCallCount;
 			return x * 2;
 		};
@@ -327,7 +329,8 @@ TEST_CASE("CachedFunction - Complex types")
 
 	SECTION("Vector return type")
 	{
-		auto makeVector = [](int n) {
+		auto makeVector = [](int n)
+		{
 			++globalCallCount;
 			return std::vector<int>(n, 42);
 		};
@@ -349,7 +352,8 @@ TEST_CASE("CachedFunction - No arguments function")
 {
 	globalCallCount = 0;
 
-	auto noArgFunc = []() {
+	auto noArgFunc = []()
+	{
 		++globalCallCount;
 		return 42;
 	};
@@ -369,13 +373,14 @@ TEST_CASE("CachedFunction - No arguments function")
 TEST_CASE("CachedFunction - No arguments function - const operator and clear")
 {
 	globalCallCount = 0;
+	CachedFunction cached(
+	        []()
+	        {
+		        ++globalCallCount;
+		        return 42;
+	        });
 
-	auto noArgFunc = []() {
-		++globalCallCount;
-		return 42;
-	};
-
-	CachedFunction<int()> cached(noArgFunc);
+	STATIC_CHECK(!std::is_same_v<decltype(cached), CachedFunction<int()>>);
 
 	SECTION("Size returns 0 before any call")
 	{
@@ -426,7 +431,8 @@ TEST_CASE("CachedFunction - Exception safety")
 {
 	globalCallCount = 0;
 
-	auto throwingFunc = [](int x) -> int {
+	auto throwingFunc = [](int x) -> int
+	{
 		++globalCallCount;
 		if (x < 0)
 		{
@@ -466,7 +472,8 @@ TEST_CASE("CachedFunction - Move semantics")
 {
 	globalCallCount = 0;
 
-	auto func = [](int x) {
+	auto func = [](int x)
+	{
 		++globalCallCount;
 		return std::string(x, 'A');
 	};
