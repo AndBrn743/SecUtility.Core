@@ -366,6 +366,62 @@ TEST_CASE("CachedFunction - No arguments function")
 }
 
 
+TEST_CASE("CachedFunction - No arguments function - const operator and clear")
+{
+	globalCallCount = 0;
+
+	auto noArgFunc = []() {
+		++globalCallCount;
+		return 42;
+	};
+
+	CachedFunction<int()> cached(noArgFunc);
+
+	SECTION("Size returns 0 before any call")
+	{
+		CHECK(cached.Size() == 0);
+	}
+
+	SECTION("Const operator throws on cache miss")
+	{
+		const auto& constCached = cached;
+		CHECK_THROWS_AS(constCached(), std::out_of_range);
+	}
+
+	SECTION("Const operator works on cache hit")
+	{
+		cached();
+		CHECK(globalCallCount == 1);
+
+		const auto& constCached = cached;
+		CHECK(constCached() == 42);
+		CHECK(globalCallCount == 1);
+	}
+
+	SECTION("Clear empties the cache for nullary function")
+	{
+		cached();
+		CHECK(cached.Size() == 1);
+		CHECK(globalCallCount == 1);
+
+		cached.Clear();
+		CHECK(cached.Size() == 0);
+
+		// After clearing, should call function again
+		cached();
+		CHECK(cached.Size() == 1);
+		CHECK(globalCallCount == 2);
+	}
+
+	SECTION("Clear on empty nullary cache is safe")
+	{
+		CHECK(cached.Size() == 0);
+		cached.Clear();
+		CHECK(cached.Size() == 0);
+	}
+}
+
+
 TEST_CASE("CachedFunction - Exception safety")
 {
 	globalCallCount = 0;
