@@ -5,12 +5,48 @@
 
 #include <cstddef>
 #include <type_traits>
+#include <SecUtility/Collection/TypeTuple.hpp>
 
 
 namespace SecUtility
 {
 	template <typename>
 	struct Traits;
+
+	template <typename>
+	struct FunctionTraits;
+
+	template <typename R, typename... Args>
+	struct FunctionTraits<R(Args...)>
+	{
+		static constexpr std::size_t Arity = sizeof...(Args);
+		using ReturnType = R;
+		using ArgTypeTuple = TypeTuple<Args...>;
+	};
+
+	template <typename R, typename... Args>
+	struct FunctionTraits<R (*)(Args...)> : FunctionTraits<R(Args...)>
+	{
+		/* NO CODE */
+	};
+
+	template <typename C, typename R, typename... Args>
+	struct FunctionTraits<R (C::*)(Args...) const> : FunctionTraits<R(Args...)>
+	{
+		/* NO CODE */
+	};
+
+	template <typename C, typename R, typename... Args>
+	struct FunctionTraits<R (C::*)(Args...)> : FunctionTraits<R(Args...)>
+	{
+		/* NO CODE */
+	};
+
+	template <typename Functor>
+	struct FunctionTraits : FunctionTraits<decltype(&std::remove_reference_t<Functor>::operator())>
+	{
+		/* NO CODE */
+	};
 }
 
 
