@@ -121,29 +121,28 @@ namespace SecUtility::Math
 	template <typename Scalar>
 	QuadratureGrid<Scalar> GenerateFejerQuadratureGrid(const Eigen::Index _size)
 	{
-		static CachedFunction<QuadratureGrid<Scalar>(Eigen::Index)> gg{
-		        [](const Eigen::Index size)
-		        {
-			        QuadratureGrid<Scalar> grid(size);
+		static CachedFunction gg{[](const Eigen::Index size)
+		                         {
+			                         QuadratureGrid<Scalar> grid(size);
 
-			        for (Eigen::Index i = 0; i < size; ++i)
-			        {
-				        grid.Node(i) = Cos((2 * i + 1) * Constant::Pi<Scalar> / (2 * size));
-			        }
+			                         for (Eigen::Index i = 0; i < size; ++i)
+			                         {
+				                         grid.Node(i) = Cos((2 * i + 1) * Constant::Pi<Scalar> / (2 * size));
+			                         }
 
-			        for (Eigen::Index i = 0; i < size; ++i)
-			        {
-				        Scalar sum = 0;
-				        for (Eigen::Index m = 1; m <= size / 2; ++m)
-				        {
-					        sum += Cos(2 * m * ACos(grid.Node(i))) / (4 * m * m - 1);
-				        }
+			                         for (Eigen::Index i = 0; i < size; ++i)
+			                         {
+				                         Scalar sum = 0;
+				                         for (Eigen::Index m = 1; m <= size / 2; ++m)
+				                         {
+					                         sum += Cos(2 * m * ACos(grid.Node(i))) / (4 * m * m - 1);
+				                         }
 
-				        grid.Weight(i) = (1 - 2 * sum) * 2 / size;
-			        }
+				                         grid.Weight(i) = (1 - 2 * sum) * 2 / size;
+			                         }
 
-			        return grid;
-		        }};
+			                         return grid;
+		                         }};
 
 		return gg(_size);
 	}
@@ -151,14 +150,13 @@ namespace SecUtility::Math
 	template <typename Scalar>
 	QuadratureGrid<Scalar> GenerateFejerQuadratureGrid01(const Eigen::Index _size)
 	{
-		static CachedFunction<QuadratureGrid<Scalar>(Eigen::Index)> gg{
-		        [](const Eigen::Index size)
-		        {
-			        QuadratureGrid<Scalar> grid = GenerateFejerQuadratureGrid<Scalar>(size);
-			        grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(size, 1)) / 2;
-			        grid.Weights() *= Scalar{0.5};
-			        return grid;
-		        }};
+		static CachedFunction gg{[](const Eigen::Index size)
+		                         {
+			                         QuadratureGrid<Scalar> grid = GenerateFejerQuadratureGrid<Scalar>(size);
+			                         grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(size, 1)) / 2;
+			                         grid.Weights() *= Scalar{0.5};
+			                         return grid;
+		                         }};
 
 		return gg(_size);
 	}
