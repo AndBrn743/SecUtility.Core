@@ -4,8 +4,8 @@
 #pragma once
 
 #include <Eigen/Dense>
-#include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/Constant.hpp>
+#include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Meta/TypeTrait.hpp>
 
 
@@ -91,6 +91,28 @@ namespace SecUtility::Math
 			m_Data.setConstant(value);
 		}
 
+#define SEC_MATH_QUADRATURE_GRID_DEFINE_GET(QUALIFIER)                                                                 \
+	template <std::size_t I>                                                                                           \
+	friend decltype(auto) get(QuadratureGrid QUALIFIER q)                                                              \
+	{                                                                                                                  \
+		static_assert(I == 0 || I == 1);                                                                               \
+		if constexpr (I == 0)                                                                                          \
+		{                                                                                                              \
+			return q.Nodes();                                                                                          \
+		}                                                                                                              \
+		else                                                                                                           \
+		{                                                                                                              \
+			return q.Weights();                                                                                        \
+		}                                                                                                              \
+	}
+
+		SEC_MATH_QUADRATURE_GRID_DEFINE_GET(&)
+		SEC_MATH_QUADRATURE_GRID_DEFINE_GET(const&)
+		SEC_MATH_QUADRATURE_GRID_DEFINE_GET(&&)
+		SEC_MATH_QUADRATURE_GRID_DEFINE_GET(const&&)
+
+#undef SEC_MATH_QUADRATURE_GRID_DEFINE_GET
+
 	private:
 		Eigen::Matrix<Scalar, Eigen::Dynamic, 2> m_Data{};
 	};
@@ -118,4 +140,32 @@ namespace SecUtility::Math
 
 		return grid;
 	}
+}
+
+
+namespace std
+{
+	template <typename Scalar>
+	struct tuple_size<SecUtility::Math::QuadratureGrid<Scalar>> : std::integral_constant<std::size_t, 2>
+	{
+		/* NO CODE */
+	};
+
+#define SEC_MATH_QUADRATURE_GRID_DEFINE_TUPLE_ELEMENT(QUALIFIER)                                                       \
+	template <typename Scalar>                                                                                         \
+	struct tuple_element<std::size_t{0}, QUALIFIER SecUtility::Math::QuadratureGrid<Scalar>>                           \
+	{                                                                                                                  \
+		using type = decltype(std::declval<QUALIFIER SecUtility::Math::QuadratureGrid<Scalar>&>().Nodes());            \
+	};                                                                                                                 \
+                                                                                                                       \
+	template <typename Scalar>                                                                                         \
+	struct tuple_element<std::size_t{1}, QUALIFIER SecUtility::Math::QuadratureGrid<Scalar>>                           \
+	{                                                                                                                  \
+		using type = decltype(std::declval<QUALIFIER SecUtility::Math::QuadratureGrid<Scalar>&>().Weights());          \
+	};
+
+	SEC_MATH_QUADRATURE_GRID_DEFINE_TUPLE_ELEMENT()
+	SEC_MATH_QUADRATURE_GRID_DEFINE_TUPLE_ELEMENT(const)
+
+#undef SEC_MATH_QUADRATURE_GRID_DEFINE_TUPLE_ELEMENT
 }
