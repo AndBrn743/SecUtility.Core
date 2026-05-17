@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/Constant.hpp>
+#include <SecUtility/Meta/TypeTrait.hpp>
 
 
 namespace SecUtility::Math
@@ -19,6 +20,20 @@ namespace SecUtility::Math
 		explicit QuadratureGrid(const Eigen::Index size) : m_Data(size, 2)
 		{
 			/* NO CODE */
+		}
+
+		template <typename NodeVector, typename WeightVector>
+		QuadratureGrid(const NodeVector& nodes, const WeightVector& weights)
+		{
+			static_assert(std::is_base_of_v<Eigen::EigenBase<NodeVector>, NodeVector>);
+			static_assert(std::is_base_of_v<Eigen::EigenBase<WeightVector>, WeightVector>);
+			eigen_assert(nodes.size() == weights.size());
+			eigen_assert(nodes.rows() == 1 || nodes.cols() == 1);
+			eigen_assert(weights.rows() == 1 || weights.cols() == 1);
+
+			m_Data.resize(nodes.size(), Eigen::NoChange);
+			m_Data.col(0) = nodes;
+			m_Data.col(1) = weights;
 		}
 
 		constexpr Eigen::Index Size() const noexcept
