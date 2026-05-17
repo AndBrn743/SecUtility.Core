@@ -31,6 +31,7 @@ namespace SecUtility
 		static_assert((!std::is_unbounded_array_v<std::remove_reference_t<Args>> && ...),
 		              "Unbounded arrays are not supported");
 
+		// TODO: Get rid of this type erasure
 		using Function = std::function<Result(Args...)>;
 
 		explicit CachedFunction(Function function) : m_Function(std::move(function))
@@ -90,6 +91,7 @@ namespace SecUtility
 		static_assert(!std::is_reference_v<TResult>, "CachedFunction does not support reference types");
 		static_assert(!std::is_void_v<TResult>, "CachedFunction does not support void return types");
 
+		// TODO: Get rid of this type erasure
 		using Function = std::function<TResult()>;
 
 		explicit CachedFunction(Function function) : m_Function(std::move(function))
