@@ -47,6 +47,11 @@ namespace SecUtility::Math
 			m_Data.resize(size, Eigen::NoChange);
 		}
 
+		constexpr void ConservativeResize(const Eigen::Index size)
+		{
+			m_Data.conservativeResize(size, Eigen::NoChange);
+		}
+
 		decltype(auto) Nodes() const noexcept
 		{
 			return m_Data.col(0);
@@ -99,11 +104,11 @@ namespace SecUtility::Math
 		static_assert(I == 0 || I == 1);                                                                               \
 		if constexpr (I == 0)                                                                                          \
 		{                                                                                                              \
-			return q.Nodes();                                                                                          \
+			return static_cast<QuadratureGrid QUALIFIER>(q).Nodes();                                                   \
 		}                                                                                                              \
 		else                                                                                                           \
 		{                                                                                                              \
-			return q.Weights();                                                                                        \
+			return static_cast<QuadratureGrid QUALIFIER>(q).Weights();                                                 \
 		}                                                                                                              \
 	}
 
