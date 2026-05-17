@@ -147,6 +147,21 @@ namespace SecUtility::Math
 
 		return gg(_size);
 	}
+
+	template <typename Scalar>
+	QuadratureGrid<Scalar> GenerateFejerQuadratureGrid01(const Eigen::Index _size)
+	{
+		static CachedFunction<QuadratureGrid<Scalar>(Eigen::Index)> gg{
+		        [](const Eigen::Index size)
+		        {
+			        QuadratureGrid<Scalar> grid = GenerateFejerQuadratureGrid<Scalar>(size);
+			        grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(size, 1)) / 2;
+			        grid.Weights() *= Scalar{0.5};
+			        return grid;
+		        }};
+
+		return gg(_size);
+	}
 }
 
 
