@@ -20,118 +20,132 @@ namespace SecUtility
 
 
 	template <typename Result, typename... Args>
-	class CachedFunction<Result(Args...)>
+	class CachedFunction<Result(Args...)> : public CachedFunction<std::function<Result(Args...)>>
 	{
+		using Base = CachedFunction<std::function<Result(Args...)>>;
+
 	public:
-		static_assert(sizeof...(Args) != 0);
+		using Base::Base;
+	};
+
+
+	template <typename Callable>
+	class CachedFunction<Callable>
+	{
+		using Traits = FunctionTraits<Callable>;
+		using Result = typename Traits::ReturnType;
+
+		template <typename... Args>
+		struct arg_storage;
+
+		template <typename... Args>
+		struct arg_storage<TypeTuple<Args...>>
+		{
+			static_assert((!std::is_bounded_array_v<std::remove_reference_t<Args>> && ...),
+			              "Please use std::array<T, S> instead");
+			static_assert((!std::is_unbounded_array_v<std::remove_reference_t<Args>> && ...),
+			              "Unbounded arrays are not supported");
+			static_assert((!std::is_pointer_v<std::remove_reference_t<Args>> && ...), "pointers are not supported");
+
+			using type = std::tuple<std::decay_t<Args>...>;
+		};
+
+	public:
 		static_assert(!std::is_reference_v<Result>, "CachedFunction does not support reference types");
 		static_assert(!std::is_void_v<Result>, "CachedFunction does not support void return types");
-		static_assert((!std::is_bounded_array_v<std::remove_reference_t<Args>> && ...),
-		              "Please use std::array<T, S> instead");
-		static_assert((!std::is_unbounded_array_v<std::remove_reference_t<Args>> && ...),
-		              "Unbounded arrays are not supported");
 
-		// TODO: Get rid of this type erasure
-		using Function = std::function<Result(Args...)>;
-
-		explicit CachedFunction(Function function) : m_Function(std::move(function))
+		explicit CachedFunction(Callable function) : m_Function(std::move(function))
 		{
 			/* NO CODE */
 		}
 
 		// the call operator is not thread-safe. user should guard the calls to it with synchronization primitives
-		template <typename... ArgsToo>
-		const Result& operator()(ArgsToo&&... args)
+		template <typename... Args>
+		const Result& operator()(Args&&... args) noexcept(
+		        noexcept(std::declval<Callable>()(std::forward<Args>(args)...)))
 		{
-			auto argTuple = std::make_tuple(std::forward<ArgsToo>(args)...);
-			const auto iterator = m_Cache.find(argTuple);
+			static_assert(sizeof...(Args) == Traits::Arity);
 
-			if (iterator != m_Cache.end())
+			if constexpr (Traits::Arity == 0)
 			{
+				if (!m_Cache.has_value())
+				{
+					m_Cache = m_Function();
+				}
+
+				return m_Cache.value();
+			}
+			else
+			{
+				auto argTuple = std::make_tuple(std::forward<Args>(args)...);
+				const auto iterator = m_Cache.find(argTuple);
+
+				if (iterator != m_Cache.end())
+				{
+					return iterator->second;
+				}
+
+				auto result = m_Function(std::forward<Args>(args)...);
+				return (m_Cache.emplace(std::move(argTuple), result)).first->second;
+			}
+		}
+
+		template <typename... Args>
+		const Result& operator()(Args&&... args) const
+		{
+			static_assert(sizeof...(Args) == Traits::Arity);
+
+			if constexpr (Traits::Arity == 0)
+			{
+				if (!m_Cache.has_value())
+				{
+					throw std::out_of_range("CachedFunction: Result not in cache. Call non-const operator() first.");
+				}
+
+				return m_Cache.value();
+			}
+			else
+			{
+				const auto iterator = m_Cache.find(std::make_tuple(std::forward<Args>(args)...));
+
+				if (iterator == m_Cache.end())
+				{
+					throw std::out_of_range("CachedFunction: Result not in cache. Call non-const operator(...) first.");
+				}
+
 				return iterator->second;
 			}
-
-			auto result = m_Function(std::forward<ArgsToo>(args)...);
-			return (m_Cache.emplace(std::move(argTuple), result)).first->second;
-		}
-
-		template <typename... ArgsToo>
-		const Result& operator()(ArgsToo&&... args) const
-		{
-			const auto iterator = m_Cache.find(std::make_tuple(std::forward<ArgsToo>(args)...));
-
-			if (iterator == m_Cache.end())
-			{
-				throw std::out_of_range("CachedFunction: Result not in cache. Call non-const operator(...) first.");
-			}
-
-			return iterator->second;
 		}
 
 		void Clear() noexcept
 		{
-			m_Cache.clear();
+			if constexpr (Traits::Arity == 0)
+			{
+				m_Cache = std::nullopt;
+			}
+			else
+			{
+				m_Cache.clear();
+			}
 		}
 
-		size_t Size() const noexcept
+		std::size_t Size() const noexcept
 		{
-			return m_Cache.size();
+			if constexpr (Traits::Arity == 0)
+			{
+				return m_Cache.has_value() ? 1 : 0;
+			}
+			else
+			{
+				return m_Cache.size();
+			}
 		}
 
 	private:
-		Function m_Function;
-		std::map<std::tuple<std::decay_t<Args>...>, Result> m_Cache;
+		Callable m_Function;
+		std::conditional_t<Traits::Arity == 0,
+		                   std::optional<Result>,
+		                   std::map<typename arg_storage<typename Traits::ArgTypeTuple>::type, Result>>
+		        m_Cache;
 	};
-
-
-	template <typename TResult>
-	class CachedFunction<TResult()>
-	{
-	public:
-		static_assert(!std::is_reference_v<TResult>, "CachedFunction does not support reference types");
-		static_assert(!std::is_void_v<TResult>, "CachedFunction does not support void return types");
-
-		// TODO: Get rid of this type erasure
-		using Function = std::function<TResult()>;
-
-		explicit CachedFunction(Function function) : m_Function(std::move(function))
-		{
-			/* NO CODE */
-		}
-
-		// the call operator is not thread-safe. user should guard the calls to it with synchronization primitives
-		const TResult& operator()()
-		{
-			if (!m_Cache.has_value())
-			{
-				m_Cache = m_Function();
-			}
-
-			return m_Cache.value();
-		}
-
-		const TResult& operator()() const
-		{
-			if (!m_Cache.has_value())
-			{
-				throw std::out_of_range("CachedFunction: Result not in cache. Call non-const operator() first.");
-			}
-
-			return m_Cache.value();
-		}
-
-		void Clear() noexcept
-		{
-			m_Cache = std::nullopt;
-		}
-
-		size_t Size() const noexcept
-		{
-			return m_Cache.has_value() ? 1 : 0;
-		}
-
-	private:
-		Function m_Function;
-		std::optional<TResult> m_Cache;
-	};
-}  // namespace SecUtility
+}
