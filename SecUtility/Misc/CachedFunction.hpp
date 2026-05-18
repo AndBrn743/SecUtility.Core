@@ -85,8 +85,7 @@ namespace SecUtility
 					return iterator->second;
 				}
 
-				auto result = m_Function(std::forward<Args>(args)...);
-				return (m_Cache.emplace(std::move(argTuple), result)).first->second;
+				return (m_Cache.emplace(std::move(argTuple), m_Function(std::forward<Args>(args)...))).first->second;
 			}
 		}
 
