@@ -10,7 +10,7 @@
 #include <iostream>
 
 
-TEST_CASE("Rys roots and weights")
+TEST_CASE("Orthogonal polynomial roots and weights")
 {
 	using namespace SecUtility::Math;
 
@@ -482,6 +482,255 @@ TEST_CASE("Rys roots and weights")
 		        0.01098900023632808, 0.01086955457909864, 0.01075267764573238, 0.01063828745567886, 0.01052630548020038,
 		        0.01041665646259003, 0.01030926824951031, 0.01020407163265796, 0.01010100020002486, 0.00999999019608324,
 		        0.0099009803902768};
+
+		const Eigen::VectorX<long double> roots = es.eigenvalues();
+		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
+		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
+		std::cout << "Weights: " << weights.transpose() << std::endl;
+
+		for (Eigen::Index i = 0; i < degree * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(referenceMoments[i]).margin(1e-14));
+		}
+	}
+
+	SECTION("Exp(x^3 / 3)")
+	{
+		const auto auxSize = 100;
+
+		QuadratureGrid grid = GenerateFejerQuadratureGrid01<long double>(auxSize);
+		for (int i = 0; i < auxSize; ++i)
+		{
+			grid.Weight(i) *= Exp(-PowInt(grid.Node(i), 3) / 3);
+		}
+		std::cout << "Aux Roots: " << grid.Nodes().transpose() << std::endl;
+		std::cout << "Aux Weights: " << grid.Weights().transpose() << std::endl;
+
+		const auto degree = 50;
+		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
+
+		std::cout << "Alphas: " << jacobiRules.Alphas.transpose() << std::endl;
+		std::cout << "Gammas: " << jacobiRules.Gammas.transpose() << std::endl;
+
+		Eigen::MatrixX<long double> jacobian = Eigen::MatrixX<long double>::Zero(degree, degree);
+		jacobian.diagonal() = jacobiRules.Alphas;
+		jacobian.diagonal(1) = jacobiRules.Gammas.segment(1, degree - 1);
+		jacobian.diagonal(-1) = jacobian.diagonal(1);
+
+		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<long double>> es(jacobian);
+
+		// Mathematica: Table[NumberForm[N@Integrate[SetPrecision[t^n E^(- t^3/3),100],{t,0,1}],16],{n,0,50 2}]
+		const std::vector referenceMoments = {
+		        0.924023413085615,    0.4397514278304956,   0.2834686894262108,   0.2074921025118261,
+		        0.1629715450872019,   0.133874757704843,    0.113437099473515,    0.0983264148622204,
+		        0.0867172356552688,   0.0775283857408155,   0.07008000832397365,  0.06392381032362939,
+		        0.05875254683436571,  0.05434878098992096,  0.0505544133097636,   0.0472517982729651,
+		        0.04435162328510401,  0.04178488907266468,  0.03949746179365232,  0.03744628527297893,
+		        0.03559669273417498,  0.03392046350560469,  0.03239439488578948,  0.03099923684388539,
+		        0.02971888654951394,  0.0285397717993688,   0.02745037367946,     0.02644085316405942,
+		        0.02550275620979943,  0.0246287787716307,   0.02381257801987457,  0.0230486195103941,
+		        0.0223320525751318,   0.02165860804232234,  0.02102451375882199,  0.02042642440556018,
+		        0.01986136286517022,  0.01932667098498035,  0.01881996802637742,  0.01833911543750903,
+		        0.01788218685546397,  0.01744744245493028,  0.01703330692657215,  0.01663835050023343,
+		        0.01626127253328251,  0.01590088726881331,  0.01555611143648186,  0.01522595342392366,
+		        0.01490950379162292,  0.01460592694085792,  0.01431445377454656,  0.01403437521573395,
+		        0.01376503646910668,  0.01350583192808541,  0.01325620064437632,  0.01301562228886475,
+		        0.01278361354282257,  0.01255972486690848,  0.01234353760263682,  0.01213466136709699,
+		        0.01193273170690244,  0.01173740798178307,  0.01154837145203019,  0.01136532354725979,
+		        0.01118798429676101,  0.01101609090411245,  0.01084939645083717,  0.0106876687156763,
+		        0.01053068909763244,  0.01037825163230085,  0.01023016209219931,  0.01008623716284882,
+		        0.00994630368727019,  0.00981019797236158,  0.00967776515132569,  0.00954885859693476,
+		        0.00942333938096784,  0.00930107577563778,  0.00918194279325254,  0.00906582176073447,
+		        0.00895259992595747,  0.00884217009316125,  0.00873443028496816,  0.00862928342876615,
+		        0.00852663706543312,  0.00842640307856851,  0.00832849744256749,  0.00823283998802613,
+		        0.00813935418310255,  0.00804796692958271,  0.007958608372509943, 0.007871211722337666,
+		        0.007785713088654875, 0.007702051324615412, 0.007620167881275925, 0.007540006671114131,
+		        0.007461513940059536, 0.007384638147423748, 0.007309329853167355, 0.007235541611985806,
+		        0.007163227873737974};
+
+		const Eigen::VectorX<long double> roots = es.eigenvalues();
+		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
+		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
+		std::cout << "Weights: " << weights.transpose() << std::endl;
+
+		for (Eigen::Index i = 0; i < degree * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(referenceMoments[i]).margin(1e-14));
+		}
+	}
+
+	SECTION("Exp(x^3 / 3) in [-1, 1]")
+	{
+		const auto auxSize = 100;
+
+		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		for (int i = 0; i < auxSize; ++i)
+		{
+			grid.Weight(i) *= Exp(-PowInt(grid.Node(i), 3) / 3);
+		}
+		std::cout << "Aux Roots: " << grid.Nodes().transpose() << std::endl;
+		std::cout << "Aux Weights: " << grid.Weights().transpose() << std::endl;
+
+		const auto degree = 50;
+		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
+
+		std::cout << "Alphas: " << jacobiRules.Alphas.transpose() << std::endl;
+		std::cout << "Gammas: " << jacobiRules.Gammas.transpose() << std::endl;
+
+		Eigen::MatrixX<long double> jacobian = Eigen::MatrixX<long double>::Zero(degree, degree);
+		jacobian.diagonal() = jacobiRules.Alphas;
+		jacobian.diagonal(1) = jacobiRules.Gammas.segment(1, degree - 1);
+		jacobian.diagonal(-1) = jacobian.diagonal(1);
+
+		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<long double>> es(jacobian);
+
+		// Mathematica: Table[NumberForm[Re@N@Integrate[SetPrecision[t^n E^(- t^3/3),100],{t,-1,1}],16],{n,0,50 2}]
+		const std::vector referenceMoments = {
+		        2.01595235569085,    -0.1344597102233058,   0.6790811145123002,  -0.096191379969029,
+		        0.4101616940656887,  -0.07490039212297795,  0.2943155946361843,  -0.0613352653314352,
+		        0.2296787617744326,  -0.05193457320658879,  0.1883989918608186,  -0.04503487968998527,
+		        0.1597353824464124,  -0.03975482519087434,  0.138662558232477,   -0.03558376385651826,
+		        0.1225135618400596,  -0.03220536217272416,  0.109740892808008,   -0.02941318437886593,
+		        0.0993845954032653,  -0.02706677230772567,  0.0908174269349818,  -0.02506723219130706,
+		        0.0836121237423355,  -0.02334291615529855,  0.07746754192093096, -0.02184064210149099,
+		        0.07216529447453802, -0.02052010379474292,  0.06754313567055268, -0.01935019589827662,
+		        0.06347800067001276, -0.01830652987274574,  0.05987484576744828, -0.01736971354945789,
+		        0.05665909883894507, -0.01652413379918881,  0.05377142673181624, -0.01575707861891153,
+		        0.0511640301431254,  -0.01505809311904548,  0.04879796975583917, -0.0144184997917373,
+		        0.04664120351239003, -0.01383103615879408,  0.04466712367585917, -0.01328957760232757,
+		        0.04285345120777274, -0.01278892289449772,  0.0411813896005769,  -0.0123246264790142,
+		        0.03963496978741424, -0.01189286603045664,  0.03820053760356177, -0.01149033692692377,
+		        0.0368663488676417,  -0.0111141674639814,   0.03562224660456923, -0.01076185020430168,
+		        0.03445940160137893, -0.01043118599029458,  0.03337010225419972, -0.01012023797576431,
+		        0.03234758311403623, -0.00982729364529632,  0.0313858840633841,  -0.00955083324752412,
+		        0.03047973392274348, -0.00928950341314358,  0.02962445368065994, -0.00904209499057875,
+		        0.02881587559224945, -0.0088075243330229,   0.0280502751906305,  -0.00858481742566903,
+		        0.02732431386860573, -0.0083730963625913,   0.02663499016145423, -0.00817156777723789,
+		        0.02597959823017905, -0.007979512904994884, 0.0253556923332691,  -0.007796279015375972,
+		        0.02476105630271983, -0.007621271998543145, 0.02419367722071866, -0.00745394992869306,
+		        0.02365172263758979, -0.007293817457355839, 0.02313352078731095, -0.007140420914387287,
+		        0.02263754335027476, -0.006993344014582608, 0.0221623903886699,  -0.006852204084325803,
+		        0.02170677714153508, -0.006716648736238633, 0.02126952241702318, -0.00658635293097622,
+		        0.02084953836091429};
+
+		const Eigen::VectorX<long double> roots = es.eigenvalues();
+		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
+		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
+		std::cout << "Weights: " << weights.transpose() << std::endl;
+
+		for (Eigen::Index i = 0; i < degree * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(referenceMoments[i]).margin(1e-14));
+		}
+	}
+
+	SECTION("Exp(x^2 / 4) in [-1, 1]")
+	{
+		const auto auxSize = 100;
+
+		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		for (int i = 0; i < auxSize; ++i)
+		{
+			grid.Weight(i) *= Exp(-PowInt(grid.Node(i), 2) / 4);
+		}
+		std::cout << "Aux Roots: " << grid.Nodes().transpose() << std::endl;
+		std::cout << "Aux Weights: " << grid.Weights().transpose() << std::endl;
+
+		const auto degree = 50;
+		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
+
+		std::cout << "Alphas: " << jacobiRules.Alphas.transpose() << std::endl;
+		std::cout << "Gammas: " << jacobiRules.Gammas.transpose() << std::endl;
+
+		Eigen::MatrixX<long double> jacobian = Eigen::MatrixX<long double>::Zero(degree, degree);
+		jacobian.diagonal() = jacobiRules.Alphas;
+		jacobian.diagonal(1) = jacobiRules.Gammas.segment(1, degree - 1);
+		jacobian.diagonal(-1) = jacobian.diagonal(1);
+
+		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<long double>> es(jacobian);
+
+		// Mathematica: Table[NumberForm[Re@N@Integrate[SetPrecision[t^n E^(- t^2/4),100],{t,-1,1}],16],{n,0,50 2}]
+		const std::vector referenceMoments = {
+		        1.84512402565117,    0., 0.5750449190167202,  0., 0.3350663818147012,  0., 0.2354606858613928,  0.,
+		        0.18124646977388,    0., 0.1472333236442209,  0., 0.123929987887241,   0., 0.1069765527826478,  0.,
+		        0.0940934511938151,  0., 0.0839742083040938,  0., 0.07581678326994329, 0., 0.06910176505199884, 0.,
+		        0.06347806010632677, 0., 0.05869987303071918, 0., 0.05459001137321609, 0., 0.05101752736091385, 0.,
+		        0.04788356409103942, 0., 0.04511209772298235, 0., 0.04264370832314459, 0., 0.04043128362707998, 0.,
+		        0.0384369906266188,  0., 0.0366300990971226,  0., 0.03498539006692438, 0., 0.03348197373757478, 0.,
+		        0.03210239904641019, 0., 0.03083197426257849, 0., 0.02965824249738605, 0., 0.02857057243730234, 0.,
+		        0.02755983581763835, 0., 0.02661815092515227, 0., 0.02573867688234811, 0., 0.0249154473608502,  0.,
+		        0.02414323518150573, 0., 0.02341744131012493, 0., 0.02273400327112062, 0., 0.02208931912902634, 0.,
+		        0.02148018403612102, 0., 0.0209037369880494,  0., 0.02035741592179001, 0., 0.01983891967004217, 0.,
+		        0.01934617558104405, 0., 0.01887731184351598, 0., 0.01843063373803304, 0., 0.01800460317999797, 0.,
+		        0.01759782103402843, 0., 0.01720901177144033, 0., 0.0168370101165206,  0., 0.01648074938721164, 0.,
+		        0.01613925128459291, 0., 0.0158116169254051,  0., 0.01549701894459126};
+
+		const Eigen::VectorX<long double> roots = es.eigenvalues();
+		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
+		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
+		std::cout << "Weights: " << weights.transpose() << std::endl;
+
+		for (Eigen::Index i = 0; i < degree * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(referenceMoments[i]).margin(1e-14));
+		}
+	}
+
+	SECTION("Exp(-x) / (1 + Exp(-x))^2 in [0, 1]")
+	{
+		const auto auxSize = 100;
+
+		QuadratureGrid grid = GenerateFejerQuadratureGrid01<long double>(auxSize);
+		for (int i = 0; i < auxSize; ++i)
+		{
+			const auto exp = Exp(-grid.Node(i));
+			grid.Weight(i) *= exp / PowInt(1 + exp, 2);
+		}
+		std::cout << "Aux Roots: " << grid.Nodes().transpose() << std::endl;
+		std::cout << "Aux Weights: " << grid.Weights().transpose() << std::endl;
+
+		const auto degree = 50;
+		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
+
+		std::cout << "Alphas: " << jacobiRules.Alphas.transpose() << std::endl;
+		std::cout << "Gammas: " << jacobiRules.Gammas.transpose() << std::endl;
+
+		Eigen::MatrixX<long double> jacobian = Eigen::MatrixX<long double>::Zero(degree, degree);
+		jacobian.diagonal() = jacobiRules.Alphas;
+		jacobian.diagonal(1) = jacobiRules.Gammas.segment(1, degree - 1);
+		jacobian.diagonal(-1) = jacobian.diagonal(1);
+
+		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<long double>> es(jacobian);
+
+		// Mathematica: Table[NumberForm[Re@NIntegrate[SetPrecision[t^n (E^-t
+		// /(SetPrecision[1,1000]+E^-t)^2),1000],{t,0,1}],16],{n,0,50 2}]
+		const std::vector referenceMoments = {
+		        0.2310585786300051,   0.1109440716717275,   0.07217327763488139,  0.05325232608595112,
+		        0.04210803243025896,  0.03478524384106956,  0.02961484565775342,  0.02577346851700999,
+		        0.02280903847476376,  0.02045308871456653,  0.01853631416167172,  0.01694674211638776,
+		        0.01560740046274459,  0.01446365586048499,  0.01347567066799296,  0.01261371921704276,
+		        0.01185517528120039,  0.01118251476587821,  0.01058195605912802,  0.01004251274026857,
+		        0.00955531988378068,  0.00911314607647871,  0.00871003409017943,  0.0083410323312631,
+		        0.00800199141150862,  0.007689408144749871, 0.007400304560718397, 0.007132133102147069,
+		        0.006882701628208472, 0.006650113561755202, 0.006432719730796564, 0.006229079323946458,
+		        0.006037928010056337, 0.005858151734619668, 0.005688765048152532, 0.005528893078105645,
+		        0.005377756449415745, 0.005234658606193737, 0.005098975100186637, 0.004970144499158533,
+		        0.004847660636503722, 0.004731065976867386, 0.004619945914746773, 0.004513923856555338,
+		        0.004412656963395934, 0.004315832453282759, 0.004223164378903229, 0.004134390811088381,
+		        0.004049271369636243, 0.003967585052529754, 0.003889128322319758, 0.003813713414826587,
+		        0.00374116684060642,  0.003671328054033954, 0.003604048268533136, 0.003539189399573107,
+		        0.00347662311964186,  0.003416230011600541, 0.00335789880867572,  0.003301525710921605,
+		        0.003247013769325325, 0.003194272329873686, 0.003143216530880756, 0.003093766847717725,
+		        0.003045848679811521, 0.002999391975404249, 0.002954330890106597, 0.002910603475747563,
+		        0.002868151396430444, 0.002826919669060018, 0.00278685642591559,  0.002747912697115425,
+		        0.002710042211055364, 0.002673201211112716, 0.002637348287089694, 0.002602444220032051,
+		        0.00256845183920097,  0.002535335890102262, 0.002503062912588292, 0.002471601128147184,
+		        0.002440920335581414, 0.002410991814356443, 0.002381788234969391, 0.002353283575750112,
+		        0.002325453045562523, 0.002298273011923768, 0.002271720934103343, 0.002245775300804314,
+		        0.002220415572064635, 0.002195622125048933, 0.002171376203430189, 0.002147659870087007,
+		        0.002124455962865871, 0.002101748053179162, 0.002079520407229145, 0.002057757949665643,
+		        0.002036446229501053, 0.00201557138812083,  0.001995120129240661, 0.001975079690673526,
+		        0.001955437817780714};
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
