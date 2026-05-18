@@ -36,7 +36,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 			CHECK(jacobiRules.Gammas[i] == Catch::Approx(i / (2 * Sqrt(4 * i * i - 1))).margin(1e-16));
 		}
 
-		const auto& [roots, weights] = CalculateOrthogonalPolynomialNodesAndWeightsFrom(jacobiRules, 1.L);
+		const auto& [roots, weights] = ConstructQuadratureGrid(jacobiRules, 1.L);
 		for (Eigen::Index i = 0; i < degree * 2; ++i)
 		{
 			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(1.0l / (i + 1)).margin(1e-14));

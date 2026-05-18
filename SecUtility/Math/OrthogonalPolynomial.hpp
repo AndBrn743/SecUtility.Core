@@ -18,8 +18,8 @@ namespace SecUtility::Math
 	};
 
 	template <typename Scalar>
-	QuadratureGrid<Scalar> CalculateOrthogonalPolynomialNodesAndWeightsFrom(
-	        const OrthogonalPolynomialRecurrence<Scalar>& rule, const Scalar zerothMoment = 1)
+	QuadratureGrid<Scalar> ConstructQuadratureGrid(const OrthogonalPolynomialRecurrence<Scalar>& rule,
+	                                                       const Scalar zerothMoment = 1)
 	{
 		eigen_assert(rule.Alphas.size() == rule.Gammas.size());
 		eigen_assert(rule.Alphas.size() > 1);
@@ -36,8 +36,8 @@ namespace SecUtility::Math
 	}
 
 	template <typename Scalar>
-	OrthogonalPolynomialRecurrence<Scalar> ConstructOrthogonalPolynomialRecurrence(const QuadratureGrid<Scalar>& weightedGrid,
-	                                                                               const int order)
+	OrthogonalPolynomialRecurrence<Scalar> ConstructOrthogonalPolynomialRecurrence(
+	        const QuadratureGrid<Scalar>& weightedGrid, const int order)
 	{
 		// this impl is using the Lanczos algorithm
 
