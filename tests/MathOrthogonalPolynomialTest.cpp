@@ -108,6 +108,129 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		}
 	}
 
+	SECTION("Exp 1 1CG")
+	{
+		const auto auxSize = 100;
+
+		QuadratureGrid grid = FirstKindOfChebyshevGaussQuadratureGrid<long double>(auxSize);
+		for (int i = 0; i < auxSize; ++i)
+		{
+			grid.Weight(i) *= Exp(-grid.Node(i));
+		}
+		std::cout << "Aux Roots: " << grid.Nodes().transpose() << std::endl;
+		std::cout << "Aux Weights: " << grid.Weights().transpose() << std::endl;
+
+		const auto degree = 50;
+		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
+
+		std::cout << "Alphas: " << jacobiRules.Alphas.transpose() << std::endl;
+		std::cout << "Gammas: " << jacobiRules.Gammas.transpose() << std::endl;
+
+		Eigen::MatrixX<long double> jacobian = Eigen::MatrixX<long double>::Zero(degree, degree);
+		jacobian.diagonal() = jacobiRules.Alphas;
+		jacobian.diagonal(1) = jacobiRules.Gammas.segment(1, degree - 1);
+		jacobian.diagonal(-1) = jacobian.diagonal(1);
+
+		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<long double>> es(jacobian);
+
+		// Mathematica: Table[NumberForm[NIntegrate[SetPrecision[t^n Exp[-t]/Sqrt[1-t^2],1000],{t,-1,1}],16],{n,0,50 2}]
+		const std::vector referenceMoments = {
+		        3.977463260506422,   -1.77549968921215,   2.20196357129427,    -1.349035807130149,  1.705855528328249,
+		        -1.131504407699918,  1.444476718349377,   -0.993921739244926,  1.276050989834117,   -0.896850849018481,
+		        1.155767262625695,   -0.823637131270877,  1.064267308828031,   -0.7658693142201553, 0.991611799214239,
+		        -0.7187791399861069, 0.932095098513078,   -0.6794345519819833, 0.882173954597097,   -0.6459200439565906,
+		        0.839515055097592,   -0.6169240793496336, 0.802510267887124,   -0.5915143428823614, 0.7700101272847713,
+		        -0.5690074494517216, 0.74116812016843,    -0.5488895071918471, 0.7153451117333271,  -0.5307656232063191,
+		        0.6920482401218049,  -0.514326659818682,  0.6708904819322601,  -0.4993266817623233, 0.6515630979734271,
+		        -0.4855672544304208, 0.6338163728277148,  -0.4728862617026683, 0.6174458493241523,  -0.4611497820103478,
+		        0.6022822956220106,  -0.4502460807718871, 0.5881842643885744,  -0.4400810969542261, 0.5750324877761361,
+		        -0.430575003512963,  0.5627255956787574,  -0.4216595522162766, 0.551176803110081,   -0.413275999834013,
+		        0.5403113176247405,  -0.405373470990981,  0.5300642887853719,  -0.3979076530134416, 0.5203791706039985,
+		        -0.3908397460222489, 0.5112064021061732,  -0.3841356112964901, 0.502502335452199,   -0.3777650751208364,
+		        0.4942283585193007,  -0.3717013556425797, 0.486350171572137,   -0.3659205878474409, 0.4788371870233159,
+		        -0.360401427399893,  0.4716620282665063,  -0.3551247183260287, 0.4648001088155457,  -0.3500732127248728,
+		        0.4582292769692939,  -0.3452313331469783, 0.4519295142749511,  -0.3405849701703777, 0.4458826784198425,
+		        -0.3361213091734924, 0.4400722830158799,  -0.3318286814548421, 0.4344833081784829,  -0.3276964357559496,
+		        0.4291020369361639,  -0.3237148269630144, 0.423915913407992,   -0.3198749193369762, 0.4189134194061648,
+		        -0.3161685020825007, 0.4140839666996278,  -0.3125880154385323, 0.4094178026423988,  -0.3091264857750901,
+		        0.4049059272502362,  -0.3057774684273497, 0.4005400201195531,  -0.3025349971999864, 0.3963123758369939,
+		        -0.2993935396410304, 0.392215846737849,   -0.2963479573219765, 0.3882437920450842,  -0.2933934704750884,
+		        0.3843900325650442};
+		const Eigen::VectorX<long double> roots = es.eigenvalues();
+		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
+		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
+		std::cout << "Weights: " << weights.transpose() << std::endl;
+
+		for (Eigen::Index i = 0; i < degree * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(referenceMoments[i]).margin(1e-14));
+		}
+	}
+
+	SECTION("Exp 1 2CG")
+	{
+		const auto auxSize = 100;
+
+		QuadratureGrid grid = SecondKindOfChebyshevGaussQuadratureGrid<long double>(auxSize);
+		for (int i = 0; i < auxSize; ++i)
+		{
+			grid.Weight(i) *= Exp(-grid.Node(i));
+		}
+		std::cout << "Aux Roots: " << grid.Nodes().transpose() << std::endl;
+		std::cout << "Aux Weights: " << grid.Weights().transpose() << std::endl;
+
+		const auto degree = 50;
+		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
+
+		std::cout << "Alphas: " << jacobiRules.Alphas.transpose() << std::endl;
+		std::cout << "Gammas: " << jacobiRules.Gammas.transpose() << std::endl;
+
+		Eigen::MatrixX<long double> jacobian = Eigen::MatrixX<long double>::Zero(degree, degree);
+		jacobian.diagonal() = jacobiRules.Alphas;
+		jacobian.diagonal(1) = jacobiRules.Gammas.segment(1, degree - 1);
+		jacobian.diagonal(-1) = jacobian.diagonal(1);
+
+		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<long double>> es(jacobian);
+
+		// Mathematica: Table[NumberForm[NIntegrate[SetPrecision[t^n Exp[-t] Sqrt[1-t^2],1000],{t,-1,1}],16],{n,0,50 2}]
+		const std::vector referenceMoments = {
+		        1.775499689212177,    -0.4264638820820491,   0.4961080429660219,   -0.2175313994302471,
+		        0.2613788099788862,   -0.1375826684549266,   0.1684257285153879,   -0.0970708902264452,
+		        0.1202837272084222,   -0.07321371774734546,  0.0914999537978936,   -0.0577678170505831,
+		        0.07265550961376677,  -0.04709017423467791,  0.05951670070059509,  -0.03934458800412378,
+		        0.04992114391598091,  -0.03351450802539235,  0.04265889949950545,  -0.02899596460695714,
+		        0.03700478721046768,  -0.0254097364672722,   0.0325001406023524,   -0.0225068934306401,
+		        0.02884200711634134,  -0.02011794225987418,  0.02582300843510291,  -0.01812388398552789,
+		        0.02329687161152228,  -0.01643896338763734,  0.02115775818954448,  -0.01499997805635848,
+		        0.01932738395883332,  -0.0137594273319026,   0.01774672513274623,  -0.01268099272775237,
+		        0.01637052350356228,  -0.01173647969232066,  0.0151635537021416,   -0.01090370123846075,
+		        0.01409803123343624,  -0.01016498381766111,  0.01315177661243828,  -0.00950609344126282,
+		        0.01230689209737876,  -0.00891545129668653,  0.01154879256867641,  -0.00838355238226361,
+		        0.01086548548534048,  -0.007902528843031867, 0.01024702883936877,  -0.007465817977539423,
+		        0.00968511818137324,  -0.007067906991192691, 0.00917276849782528,  -0.006704134725758887,
+		        0.00870406665397406,  -0.006370536175653784, 0.00827397693289864,  -0.00606371947825663,
+		        0.00787818694716351,  -0.005780767795138728, 0.007512984548821323, -0.005519160447547886,
+		        0.007175158756809495, -0.005276709073864378, 0.006861919450960665, -0.005051505601155908,
+		        0.006570831846251791, -0.004841879577894515, 0.006299762694342601, -0.004646362976600683,
+		        0.006046835855108648, -0.004463660996885267, 0.00581039540396271,  -0.004292627718650327,
+		        0.005588974837396933, -0.00413224569889244,  0.005381271242319013, -0.003981608792935279,
+		        0.00518612352817194,  -0.003839907626038157, 0.005002494001827257, -0.003706417254475522,
+		        0.004829452706536862, -0.003580486643968411, 0.004666164057229087, -0.003461529663442132,
+		        0.00451187539216258,  -0.003349017347740519, 0.004365907130683121, -0.003242471227363126,
+		        0.00422764428255927,  -0.003141457558956022, 0.004096529099144938, -0.003045582319054087,
+		        0.003972054692764646, -0.002954486846888052, 0.003853759480040059, -0.002867844041052455,
+		        0.003741222328771218};
+		const Eigen::VectorX<long double> roots = es.eigenvalues();
+		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
+		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
+		std::cout << "Weights: " << weights.transpose() << std::endl;
+
+		for (Eigen::Index i = 0; i < degree * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(referenceMoments[i]).margin(1e-14));
+		}
+	}
+
 	SECTION("Exp 10")
 	{
 		const auto auxSize = 100;

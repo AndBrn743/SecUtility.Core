@@ -168,6 +168,48 @@ namespace SecUtility::Math
 
 		return gg(size);
 	}
+
+	// works on (-1, 1). notices that the first kind of Chebyshev-Gauss calculates f(x) / sqrt(1 - x^2), not f(x)
+	template <typename Scalar>
+	const QuadratureGrid<Scalar>& FirstKindOfChebyshevGaussQuadratureGrid(const Eigen::Index size)
+	{
+		static CachedFunction gg{[](const Eigen::Index _size)
+		                         {
+			                         QuadratureGrid<Scalar> grid(_size);
+
+			                         for (Eigen::Index i = 0; i < _size; ++i)
+			                         {
+				                         grid.Node(i) = Cos((2 * i + 1) * Constant::Pi<Scalar> / (2 * _size));
+			                         }
+
+			                         grid.Weights().setConstant(Constant::Pi<Scalar> / _size);
+
+			                         return grid;
+		                         }};
+
+		return gg(size);
+	}
+
+	// works on [-1, 1]. notices that the second kind of Chebyshev-Gauss calculates f(x) * sqrt(1 - x^2), not f(x)
+	template <typename Scalar>
+	const QuadratureGrid<Scalar>& SecondKindOfChebyshevGaussQuadratureGrid(const Eigen::Index size)
+	{
+		static CachedFunction gg{[](const Eigen::Index _size)
+		                         {
+			                         QuadratureGrid<Scalar> grid(_size);
+
+			                         for (Eigen::Index i = 0; i < _size; ++i)
+			                         {
+				                         grid.Node(i) = Cos((i + 1) * Constant::Pi<Scalar> / (_size + 1));
+				                         grid.Weight(i) = PowInt(Sin((i + 1) * Constant::Pi<Scalar> / (_size + 1)), 2)
+				                                          * Constant::Pi<Scalar> / (_size + 1);
+			                         }
+
+			                         return grid;
+		                         }};
+
+		return gg(size);
+	}
 }
 
 
