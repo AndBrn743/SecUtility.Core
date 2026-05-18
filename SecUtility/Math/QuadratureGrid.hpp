@@ -125,7 +125,7 @@ namespace SecUtility::Math
 
 	// works on [-1, 1]
 	template <typename Scalar>
-	QuadratureGrid<Scalar> FejerQuadratureGrid(const Eigen::Index size)
+	const QuadratureGrid<Scalar>& FejerQuadratureGrid(const Eigen::Index size)
 	{
 		static CachedFunction gg{[](const Eigen::Index _size)
 		                         {
@@ -155,7 +155,7 @@ namespace SecUtility::Math
 
 	// works on [0, 1]
 	template <typename Scalar>
-	QuadratureGrid<Scalar> FejerQuadratureGrid01(const Eigen::Index size)
+	const QuadratureGrid<Scalar>& FejerQuadratureGrid01(const Eigen::Index size)
 	{
 		static CachedFunction gg{[](const Eigen::Index _size)
 		                         {
