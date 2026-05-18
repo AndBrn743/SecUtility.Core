@@ -17,7 +17,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	SECTION("Shifted Legendre")
 	{
 		const auto auxSize = 100;
-		QuadratureGrid grid = GenerateFejerQuadratureGrid01<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid01<long double>(auxSize);
 
 		const auto degree = 50;
 		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
@@ -47,7 +47,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid01<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid01<long double>(auxSize);
 		for (int i = 0; i < auxSize; ++i)
 		{
 			grid.Weight(i) *= Exp(-grid.Node(i));
@@ -112,7 +112,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid<long double>(auxSize);
 		grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(auxSize, 1)) / 2;
 		for (int i = 0; i < auxSize; ++i)
 		{
@@ -178,7 +178,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid<long double>(auxSize);
 		grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(auxSize, 1)) / 2;
 		for (int i = 0; i < auxSize; ++i)
 		{
@@ -244,7 +244,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid<long double>(auxSize);
 		grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(auxSize, 1)) / 2;
 		for (int i = 0; i < auxSize; ++i)
 		{
@@ -310,7 +310,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid<long double>(auxSize);
 		grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(auxSize, 1)) / 2;
 		for (int i = 0; i < auxSize; ++i)
 		{
@@ -376,7 +376,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid<long double>(auxSize);
 		grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(auxSize, 1)) / 2;
 		for (int i = 0; i < auxSize; ++i)
 		{
@@ -437,7 +437,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid<long double>(auxSize);
 		grid.Nodes() = (grid.Nodes() + Eigen::VectorX<long double>::Constant(auxSize, 1)) / 2;
 		for (int i = 0; i < auxSize; ++i)
 		{
@@ -498,7 +498,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid01<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid01<long double>(auxSize);
 		for (int i = 0; i < auxSize; ++i)
 		{
 			grid.Weight(i) *= Exp(-PowInt(grid.Node(i), 3) / 3);
@@ -563,7 +563,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid<long double>(auxSize);
 		for (int i = 0; i < auxSize; ++i)
 		{
 			grid.Weight(i) *= Exp(-PowInt(grid.Node(i), 3) / 3);
@@ -628,7 +628,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid<long double>(auxSize);
 		for (int i = 0; i < auxSize; ++i)
 		{
 			grid.Weight(i) *= Exp(-PowInt(grid.Node(i), 2) / 4);
@@ -680,7 +680,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 	{
 		const auto auxSize = 100;
 
-		QuadratureGrid grid = GenerateFejerQuadratureGrid01<long double>(auxSize);
+		QuadratureGrid grid = FejerQuadratureGrid01<long double>(auxSize);
 		for (int i = 0; i < auxSize; ++i)
 		{
 			const auto exp = Exp(-grid.Node(i));
