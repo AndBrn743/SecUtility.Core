@@ -123,6 +123,7 @@ namespace SecUtility::Math
 		Eigen::Matrix<Scalar, Eigen::Dynamic, 2> m_Data{};
 	};
 
+	// works on [-1, 1]
 	template <typename Scalar>
 	QuadratureGrid<Scalar> FejerQuadratureGrid(const Eigen::Index size)
 	{
@@ -152,6 +153,7 @@ namespace SecUtility::Math
 		return gg(size);
 	}
 
+	// works on [0, 1]
 	template <typename Scalar>
 	QuadratureGrid<Scalar> FejerQuadratureGrid01(const Eigen::Index size)
 	{
