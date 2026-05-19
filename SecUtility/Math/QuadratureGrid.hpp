@@ -8,6 +8,7 @@
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Meta/TypeTrait.hpp>
 #include <SecUtility/Misc/CachedFunction.hpp>
+#include <utility>
 
 
 namespace SecUtility::Math
@@ -122,6 +123,28 @@ namespace SecUtility::Math
 	private:
 		Eigen::Matrix<Scalar, Eigen::Dynamic, 2> m_Data{};
 	};
+
+	template <typename Scalar>
+	struct OrthogonalPolynomialRecurrence;
+
+	template <typename Scalar>
+	QuadratureGrid<Scalar> ConstructQuadratureGrid(const OrthogonalPolynomialRecurrence<Scalar>& rule,
+	                                               const Scalar zerothMoment = 1)
+	{
+		eigen_assert(rule.Alphas.size() == rule.Gammas.size());
+		eigen_assert(rule.Alphas.size() > 1);
+
+		const auto n = rule.Alphas.size();
+
+		Eigen::MatrixX<Scalar> jacobian = Eigen::MatrixX<Scalar>::Zero(n, n);
+		jacobian.diagonal() = rule.Alphas;
+		jacobian.diagonal(1) = rule.Gammas.tail(n - 1);
+		jacobian.diagonal(-1) = rule.Gammas.tail(n - 1);
+
+		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> es(jacobian);
+
+		return {std::move(es.eigenvalues()), zerothMoment * es.eigenvectors().row(0).cwiseAbs2()};
+	}
 
 	// works on [-1, 1]
 	template <typename Scalar>

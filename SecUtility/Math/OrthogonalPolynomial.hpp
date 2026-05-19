@@ -6,7 +6,6 @@
 #include <Eigen/Dense>
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/QuadratureGrid.hpp>
-#include <utility>
 
 namespace SecUtility::Math
 {
@@ -16,24 +15,6 @@ namespace SecUtility::Math
 		Eigen::VectorX<Scalar> Alphas;  // diagonal of Jacobi matrix
 		Eigen::VectorX<Scalar> Gammas;  // off-diagonal of Jacobi matrix, gamma[0] = 0
 	};
-
-	template <typename Scalar>
-	QuadratureGrid<Scalar> ConstructQuadratureGrid(const OrthogonalPolynomialRecurrence<Scalar>& rule,
-	                                                       const Scalar zerothMoment = 1)
-	{
-		eigen_assert(rule.Alphas.size() == rule.Gammas.size());
-		eigen_assert(rule.Alphas.size() > 1);
-		const auto n = rule.Alphas.size();
-
-		Eigen::MatrixX<Scalar> jacobian = Eigen::MatrixX<Scalar>::Zero(n, n);
-		jacobian.diagonal() = rule.Alphas;
-		jacobian.diagonal(1) = rule.Gammas.tail(n - 1);
-		jacobian.diagonal(-1) = rule.Gammas.tail(n - 1);
-
-		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> es(jacobian);
-
-		return {std::move(es.eigenvalues()), zerothMoment * es.eigenvectors().row(0).cwiseAbs2()};
-	}
 
 	template <typename Scalar>
 	OrthogonalPolynomialRecurrence<Scalar> ConstructOrthogonalPolynomialRecurrence(
