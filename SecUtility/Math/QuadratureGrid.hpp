@@ -169,7 +169,7 @@ namespace SecUtility::Math
 		return gg(size);
 	}
 
-	// works on (-1, 1). notices that the first kind of Chebyshev-Gauss calculates f(x) / sqrt(1 - x^2), not f(x)
+	// works on (-1, 1). notice that the first kind of Chebyshev-Gauss calculates f(x) / sqrt(1 - x^2), not f(x)
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& FirstKindOfChebyshevGaussQuadratureGrid(const Eigen::Index size)
 	{
@@ -190,7 +190,7 @@ namespace SecUtility::Math
 		return gg(size);
 	}
 
-	// works on [-1, 1]. notices that the second kind of Chebyshev-Gauss calculates f(x) * sqrt(1 - x^2), not f(x)
+	// works on [-1, 1]. notice that the second kind of Chebyshev-Gauss calculates f(x) * sqrt(1 - x^2), not f(x)
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& SecondKindOfChebyshevGaussQuadratureGrid(const Eigen::Index size)
 	{
