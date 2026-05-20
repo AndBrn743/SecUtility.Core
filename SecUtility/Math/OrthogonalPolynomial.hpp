@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <Eigen/Dense>
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/QuadratureGrid.hpp>
@@ -36,8 +37,8 @@ namespace SecUtility::Math
 		Eigen::VectorX<Scalar> candidate = Eigen::VectorX<Scalar>::Zero(n);
 		Eigen::VectorX<Scalar> residual = Eigen::VectorX<Scalar>::Zero(n);
 
-		Eigen::VectorX<Scalar> currentBasis = Eigen::VectorX<Scalar>::Ones(n);
-		currentBasis /= Sqrt(Dot(currentBasis, currentBasis));
+		const Scalar zerothMoment = weightedGrid.Weights().sum();
+		Eigen::VectorX<Scalar> currentBasis = Eigen::VectorX<Scalar>::Ones(n) / Sqrt(zerothMoment);
 
 		for (Eigen::Index k = 0; k < order; ++k)
 		{
