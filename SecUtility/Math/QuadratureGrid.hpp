@@ -98,6 +98,19 @@ namespace SecUtility::Math
 			m_Data.setConstant(value);
 		}
 
+		template <typename Function>
+		Scalar Integrate(Function&& function) const noexcept(noexcept(function(Scalar{})))
+		{
+			Scalar integral{};
+
+			for (Eigen::Index i = 0; i < m_Data.rows(); ++i)
+			{
+				integral += function(Node(i)) * Weight(i);
+			}
+
+			return integral;
+		}
+
 #define SEC_MATH_QUADRATURE_GRID_DEFINE_GET(QUALIFIER)                                                                 \
 	template <std::size_t I>                                                                                           \
 	friend decltype(auto) get(QuadratureGrid QUALIFIER q)                                                              \
