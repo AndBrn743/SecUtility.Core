@@ -16,46 +16,6 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 
 	SECTION("Shifted Legendre")
 	{
-
-		{
-			// QuadratureGrid grid = FejerQuadratureGrid<long double>(20);
-			// QuadratureGrid grid = FirstKindOfChebyshevGaussQuadratureGrid<long double>(20);
-			QuadratureGrid grid = SecondKindOfChebyshevGaussQuadratureGrid<long double>(20);
-
-			std::cout << '{';
-			for (int i = 0; i < 20; ++i)
-			{
-				// std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) << "},";
-				// std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) * Sqrt(1 - grid.Node(i) * grid.Node(i)) << "},";
-				std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) / Sqrt(1 - grid.Node(i) * grid.Node(i)) << "},";
-			}
-			std::cout << "}\n\n";
-		}
-
-		// {
-		// 	// QuadratureGrid grid = FejerQuadratureGrid01<long double>(20);
-		// 	QuadratureGrid grid = FirstKindOfChebyshevGaussQuadratureGrid<long double>(20);
-		//
-		// 	std::cout << '{';
-		// 	for (int i = 0; i < 20; ++i)
-		// 	{
-		// 		std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) << "},";
-		// 	}
-		// 	std::cout << "}\n\n";
-		// }
-		//
-		// {
-		// 	// QuadratureGrid grid = FejerQuadratureGrid01<long double>(10);
-		// 	QuadratureGrid grid = FirstKindOfChebyshevGaussQuadratureGrid<long double>(10);
-		//
-		// 	std::cout << '{';
-		// 	for (int i = 0; i < 10; ++i)
-		// 	{
-		// 		std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) << "},";
-		// 	}
-		// 	std::cout << "}\n\n";
-		// }
-
 		const auto auxSize = 100;
 		QuadratureGrid grid = FejerQuadratureGrid01<long double>(auxSize);
 
@@ -185,6 +145,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.4049059272502362,  -0.3057774684273497, 0.4005400201195531,  -0.3025349971999864, 0.3963123758369939,
 		        -0.2993935396410304, 0.392215846737849,   -0.2963479573219765, 0.3882437920450842,  -0.2933934704750884,
 		        0.3843900325650442};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
 		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
@@ -249,6 +210,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.00422764428255927,  -0.003141457558956022, 0.004096529099144938, -0.003045582319054087,
 		        0.003972054692764646, -0.002954486846888052, 0.003853759480040059, -0.002867844041052455,
 		        0.003741222328771218};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
 		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
@@ -274,17 +236,6 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		std::cout << "Aux Weights: " << grid.Weights().transpose() << std::endl;
 
 		const auto degree = 50;
-		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
-
-		std::cout << "Alphas: " << jacobiRules.Alphas.transpose() << std::endl;
-		std::cout << "Gammas: " << jacobiRules.Gammas.transpose() << std::endl;
-
-		Eigen::MatrixX<long double> jacobian = Eigen::MatrixX<long double>::Zero(degree, degree);
-		jacobian.diagonal() = jacobiRules.Alphas;
-		jacobian.diagonal(1) = jacobiRules.Gammas.segment(1, degree - 1);
-		jacobian.diagonal(-1) = jacobian.diagonal(1);
-
-		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<long double>> es(jacobian);
 
 		// Mathematica: Table[NumberForm[N@Integrate[t^n E^(-SetPrecision[10,150] t),{t,0,1}],16],{n,0,50 2}]
 		const std::vector referenceMoments = {
@@ -314,15 +265,17 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        5.462058572525608e-7,   5.397214962003303e-7,   5.333890880346189e-7,   5.272033600803947e-7,
 		        5.211592805233041e-7,   5.152520448275645e-7,   5.094770630616468e-7,   5.038299480618185e-7,
 		        4.983065043696996e-7};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
+		const auto realGrid = ConstructQuadratureGrid(grid, degree);
+		const auto& [roots, weights] = realGrid;
 
-		const Eigen::VectorX<long double> roots = es.eigenvalues();
-		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
 		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
 		std::cout << "Weights: " << weights.transpose() << std::endl;
 
 		for (Eigen::Index i = 0; i < degree * 2; ++i)
 		{
-			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(referenceMoments[i]).margin(1e-14));
+			CHECK(realGrid.Integrate([i](const auto x) { return PowInt(x, i); })
+			      == Catch::Approx(referenceMoments[i]).margin(1e-14));
 		}
 	}
 
@@ -380,6 +333,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.004040723117050443, 0.003996842534994047, 0.003953904357124403, 0.003911878558999035,
 		        0.003870736377687992, 0.003830450246232522, 0.003790993732146453, 0.003752341479672425,
 		        0.003714469155528287};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
@@ -446,6 +400,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        6.174661671741112e-7,   6.092360964295901e-7,   6.012211892353745e-7,   5.934131650948311e-7,
 		        5.858041607437865e-7,   5.783867043309464e-7,   5.711536914831221e-7,   5.640983630973951e-7,
 		        5.572142847172122e-7};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
@@ -512,6 +467,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        1.474518763764134e-15, 1.451800511388758e-15, 1.429767279404716e-15,  1.408388728501542e-15,
 		        1.387636274924877e-15, 1.367482965977045e-15, 1.347903365911622e-15,  1.328873451228294e-15,
 		        1.310370514480923e-15};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
@@ -573,6 +529,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.01098900011945115, 0.01086955446470845, 0.0107526775337504,  0.01063828734602985, 0.01052630537281217,
 		        0.01041665635739342, 0.01030926814643888, 0.01020407153164796, 0.01010100010101505, 0.0099999900990148,
 		        0.00990098029509319};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
@@ -634,6 +591,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.01098900023632808, 0.01086955457909864, 0.01075267764573238, 0.01063828745567886, 0.01052630548020038,
 		        0.01041665646259003, 0.01030926824951031, 0.01020407163265796, 0.01010100020002486, 0.00999999019608324,
 		        0.0099009803902768};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
@@ -699,6 +657,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.007785713088654875, 0.007702051324615412, 0.007620167881275925, 0.007540006671114131,
 		        0.007461513940059536, 0.007384638147423748, 0.007309329853167355, 0.007235541611985806,
 		        0.007163227873737974};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
@@ -764,6 +723,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.02263754335027476, -0.006993344014582608, 0.0221623903886699,  -0.006852204084325803,
 		        0.02170677714153508, -0.006716648736238633, 0.02126952241702318, -0.00658635293097622,
 		        0.02084953836091429};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
@@ -816,6 +776,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.01934617558104405, 0., 0.01887731184351598, 0., 0.01843063373803304, 0., 0.01800460317999797, 0.,
 		        0.01759782103402843, 0., 0.01720901177144033, 0., 0.0168370101165206,  0., 0.01648074938721164, 0.,
 		        0.01613925128459291, 0., 0.0158116169254051,  0., 0.01549701894459126};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
@@ -883,6 +844,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.002124455962865871, 0.002101748053179162, 0.002079520407229145, 0.002057757949665643,
 		        0.002036446229501053, 0.00201557138812083,  0.001995120129240661, 0.001975079690673526,
 		        0.001955437817780714};
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
 
 		const Eigen::VectorX<long double> roots = es.eigenvalues();
 		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
