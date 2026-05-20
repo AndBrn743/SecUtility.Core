@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <iostream>
 #include <Eigen/Dense>
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/QuadratureGrid.hpp>
@@ -19,14 +18,14 @@ namespace SecUtility::Math
 
 	template <typename Scalar>
 	OrthogonalPolynomialRecurrence<Scalar> ConstructOrthogonalPolynomialRecurrence(
-	        const QuadratureGrid<Scalar>& weightedGrid, const int order)
+	        const QuadratureGrid<Scalar>& weightedGrid, const Eigen::Index order)
 	{
 		// this impl is using the Lanczos algorithm
 
 		const auto Dot = [&weightedGrid](const Eigen::VectorX<Scalar>& a, const Eigen::VectorX<Scalar>& b)
 		{ return a.cwiseProduct(b).cwiseProduct(weightedGrid.Weights()).sum(); };
 
-		const int n = weightedGrid.Size();
+		const Eigen::Index n = weightedGrid.Size();
 
 		OrthogonalPolynomialRecurrence<Scalar> rule{};
 		rule.Alphas.resize(order);  // garbage, it's fine

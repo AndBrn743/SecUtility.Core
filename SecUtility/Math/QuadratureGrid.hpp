@@ -141,6 +141,10 @@ namespace SecUtility::Math
 	struct OrthogonalPolynomialRecurrence;
 
 	template <typename Scalar>
+	OrthogonalPolynomialRecurrence<Scalar> ConstructOrthogonalPolynomialRecurrence(
+	        const QuadratureGrid<Scalar>& weightedGrid, Eigen::Index order);
+
+	template <typename Scalar>
 	QuadratureGrid<Scalar> ConstructQuadratureGrid(const OrthogonalPolynomialRecurrence<Scalar>& rule,
 	                                               const Scalar zerothMoment = 1)
 	{
