@@ -163,6 +163,15 @@ namespace SecUtility::Math
 		return {std::move(es.eigenvalues()), zerothMoment * es.eigenvectors().row(0).cwiseAbs2()};
 	}
 
+	/// This is not a copy construction! This is not a grid truncation operation neither!
+	template <typename Scalar>
+	QuadratureGrid<Scalar> ConstructQuadratureGrid(const QuadratureGrid<Scalar>& weightedGrid, Eigen::Index order)
+	{
+		const auto opr = ConstructOrthogonalPolynomialRecurrence(weightedGrid, order);
+		const auto zerothMoment = weightedGrid.Weights().sum();
+		return ConstructQuadratureGrid(opr, zerothMoment);
+	}
+
 	// works on [-1, 1]
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& FejerQuadratureGrid(const Eigen::Index size)

@@ -16,6 +16,46 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 
 	SECTION("Shifted Legendre")
 	{
+
+		{
+			// QuadratureGrid grid = FejerQuadratureGrid<long double>(20);
+			// QuadratureGrid grid = FirstKindOfChebyshevGaussQuadratureGrid<long double>(20);
+			QuadratureGrid grid = SecondKindOfChebyshevGaussQuadratureGrid<long double>(20);
+
+			std::cout << '{';
+			for (int i = 0; i < 20; ++i)
+			{
+				// std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) << "},";
+				// std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) * Sqrt(1 - grid.Node(i) * grid.Node(i)) << "},";
+				std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) / Sqrt(1 - grid.Node(i) * grid.Node(i)) << "},";
+			}
+			std::cout << "}\n\n";
+		}
+
+		// {
+		// 	// QuadratureGrid grid = FejerQuadratureGrid01<long double>(20);
+		// 	QuadratureGrid grid = FirstKindOfChebyshevGaussQuadratureGrid<long double>(20);
+		//
+		// 	std::cout << '{';
+		// 	for (int i = 0; i < 20; ++i)
+		// 	{
+		// 		std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) << "},";
+		// 	}
+		// 	std::cout << "}\n\n";
+		// }
+		//
+		// {
+		// 	// QuadratureGrid grid = FejerQuadratureGrid01<long double>(10);
+		// 	QuadratureGrid grid = FirstKindOfChebyshevGaussQuadratureGrid<long double>(10);
+		//
+		// 	std::cout << '{';
+		// 	for (int i = 0; i < 10; ++i)
+		// 	{
+		// 		std::cout << '{' << std::setprecision(16) << grid.Node(i) << ',' << grid.Weight(i) << "},";
+		// 	}
+		// 	std::cout << "}\n\n";
+		// }
+
 		const auto auxSize = 100;
 		QuadratureGrid grid = FejerQuadratureGrid01<long double>(auxSize);
 
@@ -56,17 +96,6 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		std::cout << "Aux Weights: " << grid.Weights().transpose() << std::endl;
 
 		const auto degree = 50;
-		const auto jacobiRules = ConstructOrthogonalPolynomialRecurrence(grid, degree);
-
-		std::cout << "Alphas: " << jacobiRules.Alphas.transpose() << std::endl;
-		std::cout << "Gammas: " << jacobiRules.Gammas.transpose() << std::endl;
-
-		Eigen::MatrixX<long double> jacobian = Eigen::MatrixX<long double>::Zero(degree, degree);
-		jacobian.diagonal() = jacobiRules.Alphas;
-		jacobian.diagonal(1) = jacobiRules.Gammas.segment(1, degree - 1);
-		jacobian.diagonal(-1) = jacobian.diagonal(1);
-
-		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<long double>> es(jacobian);
 
 		// Mathematica: Table[NumberForm[N@Integrate[t^n E^(-SetPrecision[1.0,250] t),{t,0,1}],16],{n,0,50 2}]
 		const std::vector referenceMoments = {
@@ -97,8 +126,8 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		        0.003831666122556505, 0.00379217271653873,  0.003753485049353237, 0.003715578714528098,
 		        0.003678430281367489};
 
-		const Eigen::VectorX<long double> roots = es.eigenvalues();
-		const Eigen::VectorX<long double> weights = referenceMoments[0] * es.eigenvectors().row(0).cwiseAbs2();
+		CHECK(grid.Weights().sum() == Catch::Approx(referenceMoments[0]).margin(1e-14));
+		const auto& [roots, weights] = ConstructQuadratureGrid(grid, degree);
 		std::cout << "Roots: " << std::scientific << std::setprecision(16) << roots.transpose() << std::endl;
 		std::cout << "Weights: " << weights.transpose() << std::endl;
 
