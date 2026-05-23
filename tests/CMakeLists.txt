@@ -63,6 +63,7 @@ endfunction()
 # Utility tests
 add_secutility_test(CachedFunctionTest CachedFunctionTest.cpp)
 add_secutility_test(RandomTest RandomTest.cpp)
+add_secutility_test(RoundRobinOrderingGeneratorTest RoundRobinOrderingGeneratorTest.cpp)
 add_secutility_test(ChecksumTest ChecksumTest.cpp)
 add_secutility_test(MacroTest MacroTest.cpp)
 add_secutility_test(TypeNameTest TypeNameTest.cpp)
