@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <SecUtility/Math/Special.hpp>
 
@@ -661,5 +663,905 @@ TEST_CASE("GammaUpperIncomplete")
 		CHECK(GammaUpperIncomplete(1e-10, 10.) == Catch::Approx(4.156968930677779e-6));
 		CHECK(GammaUpperIncomplete(1e-5, 10.) == Catch::Approx(4.157068176350878e-6));
 		CHECK(GammaUpperIncomplete(1e-3, 10.) == Catch::Approx(4.166905347305812e-6));
+	}
+}
+
+
+TEST_CASE("ClebschGordanCoefficient")
+{
+	SECTION("Misc")
+	{
+		SECTION("expected fails")
+		{
+			CHECK_THROWS_WITH(ClebschGordanCoefficient(5 / 2., 5 / 2., 5 / 2., -3 / 2., 0, 1),
+			                  Catch::Matchers::ContainsSubstring("Unphysical j, m combination"));
+
+			CHECK_THROWS_WITH(ClebschGordanCoefficient(5 / 2., 7 / 2., 5 / 2., -3 / 2., 2, 2),
+			                  Catch::Matchers::ContainsSubstring("Unphysical j1, m1 combination"));
+
+			CHECK_THROWS_WITH(ClebschGordanCoefficient(5 / 2., 5 / 2., 1 / 2., -3 / 2., 2, 2),
+			                  Catch::Matchers::ContainsSubstring("Unphysical m1, m2, and m combination"));
+
+			CHECK_THROWS_WITH(ClebschGordanCoefficient(5 / 2., 5 / 2., 1 / 2., -5 / 2., 2, 0),
+			                 Catch::Matchers::ContainsSubstring("Unphysical j2, m2 combination"));
+
+			CHECK_THROWS_WITH(ClebschGordanCoefficient(5 / 2., 5 / 2., 5 / 2., -3 / 2., 6, 1),
+			                  Catch::Matchers::ContainsSubstring("Unphysical j1, j2, and j combination"));
+		}
+
+		CHECK(ClebschGordanCoefficient(11 / 2., 3 / 2., 3 / 2., -3 / 2., 4, 0) == Catch::Approx(std::sqrt(7.0 / 44)));
+	}
+
+	SECTION("j1 = 1/2, j2 = 1/2")
+	{
+		constexpr double j1 = 1 / 2.;
+		constexpr double j2 = 1 / 2.;
+
+		SECTION("m = 1")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 1, 1) == Catch::Approx(1));
+		}
+
+		SECTION("m = -1")
+		{
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, -1 / 2., 1, -1) == Catch::Approx(1));
+		}
+
+		SECTION("m = 0")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 1, 0) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 0, 0) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 1, 0) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 0, 0) == Catch::Approx(-std::sqrt(1 / 2.)));
+		}
+	}
+
+	SECTION("j1 = 1, j2 = 1/2")
+	{
+		constexpr double j1 = 1;
+		constexpr double j2 = 1 / 2.;
+
+		SECTION("m = 3/2")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1 / 2., 3 / 2., 3 / 2.) == Catch::Approx(1));
+		}
+
+		SECTION("m = 1/2")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1 / 2., 3 / 2., 1 / 2.) == Catch::Approx(std::sqrt(1 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1 / 2., 1 / 2., 1 / 2.) == Catch::Approx(std::sqrt(2 / 3.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1 / 2., 3 / 2., 1 / 2.) == Catch::Approx(std::sqrt(2 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1 / 2., 1 / 2., 1 / 2.) == Catch::Approx(-std::sqrt(1 / 3.)));
+		}
+	}
+
+	SECTION("j1 = 1, j2 = 1")
+	{
+		constexpr double j1 = 1;
+		constexpr double j2 = 1;
+
+		SECTION("m = 2")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1, 2, 2.) == Catch::Approx(1));
+		}
+
+		SECTION("m = 1")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 2, 1) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 1, 1) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 2, 1) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 1, 1) == Catch::Approx(-std::sqrt(1 / 2.)));
+		}
+
+		SECTION("m = 0")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 2, 0) == Catch::Approx(std::sqrt(1 / 6.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 1, 0) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 0, 0) == Catch::Approx(std::sqrt(1 / 3.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 2, 0) == Catch::Approx(std::sqrt(2 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 1, 0) == Catch::Approx(std::sqrt(0)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 0, 0) == Catch::Approx(-std::sqrt(1 / 3.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 2, 0) == Catch::Approx(std::sqrt(1 / 6.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 1, 0) == Catch::Approx(-std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 0, 0) == Catch::Approx(std::sqrt(1 / 3.)));
+		}
+	}
+
+	SECTION("j1 = 3/2, j2 = 1/2")
+	{
+		constexpr double j1 = 3 / 2.;
+		constexpr double j2 = 1 / 2.;
+
+		SECTION("m = 2")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 2, 2) == Catch::Approx(1));
+		}
+
+		SECTION("m = 1")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 2, 1) == Catch::Approx(1 / 2.));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 1, 1) == Catch::Approx(std::sqrt(3 / 4.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 2, 1) == Catch::Approx(std::sqrt(3 / 4.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 1, 1) == Catch::Approx(-1 / 2.));
+		}
+
+		SECTION("m = 0")
+		{
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 2, 0) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 1, 0) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 2, 0) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 1, 0) == Catch::Approx(-std::sqrt(1 / 2.)));
+		}
+	}
+
+	SECTION("j1 = 3/2, j2 = 1")
+	{
+		constexpr double j1 = 3 / 2.;
+		constexpr double j2 = 1;
+
+		SECTION("m = 5/2")
+		{
+			constexpr double m = 5 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1, 5 / 2., m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 3/2")
+		{
+			constexpr double m = 3 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 5 / 2., m) == Catch::Approx(std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 3 / 2., m) == Catch::Approx(std::sqrt(3 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 5 / 2., m) == Catch::Approx(std::sqrt(3 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 3 / 2., m) == Catch::Approx(-std::sqrt(2 / 5.)));
+		}
+
+		SECTION("m = 1/2")
+		{
+			constexpr double m = 1 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 5 / 2., m) == Catch::Approx(std::sqrt(1 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 3 / 2., m) == Catch::Approx(std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 1 / 2., m) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 5 / 2., m) == Catch::Approx(std::sqrt(3 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 3 / 2., m) == Catch::Approx(std::sqrt(1 / 15.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 1 / 2., m) == Catch::Approx(-std::sqrt(1 / 3.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 5 / 2., m) == Catch::Approx(std::sqrt(3 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 3 / 2., m) == Catch::Approx(-std::sqrt(8 / 15.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 1 / 2., m) == Catch::Approx(std::sqrt(1 / 6.)));
+		}
+	}
+
+	SECTION("j1 = 3/2, j2 = 3/2")
+	{
+		constexpr double j1 = 3 / 2.;
+		constexpr double j2 = 3 / 2.;
+
+		SECTION("m = 3")
+		{
+			constexpr double m = 3;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 3 / 2., 3, m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 2")
+		{
+			constexpr double m = 2;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 3, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 2, m) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 3, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 2, m) == Catch::Approx(-std::sqrt(1 / 2.)));
+		}
+
+		SECTION("m = 1")
+		{
+			constexpr double m = 1;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 2., m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 1., m) == Catch::Approx(std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 3., m) == Catch::Approx(std::sqrt(3 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 2., m) == Catch::Approx(0));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 1., m) == Catch::Approx(-std::sqrt(2 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 2., m) == Catch::Approx(-std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 1., m) == Catch::Approx(std::sqrt(3 / 10.)));
+		}
+
+		SECTION("m = 0")
+		{
+			constexpr double m = 0;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 2., m) == Catch::Approx(1 / 2.));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 1., m) == Catch::Approx(std::sqrt(9 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 0., m) == Catch::Approx(1 / 2.));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 3., m) == Catch::Approx(std::sqrt(9 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 2., m) == Catch::Approx(1 / 2.));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 1., m) == Catch::Approx(-std::sqrt(1 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 0., m) == Catch::Approx(-1 / 2.));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 3., m) == Catch::Approx(std::sqrt(9 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 2., m) == Catch::Approx(-1 / 2.));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 1., m) == Catch::Approx(-std::sqrt(1 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 0., m) == Catch::Approx(1 / 2.));
+
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 2., m) == Catch::Approx(-1 / 2.));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 1., m) == Catch::Approx(std::sqrt(9 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 0., m) == Catch::Approx(-1 / 2.));
+		}
+	}
+
+	SECTION("j1 = 2, j2 = 1/2")
+	{
+		constexpr double j1 = 2;
+		constexpr double j2 = 1 / 2.;
+
+		SECTION("m = 5/2")
+		{
+			constexpr double m = 5 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 2., j2, 1 / 2., 5 / 2., m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 3/2")
+		{
+			constexpr double m = 3 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1 / 2., 3 / 2., m) == Catch::Approx(std::sqrt(4 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(4 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1 / 2., 3 / 2., m) == Catch::Approx(-std::sqrt(1 / 5.)));
+		}
+
+		SECTION("m = 1/2")
+		{
+			constexpr double m = 1 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1 / 2., 3 / 2., m) == Catch::Approx(std::sqrt(3 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(3 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1 / 2., 3 / 2., m) == Catch::Approx(-std::sqrt(2 / 5.)));
+		}
+	}
+
+	SECTION("j1 = 2, j2 = 1")
+	{
+		constexpr double j1 = 2;
+		constexpr double j2 = 1;
+
+		SECTION("m = 3")
+		{
+			constexpr double m = 3;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 1, 3, m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 2")
+		{
+			constexpr double m = 2;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 0, 3, m) == Catch::Approx(std::sqrt(1 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 0, 2, m) == Catch::Approx(std::sqrt(2 / 3.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1, 3, m) == Catch::Approx(std::sqrt(2 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1, 2, m) == Catch::Approx(-std::sqrt(1 / 3.)));
+		}
+
+		SECTION("m = 1")
+		{
+			constexpr double m = 1;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1, 3, m) == Catch::Approx(std::sqrt(1 / 15.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1, 2, m) == Catch::Approx(std::sqrt(1 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1, 1, m) == Catch::Approx(std::sqrt(3 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 3, m) == Catch::Approx(std::sqrt(8 / 15.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 2, m) == Catch::Approx(std::sqrt(1 / 6.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 1, m) == Catch::Approx(-std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 3, m) == Catch::Approx(std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 2, m) == Catch::Approx(-std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 1, m) == Catch::Approx(std::sqrt(1 / 10.)));
+		}
+
+		SECTION("m = 0")
+		{
+			constexpr double m = 0;
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 3, m) == Catch::Approx(std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 2, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 1, m) == Catch::Approx(std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 3, m) == Catch::Approx(std::sqrt(3 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 2, m) == Catch::Approx(0));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 1, m) == Catch::Approx(-std::sqrt(2 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 3, m) == Catch::Approx(std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 2, m) == Catch::Approx(-std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 1, m) == Catch::Approx(std::sqrt(3 / 10.)));
+		}
+	}
+
+	SECTION("j1 = 2, j2 = 3/2")
+	{
+		constexpr double j1 = 2;
+		constexpr double j2 = 3 / 2.;
+
+		SECTION("m = 7/2")
+		{
+			constexpr double m = 7 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 3 / 2., 7 / 2., m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 5/2")
+		{
+			constexpr double m = 5 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 1 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 1 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(4 / 7.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 3 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(4 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 3 / 2., 5 / 2., m) == Catch::Approx(-std::sqrt(3 / 7.)));
+		}
+
+		SECTION("m = 3/2")
+		{
+			constexpr double m = 3 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(1 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(16 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1 / 2., 3 / 2., m) == Catch::Approx(std::sqrt(2 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(4 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(1 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1 / 2., 3 / 2., m) == Catch::Approx(-std::sqrt(2 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 3 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(2 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 3 / 2., 5 / 2., m) == Catch::Approx(-std::sqrt(18 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 3 / 2., 3 / 2., m) == Catch::Approx(std::sqrt(1 / 5.)));
+		}
+
+		SECTION("m = 1/2")
+		{
+			constexpr double m = 1 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -3 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(1 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -3 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(6 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -3 / 2., 3 / 2., m) == Catch::Approx(std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -3 / 2., 1 / 2., m) == Catch::Approx(std::sqrt(2 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(12 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1 / 2., 5 / 2., m) == Catch::Approx(std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1 / 2., 3 / 2., m) == Catch::Approx(0));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1 / 2., 1 / 2., m) == Catch::Approx(-std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(18 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1 / 2., 5 / 2., m) == Catch::Approx(-std::sqrt(3 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1 / 2., 3 / 2., m) == Catch::Approx(-std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1 / 2., 1 / 2., m) == Catch::Approx(std::sqrt(1 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 3 / 2., 7 / 2., m) == Catch::Approx(std::sqrt(4 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 3 / 2., 5 / 2., m) == Catch::Approx(-std::sqrt(27 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 3 / 2., 3 / 2., m) == Catch::Approx(std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 3 / 2., 1 / 2., m) == Catch::Approx(-std::sqrt(1 / 10.)));
+		}
+	}
+
+	SECTION("j1 = 2, j2 = 2")
+	{
+		constexpr double j1 = 2;
+		constexpr double j2 = 2;
+
+		SECTION("m = 4")
+		{
+			constexpr double m = 4;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 2, 4, m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 3")
+		{
+			constexpr double m = 3;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 1, 4, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 1, 3, m) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 2, 4, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 2, 3, m) == Catch::Approx(-std::sqrt(1 / 2.)));
+		}
+
+		SECTION("m = 2")
+		{
+			constexpr double m = 2;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 0, 4, m) == Catch::Approx(std::sqrt(3 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 0, 3, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, 0, 2, m) == Catch::Approx(std::sqrt(2 / 7.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1, 4, m) == Catch::Approx(std::sqrt(4 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1, 3, m) == Catch::Approx(0));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 1, 2, m) == Catch::Approx(-std::sqrt(3 / 7.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 2, 4, m) == Catch::Approx(std::sqrt(3 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 2, 3, m) == Catch::Approx(-std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 2, 2, m) == Catch::Approx(std::sqrt(2 / 7.)));
+		}
+
+		SECTION("m = 1")
+		{
+			constexpr double m = 1;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1, 4, m) == Catch::Approx(std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1, 3, m) == Catch::Approx(std::sqrt(3 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1, 2, m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -1, 1, m) == Catch::Approx(std::sqrt(1 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 4, m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 3, m) == Catch::Approx(std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 2, m) == Catch::Approx(-std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, 0, 1, m) == Catch::Approx(-std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 4, m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 3, m) == Catch::Approx(-std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 2, m) == Catch::Approx(-std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 1, 1, m) == Catch::Approx(std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 2, 4, m) == Catch::Approx(std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 2, 3, m) == Catch::Approx(-std::sqrt(3 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 2, 2, m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 2, 1, m) == Catch::Approx(-std::sqrt(1 / 5.)));
+		}
+
+		SECTION("m = 0")
+		{
+			constexpr double m = 0;
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -2, 4, m) == Catch::Approx(std::sqrt(1 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -2, 3, m) == Catch::Approx(std::sqrt(1 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -2, 2, m) == Catch::Approx(std::sqrt(2 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -2, 1, m) == Catch::Approx(std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 2, j2, -2, 0, m) == Catch::Approx(std::sqrt(1 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 4, m) == Catch::Approx(std::sqrt(8 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 3, m) == Catch::Approx(std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 2, m) == Catch::Approx(std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 1, m) == Catch::Approx(-std::sqrt(1 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, 1, j2, -1, 0, m) == Catch::Approx(-std::sqrt(1 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 4, m) == Catch::Approx(std::sqrt(18 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 3, m) == Catch::Approx(std::sqrt(0)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 2, m) == Catch::Approx(-std::sqrt(2 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 1, m) == Catch::Approx(std::sqrt(0)));
+			CHECK(ClebschGordanCoefficient(j1, 0, j2, 0, 0, m) == Catch::Approx(std::sqrt(1 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 4, m) == Catch::Approx(std::sqrt(8 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 3, m) == Catch::Approx(-std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 2, m) == Catch::Approx(std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 1, m) == Catch::Approx(std::sqrt(1 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, -1, j2, 1, 0, m) == Catch::Approx(-std::sqrt(1 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -2, j2, 2, 4, m) == Catch::Approx(std::sqrt(1 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, -2, j2, 2, 3, m) == Catch::Approx(-std::sqrt(1 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, -2, j2, 2, 2, m) == Catch::Approx(std::sqrt(2 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, -2, j2, 2, 1, m) == Catch::Approx(-std::sqrt(2 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, -2, j2, 2, 0, m) == Catch::Approx(std::sqrt(1 / 5.)));
+		}
+	}
+
+	SECTION("j1 = 5/2, j2 = 1/2")
+	{
+		constexpr double j1 = 5 / 2.;
+		constexpr double j2 = 1 / 2.;
+
+		SECTION("m = 3")
+		{
+			constexpr double m = 3;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1 / 2., 3, m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 2")
+		{
+			constexpr double m = 2;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 3, m) == Catch::Approx(std::sqrt(1 / 6.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 2, m) == Catch::Approx(std::sqrt(5 / 6.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 3, m) == Catch::Approx(std::sqrt(5 / 6.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 2, m) == Catch::Approx(-std::sqrt(1 / 6.)));
+		}
+
+		SECTION("m = 1")
+		{
+			constexpr double m = 1;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 2., m) == Catch::Approx(std::sqrt(2 / 3.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 3., m) == Catch::Approx(std::sqrt(2 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 2., m) == Catch::Approx(-std::sqrt(1 / 3.)));
+		}
+
+		SECTION("m = 0")
+		{
+			constexpr double m = 0;
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 2., m) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 2., m) == Catch::Approx(-std::sqrt(1 / 2.)));
+		}
+	}
+
+	SECTION("j1 = 5/2, j2 = 1")
+	{
+		constexpr double j1 = 5 / 2.;
+		constexpr double j2 = 1;
+
+		SECTION("m = 7/2")
+		{
+			constexpr double m = 7 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1, 7 / 2., m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 5/2")
+		{
+			constexpr double m = 5 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 0, 7 / 2., m) == Catch::Approx(std::sqrt(2 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 0, 5 / 2., m) == Catch::Approx(std::sqrt(5 / 7.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1, 7 / 2., m) == Catch::Approx(std::sqrt(5 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1, 5 / 2., m) == Catch::Approx(-std::sqrt(2 / 7.)));
+		}
+
+		SECTION("m = 3/2")
+		{
+			constexpr double m = 3 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1, 7 / 2., m) == Catch::Approx(std::sqrt(1 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1, 5 / 2., m) == Catch::Approx(std::sqrt(2 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1, 3 / 2., m) == Catch::Approx(std::sqrt(2 / 3.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 7 / 2., m) == Catch::Approx(std::sqrt(10 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 5 / 2., m) == Catch::Approx(std::sqrt(9 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 3 / 2., m) == Catch::Approx(-std::sqrt(4 / 15.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 7 / 2., m) == Catch::Approx(std::sqrt(10 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 5 / 2., m) == Catch::Approx(-std::sqrt(16 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 3 / 2., m) == Catch::Approx(std::sqrt(1 / 15.)));
+		}
+
+		SECTION("m = 1/2")
+		{
+			constexpr double m = 1 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 7 / 2., m) == Catch::Approx(std::sqrt(1 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 5 / 2., m) == Catch::Approx(std::sqrt(16 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 3 / 2., m) == Catch::Approx(std::sqrt(2 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 7 / 2., m) == Catch::Approx(std::sqrt(4 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 5 / 2., m) == Catch::Approx(std::sqrt(1 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 3 / 2., m) == Catch::Approx(-std::sqrt(2 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 7 / 2., m) == Catch::Approx(std::sqrt(2 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 5 / 2., m) == Catch::Approx(-std::sqrt(18 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 3 / 2., m) == Catch::Approx(std::sqrt(1 / 5.)));
+		}
+	}
+
+	SECTION("j1 = 5/2, j2 = 3/2")
+	{
+		constexpr double j1 = 5 / 2.;
+		constexpr double j2 = 3 / 2.;
+
+		SECTION("m = 4")
+		{
+			constexpr double m = 4;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 3 / 2., 4, m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 3")
+		{
+			constexpr double m = 3;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1 / 2., 4, m) == Catch::Approx(std::sqrt(3 / 8.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1 / 2., 3, m) == Catch::Approx(std::sqrt(5 / 8.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 3 / 2., 4, m) == Catch::Approx(std::sqrt(5 / 8.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 3 / 2., 3, m) == Catch::Approx(-std::sqrt(3 / 8.)));
+		}
+
+		SECTION("m = 2")
+		{
+			constexpr double m = 2;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 4., m) == Catch::Approx(std::sqrt(3 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 3., m) == Catch::Approx(std::sqrt(5 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 2., m) == Catch::Approx(std::sqrt(10 / 21.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 4., m) == Catch::Approx(std::sqrt(15 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 2., m) == Catch::Approx(-std::sqrt(8 / 21.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 4., m) == Catch::Approx(std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 3., m) == Catch::Approx(-std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 2., m) == Catch::Approx(std::sqrt(1 / 7.)));
+		}
+
+		SECTION("m = 1")
+		{
+			constexpr double m = 1;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 4., m) == Catch::Approx(std::sqrt(1 / 56.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 8.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 2., m) == Catch::Approx(std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 1., m) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 4., m) == Catch::Approx(std::sqrt(15 / 56.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 3., m) == Catch::Approx(std::sqrt(49 / 120.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 2., m) == Catch::Approx(std::sqrt(1 / 42.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 1., m) == Catch::Approx(-std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 4., m) == Catch::Approx(std::sqrt(15 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 3., m) == Catch::Approx(-std::sqrt(1 / 60.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 2., m) == Catch::Approx(-std::sqrt(25 / 84.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 1., m) == Catch::Approx(std::sqrt(3 / 20.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 4., m) == Catch::Approx(std::sqrt(5 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 3., m) == Catch::Approx(-std::sqrt(9 / 20.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 2., m) == Catch::Approx(std::sqrt(9 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 1., m) == Catch::Approx(-std::sqrt(1 / 20.)));
+		}
+
+		SECTION("m = 0")
+		{
+			constexpr double m = 0;
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 4., m) == Catch::Approx(std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 3., m) == Catch::Approx(std::sqrt(3 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 2., m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 1., m) == Catch::Approx(std::sqrt(1 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 4., m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 3., m) == Catch::Approx(std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 2., m) == Catch::Approx(-std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 1., m) == Catch::Approx(-std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 4., m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 3., m) == Catch::Approx(-std::sqrt(1 / 5.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 2., m) == Catch::Approx(-std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 1., m) == Catch::Approx(std::sqrt(3 / 10.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 4., m) == Catch::Approx(std::sqrt(1 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 3., m) == Catch::Approx(-std::sqrt(3 / 10.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 2., m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 1., m) == Catch::Approx(-std::sqrt(1 / 5.)));
+		}
+	}
+
+	SECTION("j1 = 5/2, j2 = 2")
+	{
+		constexpr double j1 = 5 / 2.;
+		constexpr double j2 = 2;
+
+		SECTION("m = 9/2")
+		{
+			constexpr double m = 9 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 2, 9 / 2., m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 7/2")
+		{
+			constexpr double m = 7 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1, 9 / 2., m) == Catch::Approx(2 / 3.));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1, 7 / 2., m) == Catch::Approx(std::sqrt(5 / 9.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 2, 9 / 2., m) == Catch::Approx(std::sqrt(5 / 9.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 2, 7 / 2., m) == Catch::Approx(-2 / 3.));
+		}
+
+		SECTION("m = 5/2")
+		{
+			constexpr double m = 5 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 0, 9 / 2., m) == Catch::Approx(std::sqrt(1 / 6.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 0, 7 / 2., m) == Catch::Approx(std::sqrt(10 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 0, 5 / 2., m) == Catch::Approx(std::sqrt(5 / 14.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1, 9 / 2., m) == Catch::Approx(std::sqrt(5 / 9.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1, 7 / 2., m) == Catch::Approx(std::sqrt(1 / 63.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1, 5 / 2., m) == Catch::Approx(-std::sqrt(3 / 7.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 2, 9 / 2., m) == Catch::Approx(std::sqrt(5 / 18.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 2, 7 / 2., m) == Catch::Approx(-std::sqrt(32 / 63.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 2, 5 / 2., m) == Catch::Approx(std::sqrt(3 / 14.)));
+		}
+
+		SECTION("m = 3/2")
+		{
+			constexpr double m = 3 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1, 9 / 2., m) == Catch::Approx(std::sqrt(1 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1, 7 / 2., m) == Catch::Approx(std::sqrt(5 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1, 5 / 2., m) == Catch::Approx(std::sqrt(3 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1, 3 / 2., m) == Catch::Approx(std::sqrt(2 / 7.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 9 / 2., m) == Catch::Approx(std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 7 / 2., m) == Catch::Approx(std::sqrt(2 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 5 / 2., m) == Catch::Approx(-std::sqrt(1 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 0, 3 / 2., m) == Catch::Approx(-std::sqrt(12 / 35.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 9 / 2., m) == Catch::Approx(std::sqrt(10 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 7 / 2., m) == Catch::Approx(-std::sqrt(2 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 5 / 2., m) == Catch::Approx(-std::sqrt(6 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1, 3 / 2., m) == Catch::Approx(std::sqrt(9 / 35.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 2, 9 / 2., m) == Catch::Approx(std::sqrt(5 / 42.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 2, 7 / 2., m) == Catch::Approx(-std::sqrt(8 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 2, 5 / 2., m) == Catch::Approx(std::sqrt(27 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 2, 3 / 2., m) == Catch::Approx(-std::sqrt(4 / 35.)));
+		}
+
+		SECTION("m = 1/2")
+		{
+			constexpr double m = 1 / 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -2, 9 / 2., m) == Catch::Approx(std::sqrt(1 / 126.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -2, 7 / 2., m) == Catch::Approx(std::sqrt(4 / 63.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -2, 5 / 2., m) == Catch::Approx(std::sqrt(3 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -2, 3 / 2., m) == Catch::Approx(std::sqrt(8 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -2, 1 / 2., m) == Catch::Approx(std::sqrt(1 / 3.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 9 / 2., m) == Catch::Approx(std::sqrt(10 / 63.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 7 / 2., m) == Catch::Approx(std::sqrt(121 / 315.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 5 / 2., m) == Catch::Approx(std::sqrt(6 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 3 / 2., m) == Catch::Approx(-std::sqrt(2 / 105.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1, 1 / 2., m) == Catch::Approx(-std::sqrt(4 / 15.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 9 / 2., m) == Catch::Approx(std::sqrt(10 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 7 / 2., m) == Catch::Approx(std::sqrt(4 / 105.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 5 / 2., m) == Catch::Approx(-std::sqrt(8 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 3 / 2., m) == Catch::Approx(-std::sqrt(2 / 35.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 0, 1 / 2., m) == Catch::Approx(std::sqrt(1 / 5.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 9 / 2., m) == Catch::Approx(std::sqrt(20 / 63.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 7 / 2., m) == Catch::Approx(-std::sqrt(14 / 45.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 5 / 2., m) == Catch::Approx(std::sqrt(0)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 3 / 2., m) == Catch::Approx(std::sqrt(5 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1, 1 / 2., m) == Catch::Approx(-std::sqrt(2 / 15.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 2, 9 / 2., m) == Catch::Approx(std::sqrt(5 / 126.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 2, 7 / 2., m) == Catch::Approx(-std::sqrt(64 / 315.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 2, 5 / 2., m) == Catch::Approx(std::sqrt(27 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 2, 3 / 2., m) == Catch::Approx(-std::sqrt(32 / 105.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 2, 1 / 2., m) == Catch::Approx(std::sqrt(1 / 15.)));
+		}
+	}
+
+	SECTION("j1 = 5/2, j2 = 5/2")
+	{
+		constexpr double j1 = 5 / 2.;
+		constexpr double j2 = 5 / 2.;
+
+		SECTION("m = 5")
+		{
+			constexpr double m = 5;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 5 / 2., 5, m) == Catch::Approx(1));
+		}
+
+		SECTION("m = 4")
+		{
+			constexpr double m = 4;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 3 / 2., 5, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 3 / 2., 4, m) == Catch::Approx(std::sqrt(1 / 2.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 5 / 2., 5, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 5 / 2., 4, m) == Catch::Approx(-std::sqrt(1 / 2.)));
+		}
+
+		SECTION("m = 3")
+		{
+			constexpr double m = 3;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1 / 2., 5, m) == Catch::Approx(std::sqrt(2 / 9.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1 / 2., 4, m) == Catch::Approx(std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, 1 / 2., 3, m) == Catch::Approx(std::sqrt(5 / 18.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 3 / 2., 5, m) == Catch::Approx(std::sqrt(5 / 9.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 3 / 2., 4, m) == Catch::Approx(std::sqrt(0)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 3 / 2., 3, m) == Catch::Approx(-2 / 3.));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 5 / 2., 5, m) == Catch::Approx(std::sqrt(2 / 9.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 5 / 2., 4, m) == Catch::Approx(-std::sqrt(1 / 2.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 5 / 2., 3, m) == Catch::Approx(std::sqrt(5 / 18.)));
+		}
+
+		SECTION("m = 2")
+		{
+			constexpr double m = 2.;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 5, m) == Catch::Approx(std::sqrt(1 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 4, m) == Catch::Approx(std::sqrt(9 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 3, m) == Catch::Approx(std::sqrt(5 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -1 / 2., 2, m) == Catch::Approx(std::sqrt(5 / 28.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 5, m) == Catch::Approx(std::sqrt(5 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 4, m) == Catch::Approx(std::sqrt(5 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 3, m) == Catch::Approx(-std::sqrt(1 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, 1 / 2., 2, m) == Catch::Approx(-std::sqrt(9 / 28.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 5, m) == Catch::Approx(std::sqrt(5 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 4, m) == Catch::Approx(-std::sqrt(5 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 3, m) == Catch::Approx(-std::sqrt(1 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 3 / 2., 2, m) == Catch::Approx(std::sqrt(9 / 28.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 5 / 2., 5, m) == Catch::Approx(std::sqrt(1 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 5 / 2., 4, m) == Catch::Approx(-std::sqrt(9 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 5 / 2., 3, m) == Catch::Approx(std::sqrt(5 / 12.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 5 / 2., 2, m) == Catch::Approx(-std::sqrt(5 / 28.)));
+		}
+
+		SECTION("m = 1")
+		{
+			constexpr double m = 1;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 5, m) == Catch::Approx(std::sqrt(1 / 42.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 4, m) == Catch::Approx(std::sqrt(1 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 3, m) == Catch::Approx(std::sqrt(1 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 2, m) == Catch::Approx(std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -3 / 2., 1, m) == Catch::Approx(std::sqrt(1 / 7.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 5, m) == Catch::Approx(std::sqrt(5 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 4, m) == Catch::Approx(std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 3, m) == Catch::Approx(std::sqrt(1 / 30.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 2, m) == Catch::Approx(-std::sqrt(1 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -1 / 2., 1, m) == Catch::Approx(-std::sqrt(8 / 35.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 5, m) == Catch::Approx(std::sqrt(10 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 4, m) == Catch::Approx(std::sqrt(0)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 3, m) == Catch::Approx(-std::sqrt(4 / 15.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 2, m) == Catch::Approx(std::sqrt(0)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, 1 / 2., 1, m) == Catch::Approx(std::sqrt(9 / 35.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 5, m) == Catch::Approx(std::sqrt(5 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 4, m) == Catch::Approx(-std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 3, m) == Catch::Approx(std::sqrt(1 / 30.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 2, m) == Catch::Approx(std::sqrt(1 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 3 / 2., 1, m) == Catch::Approx(-std::sqrt(8 / 35.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 5 / 2., 5, m) == Catch::Approx(std::sqrt(1 / 42.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 5 / 2., 4, m) == Catch::Approx(-std::sqrt(1 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 5 / 2., 3, m) == Catch::Approx(std::sqrt(1 / 3.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 5 / 2., 2, m) == Catch::Approx(-std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 5 / 2., 1, m) == Catch::Approx(std::sqrt(1 / 7.)));
+		}
+
+		SECTION("m = 0")
+		{
+			constexpr double m = 0;
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -5 / 2., 5, m) == Catch::Approx(std::sqrt(1 / 252.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -5 / 2., 4, m) == Catch::Approx(std::sqrt(1 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -5 / 2., 3, m) == Catch::Approx(std::sqrt(5 / 36.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -5 / 2., 2, m) == Catch::Approx(std::sqrt(25 / 84.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -5 / 2., 1, m) == Catch::Approx(std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, 5 / 2., j2, -5 / 2., 0, m) == Catch::Approx(std::sqrt(1 / 6.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 5, m) == Catch::Approx(std::sqrt(25 / 252.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 4, m) == Catch::Approx(std::sqrt(9 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 3, m) == Catch::Approx(std::sqrt(49 / 180.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 2, m) == Catch::Approx(std::sqrt(1 / 84.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 1, m) == Catch::Approx(-std::sqrt(9 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, 3 / 2., j2, -3 / 2., 0, m) == Catch::Approx(-std::sqrt(1 / 6.)));
+
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 5, m) == Catch::Approx(std::sqrt(25 / 63.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 4, m) == Catch::Approx(std::sqrt(1 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 3, m) == Catch::Approx(-std::sqrt(4 / 45.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 2, m) == Catch::Approx(-std::sqrt(4 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 1, m) == Catch::Approx(std::sqrt(1 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, 1 / 2., j2, -1 / 2., 0, m) == Catch::Approx(std::sqrt(1 / 6.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 5, m) == Catch::Approx(std::sqrt(25 / 63.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 4, m) == Catch::Approx(-std::sqrt(1 / 7.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 3, m) == Catch::Approx(-std::sqrt(4 / 45.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 2, m) == Catch::Approx(std::sqrt(4 / 21.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 1, m) == Catch::Approx(std::sqrt(1 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, -1 / 2., j2, 1 / 2., 0, m) == Catch::Approx(-std::sqrt(1 / 6.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 5, m) == Catch::Approx(std::sqrt(25 / 252.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 4, m) == Catch::Approx(-std::sqrt(9 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 3, m) == Catch::Approx(std::sqrt(49 / 180.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 2, m) == Catch::Approx(-std::sqrt(1 / 84.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 1, m) == Catch::Approx(-std::sqrt(9 / 70.)));
+			CHECK(ClebschGordanCoefficient(j1, -3 / 2., j2, 3 / 2., 0, m) == Catch::Approx(std::sqrt(1 / 6.)));
+
+			CHECK(ClebschGordanCoefficient(j1, -5 / 2., j2, 5 / 2., 5, m) == Catch::Approx(std::sqrt(1 / 252.)));
+			CHECK(ClebschGordanCoefficient(j1, -5 / 2., j2, 5 / 2., 4, m) == Catch::Approx(-std::sqrt(1 / 28.)));
+			CHECK(ClebschGordanCoefficient(j1, -5 / 2., j2, 5 / 2., 3, m) == Catch::Approx(std::sqrt(5 / 36.)));
+			CHECK(ClebschGordanCoefficient(j1, -5 / 2., j2, 5 / 2., 2, m) == Catch::Approx(-std::sqrt(25 / 84.)));
+			CHECK(ClebschGordanCoefficient(j1, -5 / 2., j2, 5 / 2., 1, m) == Catch::Approx(std::sqrt(5 / 14.)));
+			CHECK(ClebschGordanCoefficient(j1, -5 / 2., j2, 5 / 2., 0, m) == Catch::Approx(-std::sqrt(1 / 6.)));
+		}
 	}
 }

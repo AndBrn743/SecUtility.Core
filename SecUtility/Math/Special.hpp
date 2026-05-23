@@ -5,6 +5,7 @@
 
 
 #include <SecUtility/Math/Special/Boys.hpp>
+#include <SecUtility/Math/Special/ClebschGordan.hpp>
 #include <SecUtility/Math/Special/Common.hpp>
 #include <SecUtility/Math/Special/Digamma.hpp>
 #include <SecUtility/Math/Special/ExpIntegral.hpp>
