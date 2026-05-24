@@ -1565,3 +1565,97 @@ TEST_CASE("ClebschGordanCoefficient")
 		}
 	}
 }
+
+TEST_CASE("BinomialCoefficient")
+{
+	SECTION("k > n returns 0")
+	{
+		CHECK(BinomialCoefficient(0, 1) == 0);
+		CHECK(BinomialCoefficient(3, 5) == 0);
+		CHECK(BinomialCoefficient(10, 11) == 0);
+	}
+
+	SECTION("k == 0 or k == n returns 1")
+	{
+		CHECK(BinomialCoefficient(0, 0) == 1);
+		CHECK(BinomialCoefficient(1, 0) == 1);
+		CHECK(BinomialCoefficient(1, 1) == 1);
+		CHECK(BinomialCoefficient(5, 0) == 1);
+		CHECK(BinomialCoefficient(5, 5) == 1);
+		CHECK(BinomialCoefficient(20, 0) == 1);
+		CHECK(BinomialCoefficient(20, 20) == 1);
+	}
+
+	SECTION("Known values")
+	{
+		CHECK(BinomialCoefficient(1, 1) == 1);
+
+		CHECK(BinomialCoefficient(2, 1) == 2);
+
+		CHECK(BinomialCoefficient(3, 1) == 3);
+		CHECK(BinomialCoefficient(3, 2) == 3);
+
+		CHECK(BinomialCoefficient(4, 1) == 4);
+		CHECK(BinomialCoefficient(4, 2) == 6);
+		CHECK(BinomialCoefficient(4, 3) == 4);
+
+		CHECK(BinomialCoefficient(5, 1) == 5);
+		CHECK(BinomialCoefficient(5, 2) == 10);
+		CHECK(BinomialCoefficient(5, 3) == 10);
+		CHECK(BinomialCoefficient(5, 4) == 5);
+
+		CHECK(BinomialCoefficient(6, 1) == 6);
+		CHECK(BinomialCoefficient(6, 2) == 15);
+		CHECK(BinomialCoefficient(6, 3) == 20);
+		CHECK(BinomialCoefficient(6, 4) == 15);
+		CHECK(BinomialCoefficient(6, 5) == 6);
+
+		CHECK(BinomialCoefficient(10, 3) == 120);
+		CHECK(BinomialCoefficient(10, 5) == 252);
+		CHECK(BinomialCoefficient(10, 7) == 120);
+
+		CHECK(BinomialCoefficient(12, 4) == 495);
+		CHECK(BinomialCoefficient(12, 6) == 924);
+
+		CHECK(BinomialCoefficient(15, 7) == 6435);
+
+		CHECK(BinomialCoefficient(20, 10) == 184756);
+
+		CHECK(BinomialCoefficient(30, 15) == 155117520);
+	}
+
+	SECTION("Symmetry: C(n,k) == C(n, n-k)")
+	{
+		for (int n = 0; n <= 20; ++n)
+		{
+			for (int k = 0; k <= n; ++k)
+			{
+				CHECK(BinomialCoefficient(n, k) == BinomialCoefficient(n, n - k));
+			}
+		}
+	}
+
+	SECTION("Negative k returns 1 (current behavior)")
+	{
+		CHECK(BinomialCoefficient(5, -1) == 1);
+		CHECK(BinomialCoefficient(10, -5) == 1);
+	}
+
+	SECTION("Different integer types")
+	{
+		CHECK(BinomialCoefficient(10, 5) == 252);
+		CHECK(BinomialCoefficient(10L, 5L) == 252L);
+		CHECK(BinomialCoefficient(10LL, 5LL) == 252LL);
+		CHECK(BinomialCoefficient(10U, 5U) == 252U);
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		static_assert(BinomialCoefficient(0, 0) == 1);
+		static_assert(BinomialCoefficient(5, 0) == 1);
+		static_assert(BinomialCoefficient(5, 5) == 1);
+		static_assert(BinomialCoefficient(5, 2) == 10);
+		static_assert(BinomialCoefficient(10, 3) == 120);
+		static_assert(BinomialCoefficient(3, 5) == 0);
+	}
+}
