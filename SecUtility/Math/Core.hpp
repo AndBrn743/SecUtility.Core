@@ -6,7 +6,7 @@
 #include <SecUtility/Macro/ConstevalIf.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Math/Constant.hpp>
-#include <assert>
+#include <cassert>
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 #include <gcem.hpp>
