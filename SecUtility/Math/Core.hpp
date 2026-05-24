@@ -266,7 +266,16 @@ namespace SecUtility::Math
 	}
 
 	template <typename Scalar>
-	co
+	constexpr SEC_FORCE_INLINE Scalar Square(const Scalar x) noexcept
+	{
+		return x * x;
+	}
+
+	template <typename Scalar>
+	constexpr SEC_FORCE_INLINE Scalar Cube(const Scalar x) noexcept
+	{
+		return x * x * x;
+	}
 
 	template <typename Scalar>
 	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto Norm(const Scalar& scalar) noexcept(
