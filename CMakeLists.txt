@@ -150,8 +150,17 @@ target_link_libraries(SecUtility.Core INTERFACE gcem::gcem)
 
 target_compile_definitions(SecUtility.Core INTERFACE __STDCPP_WANT_MATH_SPEC_FUNCS__)
 
-enable_testing()
-add_subdirectory(tests)
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    set(_secutility_core_default_test ON)
+else ()
+    set(_secutility_core_default_test OFF)
+endif ()
+option(SECUTILITY_CORE_ENABLE_TEST "Build SecUtility.Core tests" ${_secutility_core_default_test})
+
+if (SECUTILITY_CORE_ENABLE_TEST)
+    enable_testing()
+    add_subdirectory(tests)
+endif ()
 
 #-----------------------------------------------------------------------------------
 
