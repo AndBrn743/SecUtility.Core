@@ -369,3 +369,9 @@ namespace SecUtility::Diagnostic::Stopwatch
 		std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTimestamp;
 	};
 }  // namespace SecUtility::Diagnostic::Stopwatch
+
+namespace SecUtility
+{
+	using Stopwatch = Diagnostic::Stopwatch::Stopwatch;
+	using CpuStopwatch = Diagnostic::Stopwatch::CpuStopwatch;
+}
