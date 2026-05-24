@@ -226,6 +226,19 @@ namespace SecUtility::Diagnostic::Stopwatch
 
 
 		/// <summary>
+		/// Returns formatted the elapsed time in given time unit and precision.
+		/// </summary>
+		template <TimeUnit Unit, int Precision>
+		std::string Elapsed() const
+		{
+			static_assert(Precision >= 0);
+			std::ostringstream ss;
+			ss << std::fixed << std::setprecision(Precision) << Elapsed<Unit>() << ' ' << ToCStringSymbol(Unit);
+			return ss.str();
+		}
+
+
+		/// <summary>
 		/// Returns the elapsed time in given ticks.
 		/// </summary>
 		Int64 ElapsedTicks() const noexcept
