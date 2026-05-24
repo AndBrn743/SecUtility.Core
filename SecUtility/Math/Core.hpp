@@ -266,6 +266,9 @@ namespace SecUtility::Math
 	}
 
 	template <typename Scalar>
+	co
+
+	template <typename Scalar>
 	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto Norm(const Scalar& scalar) noexcept(
 	        noexcept(Sqrt(SquaredNorm(scalar))))
 	        -> std::enable_if_t<!std::is_arithmetic_v<std::decay_t<Scalar>>, decltype(Sqrt(SquaredNorm(scalar)))>
