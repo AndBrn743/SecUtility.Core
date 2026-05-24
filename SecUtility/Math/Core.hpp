@@ -6,6 +6,7 @@
 #include <SecUtility/Macro/ConstevalIf.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Math/Constant.hpp>
+#include <assert>
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 #include <gcem.hpp>
@@ -577,7 +578,7 @@ namespace SecUtility::Math
 		static_assert(sizeof...(Scalars) > 0);
 		using Scalar = std::decay_t<decltype((scalars + ...))>;
 		using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
-		assert(((scalars > 0) && ...) && "not validation for negatives and zeros");
+		assert(((scalars > 0) && ...) && "invalid for negatives and zeros");
 
 		return static_cast<Output>(sizeof...(Scalars)) / ((1 / static_cast<Output>(scalars)) + ...);
 	}
