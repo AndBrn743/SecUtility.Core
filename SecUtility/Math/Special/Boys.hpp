@@ -138,7 +138,15 @@ namespace SecUtility::Math
 		SEC_MATH_CONDITIONAL_CONSTEXPR auto CreateBoysTable() noexcept
 		{
 			using Scalar = std::conditional_t<std::is_floating_point_v<decltype(MaxArg)>, decltype(MaxArg), double>;
-			constexpr auto Count = Ceil<std::size_t>(MaxArg * GridDensity);
+			constexpr auto Count =
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+			        Ceil<std::size_t>(MaxArg * GridDensity);
+#else
+			        static_cast<decltype(MaxArg * GridDensity)>(static_cast<std::size_t>(MaxArg * GridDensity))
+			                        >= MaxArg * GridDensity
+			                ? static_cast<std::size_t>(MaxArg * GridDensity)
+			                : static_cast<std::size_t>(MaxArg * GridDensity) + 1;
+#endif
 			std::array<std::array<Scalar, MaxOrder + 1>, Count> fs{};
 
 			if constexpr (Count == 0)
