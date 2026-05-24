@@ -4,6 +4,8 @@
 #pragma once
 
 #include <SecUtility/Collection/SubscriptBasedIterator.hpp>
+#include <SecUtility/Meta/TypeTrait.hpp>
+#include <SecUtility/Raw/Int.hpp>
 #include <utility>
 #include <vector>
 
@@ -125,12 +127,12 @@ namespace SecUtility
 			return AsDerived().Period();
 		}
 
-		decltype(auto) operator[](const std::int64_t index) const noexcept(noexcept(AsDerived()[index]))
+		decltype(auto) operator[](const Int64 index) const noexcept(noexcept(std::declval<Derived>()[index]))
 		{
 			return AsDerived()[index];
 		}
 
-		using Iterator = SubscriptBasedIterator<Derived, std::int64_t>;
+		using Iterator = SubscriptBasedIterator<Derived, Int64>;
 
 		Iterator begin()
 		{
@@ -171,11 +173,11 @@ namespace SecUtility
 		using Item = std::decay_t<decltype(*std::declval<Range>().begin())>;
 		Range m_Range;
 		Item m_InvalidItemMarker;
-		std::int64_t m_RangeSize;
-		std::int64_t m_EffectiveAndActiveRangeSize;
-		std::int64_t m_PairsPerCycle;
-		std::int64_t m_Period;
-		std::int64_t m_RobinIndex;
+		Int64 m_RangeSize;
+		Int64 m_EffectiveAndActiveRangeSize;
+		Int64 m_PairsPerCycle;
+		Int64 m_Period;
+		Int64 m_RobinIndex;
 
 	public:
 		RoundRobinOrdering(Range range, const Item invalidItemMarker)
@@ -193,17 +195,17 @@ namespace SecUtility
 			m_RobinIndex = (m_RobinIndex + 1) % Period();
 		}
 
-		/* CRTP OVERRIDE */ std::int64_t PairsPerCycle() const noexcept
+		/* CRTP OVERRIDE */ Int64 PairsPerCycle() const noexcept
 		{
 			return m_PairsPerCycle;
 		}
 
-		/* CRTP OVERRIDE */ std::int64_t Period() const noexcept
+		/* CRTP OVERRIDE */ Int64 Period() const noexcept
 		{
 			return m_Period;
 		}
 
-		/* CRTP OVERRIDE */ std::pair<Item, Item> operator[](const std::int64_t index) const
+		/* CRTP OVERRIDE */ std::pair<Item, Item> operator[](const Int64 index) const
 		{
 			const auto i = index == 0 ? 0
 			                          : (index > m_RobinIndex ? index - m_RobinIndex
@@ -224,7 +226,7 @@ namespace SecUtility
 
 
 	private:
-		auto ItemAt(const std::int64_t index) const
+		auto ItemAt(const Int64 index) const
 		{
 			if (index < m_RangeSize)
 			{
@@ -246,11 +248,11 @@ namespace SecUtility
 		using Item = std::decay_t<decltype(*std::declval<Range>().begin())>;
 		Range m_Range0;
 		Range m_Range1;
-		std::int64_t m_RangeSize0;
-		std::int64_t m_RangeSize1;
-		std::int64_t m_PairsPerCycle;
-		std::int64_t m_Period;
-		std::int64_t m_RobinIndex;
+		Int64 m_RangeSize0;
+		Int64 m_RangeSize1;
+		Int64 m_PairsPerCycle;
+		Int64 m_Period;
+		Int64 m_RobinIndex;
 
 	public:
 		BiPartiteRoundRobinOrdering(Range range0, Range range1)
@@ -268,17 +270,17 @@ namespace SecUtility
 			m_RobinIndex = (m_RobinIndex + 1) % Period();
 		}
 
-		/* CRTP OVERRIDE */ std::int64_t PairsPerCycle() const noexcept
+		/* CRTP OVERRIDE */ Int64 PairsPerCycle() const noexcept
 		{
 			return m_PairsPerCycle;
 		}
 
-		/* CRTP OVERRIDE */ std::int64_t Period() const noexcept
+		/* CRTP OVERRIDE */ Int64 Period() const noexcept
 		{
 			return m_Period;
 		}
 
-		/* CRTP OVERRIDE */ std::pair<Item, Item> operator[](const std::int64_t index) const
+		/* CRTP OVERRIDE */ std::pair<Item, Item> operator[](const Int64 index) const
 		{
 			if (m_RangeSize0 <= m_RangeSize1)
 			{
