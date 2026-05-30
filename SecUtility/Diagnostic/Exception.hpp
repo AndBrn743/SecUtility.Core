@@ -41,7 +41,7 @@ namespace SecUtility
 	class Exception : public std::exception
 	{
 	public:
-		Exception() noexcept = default;
+		Exception() noexcept(noexcept(std::exception{}) && noexcept(std::runtime_error{""})) = default;
 
 		template <typename... Messages>
 		explicit Exception(Messages&&... messages) noexcept
