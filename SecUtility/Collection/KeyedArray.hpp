@@ -130,6 +130,11 @@ namespace SecUtility
 				[&]<std::size_t... I>(std::index_sequence<I...>)
 				{ (f(KeySet[I], m_Data[I]), ...); }(std::make_index_sequence<KSize>{});
 			}
+			else if constexpr (std::invocable<Fn, const KeyType&, Value&, std::size_t>)
+			{
+				[&]<std::size_t... I>(std::index_sequence<I...>)
+				{ (f(KeySet[I], m_Data[I], I), ...); }(std::make_index_sequence<KSize>{});
+			}
 			else
 			{
 				auto it = m_Data.begin();
@@ -144,6 +149,11 @@ namespace SecUtility
 			{
 				[&]<std::size_t... I>(std::index_sequence<I...>)
 				{ (f(KeySet[I], m_Data[I]), ...); }(std::make_index_sequence<KSize>{});
+			}
+			else if constexpr (std::invocable<Fn, const KeyType&, const Value&, std::size_t>)
+			{
+				[&]<std::size_t... I>(std::index_sequence<I...>)
+				{ (f(KeySet[I], m_Data[I], I), ...); }(std::make_index_sequence<KSize>{});
 			}
 			else
 			{
