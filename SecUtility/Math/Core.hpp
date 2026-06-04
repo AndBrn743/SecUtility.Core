@@ -580,7 +580,14 @@ namespace SecUtility::Math
 		using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
 		assert(((scalars > 0) && ...) && "invalid for negatives and zeros");
 
-		return static_cast<Output>(sizeof...(Scalars)) / ((1 / static_cast<Output>(scalars)) + ...);
+		if constexpr (sizeof...(Scalars) == 1)
+		{
+			return (scalars, ...);
+		}
+		else
+		{
+			return static_cast<Output>(sizeof...(Scalars)) / ((1 / static_cast<Output>(scalars)) + ...);
+		}
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
