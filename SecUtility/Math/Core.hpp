@@ -590,6 +590,24 @@ namespace SecUtility::Math
 		}
 	}
 
+	template <typename... Scalars>
+	constexpr auto InverseSumOfReciprocals(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
+	{
+		static_assert(sizeof...(Scalars) > 0);
+		using Scalar = std::decay_t<decltype((scalars + ...))>;
+		using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
+		assert(((scalars > 0) && ...) && "invalid for negatives and zeros");
+
+		if constexpr (sizeof...(Scalars) == 1)
+		{
+			return (scalars, ...);
+		}
+		else
+		{
+			return static_cast<Output>(1) / ((1 / static_cast<Output>(scalars)) + ...);
+		}
+	}
+
 	//----------------------------------------------------------------------------------------------------------------//
 
 	inline constexpr auto Deg2Rad = [](const auto& deg) constexpr noexcept

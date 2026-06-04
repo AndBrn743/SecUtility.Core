@@ -965,13 +965,15 @@ TEST_CASE("GeometricMean")
 	}
 }
 
-TEST_CASE("HarmonicMean")
+TEST_CASE("HarmonicMean and InverseSumOfReciprocals")
 {
 	SECTION("Basic functionality")
 	{
 		REQUIRE(HarmonicMean(1., 1) == Approx(1));
 		REQUIRE(HarmonicMean(1., 2) == Approx(2 * 2. / 3.));  // 2/(1+0.5) = 4/3
 		REQUIRE(HarmonicMean(2., 4) == Approx(2 * 8. / 6.));  // 2/(0.5+0.25) = 8/3
+
+		REQUIRE(InverseSumOfReciprocals(1., 1) == Approx(0.5));
 	}
 
 	SECTION("Speed averaging")
@@ -984,12 +986,16 @@ TEST_CASE("HarmonicMean")
 		STATIC_CHECK(std::is_same_v<decltype(HarmonicMean(1, 2, 4)), double>);
 		REQUIRE(HarmonicMean(1, 2, 4) == Approx(12. / 7.));
 		REQUIRE(HarmonicMean(2, 3, 6) == Approx(3));
+
+		REQUIRE(InverseSumOfReciprocals(2, 3, 6) == Approx(1));
 	}
 
 	SECTION("Single value")
 	{
 		REQUIRE(HarmonicMean(5) == 5);
 		REQUIRE(HarmonicMean(3.0) == Approx(3.0));
+
+		REQUIRE(InverseSumOfReciprocals(3.0) == Approx(3.0));
 	}
 
 	SECTION("Constexpr")
