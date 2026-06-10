@@ -12,6 +12,7 @@
 #include <type_traits>
 
 using SecUtility::MultidimensionalArray;
+using SecUtility::MultidimensionalHeapArray;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -677,7 +678,159 @@ TEST_CASE("MultidimensionalArray")
 }
 
 // =============================================================================
-// 10. Type template tests — behaviour consistent across value types
+// 10. MultidimensionalHeapArray — heap-specific behaviour
+// =============================================================================
+
+TEST_CASE("MultidimensionalHeapArray")
+{
+	SECTION("Iterator type is vector iterator, not raw pointer")
+	{
+		using A = MultidimensionalHeapArray<int, 3, 4>;
+		STATIC_CHECK(std::is_same_v<A::iterator, std::vector<int>::iterator>);
+		STATIC_CHECK(std::is_same_v<A::const_iterator, std::vector<int>::const_iterator>);
+	}
+
+	SECTION("Default construction zero-initialises")
+	{
+		MultidimensionalHeapArray<int, 2, 3, 4> arr;
+		REQUIRE(arr.Size() == 24u);
+		for (const auto& v : arr)
+		{
+			REQUIRE(v == 0);
+		}
+	}
+
+	SECTION("Fill construction")
+	{
+		MultidimensionalHeapArray<float, 3, 3> arr(3.14f);
+		for (const auto& v : arr)
+		{
+			REQUIRE(v == Catch::Approx(3.14f));
+		}
+	}
+
+	SECTION("Initialiser-list construction")
+	{
+		MultidimensionalHeapArray<int, 2, 3> arr{0, 1, 2, 3, 4, 5};
+		REQUIRE(arr(0, 0) == 0);
+		REQUIRE(arr(1, 2) == 5);
+	}
+
+	SECTION("Move construction transfers storage")
+	{
+		MultidimensionalHeapArray<int, 3> a{1, 2, 3};
+		auto b = std::move(a);
+		REQUIRE(b(0) == 1);
+		REQUIRE(b(2) == 3);
+		// moved-from 'a' is in valid-but-unspecified state; reassign to confirm it's usable
+		a = MultidimensionalHeapArray<int, 3>{10, 20, 30};
+		REQUIRE(a(1) == 20);
+	}
+
+	SECTION("Move assignment transfers storage")
+	{
+		MultidimensionalHeapArray<int, 2, 2> a{1, 2, 3, 4};
+		MultidimensionalHeapArray<int, 2, 2> b;
+		b = std::move(a);
+		REQUIRE(b(0, 0) == 1);
+		REQUIRE(b(1, 1) == 4);
+	}
+
+	SECTION("Large array that would overflow the stack")
+	{
+		// 100,000 ints (~400 KB) — likely a stack overflow with std::array
+		MultidimensionalHeapArray<int, 100, 1000> arr;
+		REQUIRE(arr.Size() == 100000u);
+		arr.Fill(42);
+		REQUIRE(arr(0, 0) == 42);
+		REQUIRE(arr(99, 999) == 42);
+	}
+
+	SECTION("data() returns pointer to heap-allocated storage")
+	{
+		MultidimensionalHeapArray<int, 3, 4> arr;
+		iota_fill(arr);
+		int* p = arr.data();
+		REQUIRE(p != nullptr);
+		REQUIRE(p[0] == 0);
+		REQUIRE(p[11] == 11);
+	}
+
+	SECTION("Fill() works via Foreach")
+	{
+		MultidimensionalHeapArray<int, 3, 4> arr;
+		arr.Fill(99);
+		for (const auto& v : arr)
+		{
+			REQUIRE(v == 99);
+		}
+	}
+
+	SECTION("Foreach() mutable and const")
+	{
+		MultidimensionalHeapArray<int, 2, 3> arr{1, 2, 3, 4, 5, 6};
+		arr.Foreach([](int& v) { v *= 2; });
+		REQUIRE(arr(1, 2) == 12);
+
+		int sum = 0;
+		const auto& cref = arr;
+		cref.Foreach([&sum](const int& v) { sum += v; });
+		REQUIRE(sum == 42);
+	}
+
+	SECTION("At() bounds-checked access")
+	{
+		MultidimensionalHeapArray<int, 2, 2> arr;
+		REQUIRE_NOTHROW(arr.At(1, 1));
+		REQUIRE_THROWS_AS(arr.At(2, 0), SecUtility::ArgumentOutOfRangeException);
+		REQUIRE_THROWS_AS(arr.At(0, 2), SecUtility::ArgumentOutOfRangeException);
+	}
+
+	SECTION("Copy construction produces independent copy")
+	{
+		MultidimensionalHeapArray<int, 3> a{1, 2, 3};
+		auto b = a;
+		b(0) = 99;
+		REQUIRE(a(0) == 1);
+		REQUIRE(b(0) == 99);
+	}
+
+	SECTION("Equality operators")
+	{
+		MultidimensionalHeapArray<int, 2, 3> a{0, 1, 2, 3, 4, 5};
+		MultidimensionalHeapArray<int, 2, 3> b{0, 1, 2, 3, 4, 5};
+		MultidimensionalHeapArray<int, 2, 3> c{0, 1, 2, 3, 4, 99};
+		REQUIRE(a == b);
+		REQUIRE(a != c);
+	}
+
+	SECTION("STL algorithms work via vector iterators")
+	{
+		MultidimensionalHeapArray<int, 2, 3> arr{5, 3, 1, 4, 2, 0};
+		std::sort(arr.begin(), arr.end());
+		for (int i = 0; i < 6; ++i)
+		{
+			REQUIRE(arr.Flat(static_cast<std::size_t>(i)) == i);
+		}
+
+		int sum = std::accumulate(arr.begin(), arr.end(), 0);
+		REQUIRE(sum == 15);
+	}
+
+	SECTION("Non-trivial types (std::string)")
+	{
+		MultidimensionalHeapArray<std::string, 2, 2> arr;
+		arr(0, 0) = "hello";
+		arr(1, 1) = "world";
+		REQUIRE(arr(0, 0) == "hello");
+		REQUIRE(arr(1, 1) == "world");
+		REQUIRE(arr(0, 1).empty());
+	}
+}
+
+
+// =============================================================================
+// 11. Type template tests — behaviour consistent across value types
 // =============================================================================
 
 TEMPLATE_TEST_CASE("MultidimensionalArray: Default construction zero/value initialises",

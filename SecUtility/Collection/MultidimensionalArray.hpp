@@ -74,7 +74,7 @@ namespace SecUtility::Detail::MultidimensionalArray
 #endif
 		        type New()
 		{
-			return {FlatSize};
+			return type(FlatSize);
 		}
 	};
 
