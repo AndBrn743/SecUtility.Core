@@ -68,7 +68,11 @@ namespace SecUtility::Detail::MultidimensionalArray
 	{
 		using type = std::vector<T>;
 
-		static constexpr type New() noexcept
+		static
+#if __cplusplus >= 202002L
+		        constexpr
+#endif
+		        type New()
 		{
 			return {FlatSize};
 		}
@@ -87,8 +91,8 @@ namespace SecUtility::Detail::MultidimensionalArray
 		using pointer = T*;
 		using const_pointer = const T*;
 		using size_type = std::size_t;
-		using iterator = pointer;
-		using const_iterator = const_pointer;
+		using iterator = typename FlatStorage<T, (Dimensions * ...)>::type::iterator;
+		using const_iterator = typename FlatStorage<T, (Dimensions * ...)>::type::const_iterator;
 
 		static constexpr size_type Rank = sizeof...(Dimensions);
 		static constexpr size_type TotalSize = (Dimensions * ...);
@@ -102,7 +106,7 @@ namespace SecUtility::Detail::MultidimensionalArray
 
 		explicit constexpr BasicMultidimensionalArray(const T& fillValue)
 		{
-			m_Data.fill(fillValue);
+			Foreach([&](auto& v) { v = fillValue; });
 		}
 
 		// From flat initializer list  {1, 2, 3, 4, ...}
@@ -138,11 +142,6 @@ namespace SecUtility::Detail::MultidimensionalArray
 		constexpr const_reference operator()(Indices... indices) const
 		{
 			static_assert(sizeof...(Indices) == Rank, "Wrong number of indices");
-			if (((static_cast<std::size_t>(indices) >= Dimensions) || ...))
-			{
-				throw ArgumentOutOfRangeException("MultidimensionalArray: index out of range");
-			}
-
 			return m_Data[ComputeFlatIndex(indices...)];
 		}
 
@@ -155,14 +154,19 @@ namespace SecUtility::Detail::MultidimensionalArray
 				throw ArgumentOutOfRangeException("MultidimensionalArray: index out of range");
 			}
 
-			return m_Data.at(ComputeFlatIndex(indices...));
+			return m_Data[ComputeFlatIndex(indices...)];
 		}
 
 		template <typename... Indices>
 		const_reference At(Indices... indices) const
 		{
 			static_assert(sizeof...(Indices) == Rank, "Wrong number of indices");
-			return m_Data.at(ComputeFlatIndex(indices...));
+			if (((static_cast<std::size_t>(indices) >= Dimensions) || ...))
+			{
+				throw ArgumentOutOfRangeException("MultidimensionalArray: index out of range");
+			}
+
+			return m_Data[ComputeFlatIndex(indices...)];
 		}
 
 		// Raw flat access (no bounds check).
@@ -231,24 +235,24 @@ namespace SecUtility::Detail::MultidimensionalArray
 			return m_Data.cend();
 		}
 
-		constexpr void Fill(const T& value)
+		constexpr void Fill(const T& value) noexcept(noexcept(std::declval<reference>() = std::declval<const T&>()))
 		{
-			m_Data.fill(value);
+			Foreach([&](auto& v) { v = value; });
 		}
 
 		template <typename UnaryFunc>
-		void Foreach(UnaryFunc&& f)
+		constexpr void Foreach(UnaryFunc&& f) noexcept(noexcept(f(std::declval<T&>())))
 		{
-			for (auto& v : m_Data)
+			for (T& v : m_Data)
 			{
 				f(v);
 			}
 		}
 
 		template <typename UnaryFunc>
-		void Foreach(UnaryFunc&& f) const
+		constexpr void Foreach(UnaryFunc&& f) const noexcept(noexcept(f(std::declval<const T&>())))
 		{
-			for (const auto& v : m_Data)
+			for (const T& v : m_Data)
 			{
 				f(v);
 			}
@@ -277,7 +281,7 @@ namespace SecUtility::Detail::MultidimensionalArray
 		typename FlatStorage<T, TotalSize>::type m_Data = FlatStorage<T, TotalSize>::New();
 
 		template <typename... Indices>
-		static constexpr size_type ComputeFlatIndex(Indices... indices)
+		static constexpr size_type ComputeFlatIndex(Indices... indices) noexcept
 		{
 			const auto indexArray = MultidimensionalArray::PackIndicesIntoArray<Rank>(indices...);
 			return MultidimensionalArray::ComputeFlatIndex<Rank>(Strides, Shape, indexArray);
@@ -307,4 +311,8 @@ namespace SecUtility
 	template <typename T, std::size_t... Dimensions>
 	using MultidimensionalArray = Detail::MultidimensionalArray::
 	        BasicMultidimensionalArray<Detail::MultidimensionalArray::FlatStackStorage, T, Dimensions...>;
+
+	template <typename T, std::size_t... Dimensions>
+	using MultidimensionalHeapArray = Detail::MultidimensionalArray::
+	        BasicMultidimensionalArray<Detail::MultidimensionalArray::FlatHeapStorage, T, Dimensions...>;
 }
