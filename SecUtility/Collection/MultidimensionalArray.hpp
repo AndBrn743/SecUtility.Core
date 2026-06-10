@@ -46,7 +46,7 @@ namespace SecUtility::Detail::MultidimensionalArray
 	}
 
 	template <std::size_t N, typename... Indices>
-	constexpr std::array<std::size_t, N> PackIndicesIntoArray(Indices... idxs)
+	constexpr std::array<std::size_t, N> PackIndicesIntoArray(Indices... idxs) noexcept
 	{
 		static_assert(sizeof...(Indices) == N, "Wrong number of indices");
 		return {static_cast<std::size_t>(idxs)...};
@@ -132,14 +132,14 @@ namespace SecUtility::Detail::MultidimensionalArray
 		}
 
 		template <typename... Indices>
-		constexpr reference operator()(Indices... indices)
+		constexpr reference operator()(Indices... indices) noexcept
 		{
 			static_assert(sizeof...(Indices) == Rank, "Wrong number of indices");
 			return m_Data[ComputeFlatIndex(indices...)];
 		}
 
 		template <typename... Indices>
-		constexpr const_reference operator()(Indices... indices) const
+		constexpr const_reference operator()(Indices... indices) const noexcept
 		{
 			static_assert(sizeof...(Indices) == Rank, "Wrong number of indices");
 			return m_Data[ComputeFlatIndex(indices...)];
