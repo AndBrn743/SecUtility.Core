@@ -13,60 +13,69 @@
 #include <vector>
 
 
-namespace SecUtility
+namespace SecUtility::Detail::MultidimensionalArray
 {
-	namespace Detail::MultidimensionalArray
+	// Builds a constexpr array of per-dimension strides (row-major).
+	// For shape {D0, D1, D2}: strides = {D1*D2, D2, 1}
+	template <std::size_t... Dims>
+	constexpr std::array<std::size_t, sizeof...(Dims)> MakeStrides() noexcept
 	{
-		// Builds a constexpr array of per-dimension strides (row-major).
-		// For shape {D0, D1, D2}: strides = {D1*D2, D2, 1}
-		template <std::size_t... Dims>
-		constexpr std::array<std::size_t, sizeof...(Dims)> MakeStrides() noexcept
+		constexpr std::size_t N = sizeof...(Dims);
+		std::array<std::size_t, N> dims = {Dims...};
+		std::array<std::size_t, N> strides{};
+		strides[N - 1] = 1;
+		for (std::size_t i = N - 1; i-- > 0;)
 		{
-			constexpr std::size_t N = sizeof...(Dims);
-			std::array<std::size_t, N> dims = {Dims...};
-			std::array<std::size_t, N> strides{};
-			strides[N - 1] = 1;
-			for (std::size_t i = N - 1; i-- > 0;)
-			{
-				strides[i] = strides[i + 1] * dims[i + 1];
-			}
-			return strides;
+			strides[i] = strides[i + 1] * dims[i + 1];
 		}
-
-		template <std::size_t N>
-		constexpr std::size_t ComputeFlatIndex(const std::array<std::size_t, N>& strides,
-		                                       const std::array<std::size_t, N>& shape,
-		                                       const std::array<std::size_t, N>& indices) noexcept
-		{
-			std::size_t flat = 0;
-			for (std::size_t i = 0; i < N; ++i)
-			{
-				assert(indices[i] < shape[i] && "MultidimensionalArray: index out of range");
-				flat += indices[i] * strides[i];
-			}
-			return flat;
-		}
-
-		template <std::size_t N, typename... Indices>
-		constexpr std::array<std::size_t, N> PackIndicesIntoArray(Indices... idxs)
-		{
-			static_assert(sizeof...(Indices) == N, "Wrong number of indices");
-			return {static_cast<std::size_t>(idxs)...};
-		}
+		return strides;
 	}
 
+	template <std::size_t N>
+	constexpr std::size_t ComputeFlatIndex(const std::array<std::size_t, N>& strides,
+	                                       const std::array<std::size_t, N>& shape,
+	                                       const std::array<std::size_t, N>& indices) noexcept
+	{
+		std::size_t flat = 0;
+		for (std::size_t i = 0; i < N; ++i)
+		{
+			assert(indices[i] < shape[i] && "MultidimensionalArray: index out of range");
+			flat += indices[i] * strides[i];
+		}
+		return flat;
+	}
 
-	// -----------------------------------------------------------------------------
-	// MultidimensionalArray<T, Dimensions...>
-	//
-	// A fully stack-allocated, row-major N-dimensional array.
-	//
-	// Example:
-	//   MultidimensionalArray<float, 3, 4, 5> arr; // 3 * 4 * 5 array of floats
-	//   arr(1, 2, 3) = 42.f;
-	// -----------------------------------------------------------------------------
-	template <typename T, std::size_t... Dimensions>
-	class MultidimensionalArray
+	template <std::size_t N, typename... Indices>
+	constexpr std::array<std::size_t, N> PackIndicesIntoArray(Indices... idxs)
+	{
+		static_assert(sizeof...(Indices) == N, "Wrong number of indices");
+		return {static_cast<std::size_t>(idxs)...};
+	}
+
+	template <typename T, std::size_t FlatSize>
+	struct FlatStackStorage
+	{
+		using type = std::array<T, FlatSize>;
+
+		static constexpr type New() noexcept
+		{
+			return {};
+		}
+	};
+
+	template <typename T, std::size_t FlatSize>
+	struct FlatHeapStorage
+	{
+		using type = std::vector<T>;
+
+		static constexpr type New() noexcept
+		{
+			return {FlatSize};
+		}
+	};
+
+	template <template <typename, std::size_t> class FlatStorage, typename T, std::size_t... Dimensions>
+	class BasicMultidimensionalArray
 	{
 		static_assert(sizeof...(Dimensions) > 0, "Must have at least one dimension");
 		static_assert(((Dimensions > 0) && ...), "All dimensions must be non-zero");
@@ -84,15 +93,14 @@ namespace SecUtility
 		static constexpr size_type Rank = sizeof...(Dimensions);
 		static constexpr size_type TotalSize = (Dimensions * ...);
 		static constexpr std::array<size_type, Rank> Shape = {Dimensions...};
-		static constexpr std::array<size_type, Rank> Strides =
-		        Detail::MultidimensionalArray::MakeStrides<Dimensions...>();
+		static constexpr std::array<size_type, Rank> Strides = MultidimensionalArray::MakeStrides<Dimensions...>();
 
-		constexpr MultidimensionalArray() : m_Data{}
+		constexpr BasicMultidimensionalArray() : m_Data{FlatStorage<T, TotalSize>::New()}
 		{
 			/* NO CODE */
 		}
 
-		explicit constexpr MultidimensionalArray(const T& fillValue)
+		explicit constexpr BasicMultidimensionalArray(const T& fillValue)
 		{
 			m_Data.fill(fillValue);
 		}
@@ -100,7 +108,7 @@ namespace SecUtility
 		// From flat initializer list  {1, 2, 3, 4, ...}
 		// Note: std::initializer_list constructors cannot be fully constexpr in C++17
 		// (std::copy is not constexpr until C++20). Use the variadic helper for constexpr.
-		MultidimensionalArray(std::initializer_list<T> il) : m_Data{}
+		BasicMultidimensionalArray(std::initializer_list<T> il) : m_Data{FlatStorage<T, TotalSize>::New()}
 		{
 			if (il.size() != TotalSize)
 			{
@@ -111,10 +119,10 @@ namespace SecUtility
 
 		template <typename... Values>
 		static constexpr std::enable_if_t<sizeof...(Values) == TotalSize && (std::is_convertible_v<Values, T> && ...),
-		                                  MultidimensionalArray>
+		                                  BasicMultidimensionalArray>
 		FromValues(Values&&... values)
 		{
-			MultidimensionalArray arr{};
+			BasicMultidimensionalArray arr{};
 			arr.m_Data = {static_cast<T>(std::forward<Values>(values))...};
 			return arr;
 		}
@@ -246,12 +254,12 @@ namespace SecUtility
 			}
 		}
 
-		constexpr bool operator==(const MultidimensionalArray& other) const noexcept
+		constexpr bool operator==(const BasicMultidimensionalArray& other) const noexcept
 		{
 			return m_Data == other.m_Data;
 		}
 
-		constexpr bool operator!=(const MultidimensionalArray& other) const noexcept
+		constexpr bool operator!=(const BasicMultidimensionalArray& other) const noexcept
 		{
 			return m_Data != other.m_Data;
 		}
@@ -266,13 +274,13 @@ namespace SecUtility
 		// }
 
 	private:
-		std::array<T, TotalSize> m_Data;
+		typename FlatStorage<T, TotalSize>::type m_Data = FlatStorage<T, TotalSize>::New();
 
 		template <typename... Indices>
 		static constexpr size_type ComputeFlatIndex(Indices... indices)
 		{
-			const auto indexArray = Detail::MultidimensionalArray::PackIndicesIntoArray<Rank>(indices...);
-			return Detail::MultidimensionalArray::ComputeFlatIndex<Rank>(Strides, Shape, indexArray);
+			const auto indexArray = MultidimensionalArray::PackIndicesIntoArray<Rank>(indices...);
+			return MultidimensionalArray::ComputeFlatIndex<Rank>(Strides, Shape, indexArray);
 		}
 
 		// // Slice helper: builds the sub-array type by removing dimension 0.
@@ -291,4 +299,12 @@ namespace SecUtility
 		// 	return sub;
 		// }
 	};
+}
+
+
+namespace SecUtility
+{
+	template <typename T, std::size_t... Dimensions>
+	using MultidimensionalArray = Detail::MultidimensionalArray::
+	        BasicMultidimensionalArray<Detail::MultidimensionalArray::FlatStackStorage, T, Dimensions...>;
 }
