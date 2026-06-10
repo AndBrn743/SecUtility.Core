@@ -6,6 +6,7 @@
 #include <SecUtility/Macro/ConstevalIf.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Math/Core.hpp>
+#include <cassert>
 #include <numeric>
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
@@ -112,7 +113,7 @@ namespace SecUtility::Math
 		{
 			return 0;
 		}
-		if (k == 0 || k == n)
+		if (k <= 0 || n <= 0 || k == n)
 		{
 			return 1;
 		}
@@ -121,13 +122,14 @@ namespace SecUtility::Math
 			k = n - k;
 		}
 
-		Integer result = 1;
-		for (Integer i = 1; i <= k; i++)
+		std::uint64_t result = 1;
+		for (std::uint64_t i = 1; i <= static_cast<std::uint64_t>(k); i++)
 		{
 			result *= n - i + 1;
 			result /= i;
 		}
-		return result;
+		assert(result <= static_cast<std::uint64_t>(std::numeric_limits<Integer>::max()));
+		return static_cast<Integer>(result);
 	}
 }
 
