@@ -2,6 +2,7 @@
 // Copyright (c) 2024-2026 Andy Brown
 
 #include <SecUtility/Text/CaseConversion.hpp>
+#include <SecUtility/Text/Split.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -186,5 +187,179 @@ TEST_CASE("Case conversion tests")
 			CHECK_THAT(original, Equals(copy));
 			CHECK_THAT(result, Equals("HELLO"));
 		}
+	}
+}
+
+TEST_CASE("String split")
+{
+	SECTION("Split on char delimiter")
+	{
+		SECTION("Basic split")
+		{
+			const auto parts = Split("a,b,c", ',');
+			REQUIRE(parts.size() == 3);
+			CHECK_THAT(parts[0], Equals("a"));
+			CHECK_THAT(parts[1], Equals("b"));
+			CHECK_THAT(parts[2], Equals("c"));
+		}
+
+		SECTION("Single element (no delimiter)")
+		{
+			const auto parts = Split("hello", ',');
+			REQUIRE(parts.size() == 1);
+			CHECK_THAT(parts[0], Equals("hello"));
+		}
+
+		SECTION("Empty string")
+		{
+			const auto parts = Split("", ',');
+			REQUIRE(parts.size() == 1);
+			CHECK_THAT(parts[0], Equals(""));
+		}
+
+		SECTION("Only delimiter")
+		{
+			const auto parts = Split(",", ',');
+			REQUIRE(parts.size() == 2);
+			CHECK_THAT(parts[0], Equals(""));
+			CHECK_THAT(parts[1], Equals(""));
+		}
+
+		SECTION("Leading delimiter")
+		{
+			const auto parts = Split(",a,b", ',');
+			REQUIRE(parts.size() == 3);
+			CHECK_THAT(parts[0], Equals(""));
+			CHECK_THAT(parts[1], Equals("a"));
+			CHECK_THAT(parts[2], Equals("b"));
+		}
+
+		SECTION("Trailing delimiter")
+		{
+			const auto parts = Split("a,b,", ',');
+			REQUIRE(parts.size() == 3);
+			CHECK_THAT(parts[0], Equals("a"));
+			CHECK_THAT(parts[1], Equals("b"));
+			CHECK_THAT(parts[2], Equals(""));
+		}
+
+		SECTION("Consecutive delimiters")
+		{
+			const auto parts = Split("a,,b", ',');
+			REQUIRE(parts.size() == 3);
+			CHECK_THAT(parts[0], Equals("a"));
+			CHECK_THAT(parts[1], Equals(""));
+			CHECK_THAT(parts[2], Equals("b"));
+		}
+
+		SECTION("Space delimiter")
+		{
+			const auto parts = Split("hello world", ' ');
+			REQUIRE(parts.size() == 2);
+			CHECK_THAT(parts[0], Equals("hello"));
+			CHECK_THAT(parts[1], Equals("world"));
+		}
+	}
+
+	SECTION("Split with predicate")
+	{
+		SECTION("Whitespace predicate")
+		{
+			const auto parts = Split("a b\tc\nd", [](const char c) { return c == ' ' || c == '\t' || c == '\n'; });
+			REQUIRE(parts.size() == 4);
+			CHECK_THAT(parts[0], Equals("a"));
+			CHECK_THAT(parts[1], Equals("b"));
+			CHECK_THAT(parts[2], Equals("c"));
+			CHECK_THAT(parts[3], Equals("d"));
+		}
+
+		SECTION("Predicate that matches nothing")
+		{
+			const auto parts = Split("abc", [](const char) { return false; });
+			REQUIRE(parts.size() == 1);
+			CHECK_THAT(parts[0], Equals("abc"));
+		}
+
+		SECTION("Predicate that matches everything")
+		{
+			const auto parts = Split("abc", [](const char) { return true; });
+			REQUIRE(parts.size() == 4);
+			CHECK_THAT(parts[0], Equals(""));
+			CHECK_THAT(parts[1], Equals(""));
+			CHECK_THAT(parts[2], Equals(""));
+			CHECK_THAT(parts[3], Equals(""));
+		}
+	}
+
+	SECTION("Split with string_view parser")
+	{
+		const auto parts = Split("a,b,c", ',', Parser<std::string_view>{});
+		REQUIRE(parts.size() == 3);
+		CHECK(parts[0] == "a");
+		CHECK(parts[1] == "b");
+		CHECK(parts[2] == "c");
+	}
+
+	SECTION("Split with integer parser")
+	{
+		SECTION("Parse integers")
+		{
+			const auto parts = Split("1,2,3", ',', Parser<Int32>{});
+			REQUIRE(parts.size() == 3);
+			CHECK(parts[0] == 1);
+			CHECK(parts[1] == 2);
+			CHECK(parts[2] == 3);
+		}
+
+		SECTION("Parse negative integers")
+		{
+			const auto parts = Split("-10,0,10", ',', Parser<Int32>{});
+			REQUIRE(parts.size() == 3);
+			CHECK(parts[0] == -10);
+			CHECK(parts[1] == 0);
+			CHECK(parts[2] == 10);
+		}
+
+		SECTION("Invalid integer throws InvalidArgumentException")
+		{
+			CHECK_THROWS_AS(Split("1,abc,3", ',', Parser<Int32>{}), InvalidArgumentException);
+		}
+
+		SECTION("Partial parse failure throws")
+		{
+			CHECK_THROWS_AS(Split("123abc", ',', Parser<Int32>{}), InvalidArgumentException);
+		}
+
+		SECTION("Empty token throws for integer parse")
+		{
+			CHECK_THROWS_AS(Split("1,,3", ',', Parser<Int32>{}), InvalidArgumentException);
+		}
+	}
+
+	SECTION("Split with floating-point parser")
+	{
+		SECTION("Parse doubles")
+		{
+			const auto parts = Split("1.5,2.5,3.5", ',', Parser<double>{});
+			REQUIRE(parts.size() == 3);
+			CHECK(parts[0] == 1.5);
+			CHECK(parts[1] == 2.5);
+			CHECK(parts[2] == 3.5);
+		}
+
+		SECTION("Invalid double throws InvalidArgumentException")
+		{
+			CHECK_THROWS_AS(Split("1.0,not_a_number", ',', Parser<double>{}), InvalidArgumentException);
+		}
+	}
+
+	SECTION("Split preserves original string_view lifetime")
+	{
+		const std::string original = "x,y,z";
+		const auto parts = Split(original, ',', Parser<std::string_view>{});
+		REQUIRE(parts.size() == 3);
+		CHECK(parts[0] == "x");
+		CHECK(parts[1] == "y");
+		CHECK(parts[2] == "z");
 	}
 }
