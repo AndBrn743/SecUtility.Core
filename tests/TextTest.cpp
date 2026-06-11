@@ -391,11 +391,83 @@ TEST_CASE("String split")
 			CHECK(parts[3] == "z");
 		}
 		{
-			const auto parts = Split<SplitOptions::Trim | SplitOptions::SkipEmpty>(original, ',', Parser<std::string_view>{});
+			const auto parts =
+			        Split<SplitOptions::Trim | SplitOptions::SkipEmpty>(original, ',', Parser<std::string_view>{});
 			REQUIRE(parts.size() == 3);
 			CHECK(parts[0] == "x");
 			CHECK(parts[1] == "y");
 			CHECK(parts[2] == "z");
 		}
+	}
+
+	SECTION("Split respects quoted delimiters")
+	{
+		auto result = Split<SplitOptions::EnableQuotes>(R"(a,"b,c",d)", ',');
+
+		REQUIRE(result.size() == 3);
+		REQUIRE(result[0] == "a");
+		REQUIRE(result[1] == "\"b,c\"");
+		REQUIRE(result[2] == "d");
+	}
+
+	// -------------------------
+	// empty quoted token
+	// -------------------------
+	SECTION("Split preserves empty quoted token")
+	{
+		auto result = Split<SplitOptions::EnableQuotes | SplitOptions::SkipEmpty>(R"(a,"",b)", ',');
+
+		REQUIRE(result.size() == 3);
+		REQUIRE(result[0] == "a");
+		REQUIRE(result[1] == R"("")");
+		REQUIRE(result[2] == "b");
+	}
+
+	// -------------------------
+	// escape sequences inside quotes
+	// -------------------------
+	SECTION("Split handles escaped quotes inside quoted strings")
+	{
+		auto result = Split<SplitOptions::EnableQuotes>(R"(a,"b\"c",d)", ',');
+
+		REQUIRE(result.size() == 3);
+		REQUIRE(result[1] == R"("b\"c")");
+	}
+
+	// -------------------------
+	// backslash literal inside quotes
+	// -------------------------
+	SECTION("Split handles escaped backslash inside quotes")
+	{
+		auto result = Split<SplitOptions::EnableQuotes>(R"(a,"b,\\,c",d)", ',');
+
+		REQUIRE(result.size() == 3);
+		REQUIRE(result[1] == R"("b,\\,c")");
+	}
+
+	// -------------------------
+	// unclosed quote throws
+	// -------------------------
+	SECTION("Split throws on unterminated quote")
+	{
+		{
+			REQUIRE_THROWS_AS(Split<SplitOptions::EnableQuotes>(R"(a,"b,c)", ','), std::runtime_error);
+		}
+		{
+			REQUIRE_NOTHROW(Split(R"(a,"b,c)", ','));
+		}
+	}
+
+	// -------------------------
+	// whitespace outside quotes is trimmed only if enabled
+	// -------------------------
+	SECTION("Trim does not affect quoted content")
+	{
+		auto result = Split<SplitOptions::EnableQuotes | SplitOptions::Trim>(R"(  a ,  "  b, c  " , d  )", ',');
+
+		REQUIRE(result.size() == 3);
+		REQUIRE(result[0] == "a");
+		REQUIRE(result[1] == R"("  b, c  ")");
+		REQUIRE(result[2] == "d");
 	}
 }
