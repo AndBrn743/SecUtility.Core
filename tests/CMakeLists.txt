@@ -61,6 +61,7 @@ function(add_secutility_test test_name source_file)
 endfunction()
 
 # Utility tests
+add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(CachedFunctionTest CachedFunctionTest.cpp)
 add_secutility_test(RandomTest RandomTest.cpp)
 add_secutility_test(RoundRobinOrderingGeneratorTest RoundRobinOrderingGeneratorTest.cpp)
