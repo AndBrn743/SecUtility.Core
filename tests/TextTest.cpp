@@ -252,6 +252,14 @@ TEST_CASE("String split")
 			CHECK_THAT(parts[2], Equals("b"));
 		}
 
+		SECTION("Empties can be removed with SplitOptions::SkipEmpty")
+		{
+			const auto parts = Split<SplitOptions::SkipEmpty>("a,,b", ',');
+			REQUIRE(parts.size() == 2);
+			CHECK_THAT(parts[0], Equals("a"));
+			CHECK_THAT(parts[1], Equals("b"));
+		}
+
 		SECTION("Space delimiter")
 		{
 			const auto parts = Split("hello world", ' ');
@@ -361,5 +369,33 @@ TEST_CASE("String split")
 		CHECK(parts[0] == "x");
 		CHECK(parts[1] == "y");
 		CHECK(parts[2] == "z");
+	}
+
+	SECTION("SplitOptions::Trim works")
+	{
+		const std::string original = " x, y ,    ,z ";
+		{
+			const auto parts = Split(original, ',', Parser<std::string_view>{});
+			REQUIRE(parts.size() == 4);
+			CHECK(parts[0] == " x");
+			CHECK(parts[1] == " y ");
+			CHECK(parts[2] == "    ");
+			CHECK(parts[3] == "z ");
+		}
+		{
+			const auto parts = Split<SplitOptions::Trim>(original, ',', Parser<std::string_view>{});
+			REQUIRE(parts.size() == 4);
+			CHECK(parts[0] == "x");
+			CHECK(parts[1] == "y");
+			CHECK(parts[2] == "");
+			CHECK(parts[3] == "z");
+		}
+		{
+			const auto parts = Split<SplitOptions::Trim | SplitOptions::SkipEmpty>(original, ',', Parser<std::string_view>{});
+			REQUIRE(parts.size() == 3);
+			CHECK(parts[0] == "x");
+			CHECK(parts[1] == "y");
+			CHECK(parts[2] == "z");
+		}
 	}
 }

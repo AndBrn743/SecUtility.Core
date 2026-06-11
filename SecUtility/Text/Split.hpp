@@ -5,6 +5,7 @@
 
 #include <SecUtility/Diagnostic/Exception.hpp>
 #include <SecUtility/Diagnostic/TypeName.hpp>
+#include <SecUtility/Misc/Bitflag.hpp>
 #include <SecUtility/Raw/Int.hpp>
 #include <charconv>
 #include <string>
@@ -76,10 +77,41 @@ namespace SecUtility
 
 #undef SEC_POPULATE_ARITHMETIC_PARSER
 
-	template <typename DelimiterPredicate, typename TParser = Parser<std::string>>
+	enum class SplitOptions
+	{
+		None = 0,
+		SkipEmpty = 1 << 1,
+		Trim = 1 << 2
+	};
+
+	template <>
+	struct is_bitmask<SplitOptions> : std::true_type
+	{
+		/* NO CODE */
+	};
+
+	template <SplitOptions Options = {}, typename DelimiterPredicate, typename TParser = Parser<std::string>>
 	auto Split(const std::string_view text, DelimiterPredicate isDelimiter, TParser parser = {})
 	{
 		std::vector<std::decay_t<decltype(parser(std::declval<std::string_view>()))>> result;
+
+		const auto extractSubstr = [&text](std::size_t begin, std::size_t end)
+		{
+			if constexpr (static_cast<bool>(Options & SplitOptions::Trim))
+			{
+				while (begin < end && std::isspace(text[begin]))
+				{
+					++begin;
+				}
+
+				while (end > begin && std::isspace(text[end - 1]))
+				{
+					--end;
+				}
+			}
+
+			return text.substr(begin, end - begin);
+		};
 
 		std::size_t tokenBegin = 0;
 
@@ -90,19 +122,27 @@ namespace SecUtility
 				continue;
 			}
 
-			result.push_back(parser(text.substr(tokenBegin, i - tokenBegin)));
+			if (const auto substr = extractSubstr(tokenBegin, i);
+			    !(static_cast<bool>(Options & SplitOptions::SkipEmpty) && substr.empty()))
+			{
+				result.push_back(parser(substr));
+			}
 
 			tokenBegin = i + 1;
 		}
 
-		result.push_back(parser(text.substr(tokenBegin)));
+		if (const auto substr = extractSubstr(tokenBegin, text.size());
+		    !(static_cast<bool>(Options & SplitOptions::SkipEmpty) && substr.empty()))
+		{
+			result.push_back(parser(substr));
+		}
 
 		return result;
 	}
 
-	template <typename TParser = Parser<std::string>>
+	template <SplitOptions Options = {}, typename TParser = Parser<std::string>>
 	auto Split(std::string_view text, char delimiter, TParser parser = {})
 	{
-		return Split(text, [delimiter](const char c) { return c == delimiter; }, parser);
+		return Split<Options>(text, [delimiter](const char c) { return c == delimiter; }, parser);
 	}
 }
