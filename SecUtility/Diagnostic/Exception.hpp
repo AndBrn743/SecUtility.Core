@@ -3,10 +3,10 @@
 
 #pragma once
 
+#include <cstring>
 #include <exception>
 #include <stdexcept>
 #include <string>
-#include <cstring>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -43,7 +43,8 @@ namespace SecUtility
 	public:
 		Exception() noexcept(noexcept(std::exception{}) && noexcept(std::runtime_error{""})) = default;
 
-		template <typename... Messages>
+		template <typename... Messages,
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
 		explicit Exception(Messages&&... messages) noexcept
 		{
 			BuildMessage(std::forward<Messages>(messages)...);
@@ -98,7 +99,8 @@ namespace SecUtility
 			/* NO CODE */
 		}
 
-		template <typename... Messages>
+		template <typename... Messages,
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
 		explicit Exception(MessageHeaderSuppressor, Messages&&... messages) noexcept
 		    : Exception(std::forward<Messages>(messages)...)
 		{
@@ -107,7 +109,8 @@ namespace SecUtility
 
 
 	private:
-		template <typename... Messages>
+		template <typename... Messages,
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
 		void BuildMessage(Messages&&... messages) noexcept
 		{
 			if (std::uncaught_exceptions() > 0)
@@ -196,7 +199,8 @@ namespace SecUtility
 			/* NO CODE */                                                                                              \
 		}                                                                                                              \
                                                                                                                        \
-		template <typename... Messages>                                                                                \
+		template <typename... Messages,                                                                                \
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>         \
 		explicit DERIVED_EXCEPTION(Messages&&... messages) noexcept                                                    \
 		    : Base(Exception::MessageHeaderSuppressor{}, __func__, std::forward<Messages>(messages)...)                \
 		{                                                                                                              \
@@ -204,7 +208,8 @@ namespace SecUtility
 		}                                                                                                              \
                                                                                                                        \
 	protected:                                                                                                         \
-		template <typename... Messages>                                                                                \
+		template <typename... Messages,                                                                                \
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>         \
 		explicit DERIVED_EXCEPTION(Exception::MessageHeaderSuppressor, Messages&&... messages) noexcept                \
 		    : Base(Exception::MessageHeaderSuppressor{}, std::forward<Messages>(messages)...)                          \
 		{                                                                                                              \
