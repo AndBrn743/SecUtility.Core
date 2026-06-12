@@ -4,9 +4,9 @@
 #pragma once
 
 #include <SecUtility/Collection/TypeTuple.hpp>
-#include <type_traits>
 #include <array>
 #include <cstddef>
+#include <type_traits>
 
 
 namespace SecUtility
@@ -109,3 +109,21 @@ namespace std
 	using remove_cvref_t = typename remove_cvref<T>::type;
 }
 #endif
+
+namespace SecUtility
+{
+	template <typename>
+	struct is_std_array : std::false_type
+	{
+		/* NO CODE */
+	};
+
+	template <typename T, std::size_t S>
+	struct is_std_array<std::array<T, S>> : std::true_type
+	{
+		/* NO CODE */
+	};
+
+	template <typename T>
+	inline constexpr bool is_std_array_v = is_std_array<T>::value;
+}
