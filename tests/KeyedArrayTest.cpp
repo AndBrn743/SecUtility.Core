@@ -182,6 +182,61 @@ TEST_CASE("KeyedArray")
 		CHECK(a != b);
 	}
 
+	SECTION("fill constructor")
+	{
+		KeyedArray<int, 1, 2, 3> arr{42};
+
+		CHECK(arr.Get<1>() == 42);
+		CHECK(arr.Get<2>() == 42);
+		CHECK(arr.Get<3>() == 42);
+	}
+
+	SECTION("fill constructor with struct keys")
+	{
+		KeyedArray<int, Point{0, 0}, Point{1, 1}> arr{-1};
+
+		CHECK(arr.Get<Point{0, 0}>() == -1);
+		CHECK(arr.Get<Point{1, 1}>() == -1);
+	}
+
+	SECTION("fill constructor is constexpr")
+	{
+		constexpr auto make = []() constexpr
+		{
+			KeyedArray<int, Point{0, 0}, Point{1, 1}> arr{7};
+			return arr;
+		};
+
+		constexpr auto arr = make();
+
+		STATIC_CHECK(arr.Get<Point{0, 0}>() == 7);
+		STATIC_CHECK(arr.Get<Point{1, 1}>() == 7);
+	}
+
+	SECTION("Fill")
+	{
+		KeyedArray<int, 1, 2, 3> arr{10, 20, 30};
+
+		arr.Fill(0);
+
+		CHECK(arr.Get<1>() == 0);
+		CHECK(arr.Get<2>() == 0);
+		CHECK(arr.Get<3>() == 0);
+	}
+
+	SECTION("Fill resets after mutation")
+	{
+		KeyedArray<int, 1, 2> arr{0};
+
+		arr.Get<1>() = 5;
+		arr.Get<2>() = 10;
+
+		arr.Fill(99);
+
+		CHECK(arr.Get<1>() == 99);
+		CHECK(arr.Get<2>() == 99);
+	}
+
 	SECTION("move construction", "[KeyedArray][Phase1]")
 	{
 		SECTION("Move preserves values - basic test")

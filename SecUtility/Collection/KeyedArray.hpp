@@ -88,6 +88,12 @@ namespace SecUtility
 			/* NO CODE */
 		}
 
+		constexpr explicit KeyedArray(const Value& fillValue) noexcept(
+		        noexcept(std::declval<Value&>() = std::declval<const Value&>()))
+		{
+			m_Data.fill(fillValue);
+		}
+
 		template <KeyType K>
 		[[nodiscard]] constexpr Value& Get() noexcept
 		{
@@ -165,6 +171,12 @@ namespace SecUtility
 		[[nodiscard]] static constexpr std::size_t Size() noexcept
 		{
 			return KSize;
+		}
+
+		constexpr void Fill(const Value& value) noexcept(
+		        noexcept(std::declval<Value&>() = std::declval<const Value&>()))
+		{
+			m_Data.fill(value);
 		}
 
 		[[nodiscard]] constexpr Value* data() noexcept
