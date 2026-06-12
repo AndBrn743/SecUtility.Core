@@ -573,39 +573,60 @@ namespace SecUtility::Math
 	}
 
 	template <typename... Scalars>
-	constexpr auto HarmonicMean(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
-	{
-		static_assert(sizeof...(Scalars) > 0);
-		using Scalar = std::decay_t<decltype((scalars + ...))>;
-		using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
-		assert(((scalars > 0) && ...) && "invalid for negatives and zeros");
-
-		if constexpr (sizeof...(Scalars) == 1)
-		{
-			return (scalars, ...);
-		}
-		else
-		{
-			return static_cast<Output>(sizeof...(Scalars)) / ((1 / static_cast<Output>(scalars)) + ...);
-		}
-	}
-
-	template <typename... Scalars>
 	constexpr auto InverseSumOfReciprocals(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
 	{
 		static_assert(sizeof...(Scalars) > 0);
 		using Scalar = std::decay_t<decltype((scalars + ...))>;
 		using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
-		assert(((scalars > 0) && ...) && "invalid for negatives and zeros");
 
 		if constexpr (sizeof...(Scalars) == 1)
 		{
-			return (scalars, ...);
+			return static_cast<Output>((scalars, ...));
+		}
+		if constexpr (sizeof...(Scalars) == 2)
+		{
+			return [](auto x, auto y) -> Output
+			{
+				return x * y / (x + y);
+			}(scalars...);
 		}
 		else
 		{
-			return static_cast<Output>(1) / ((1 / static_cast<Output>(scalars)) + ...);
+			constexpr std::size_t N = sizeof...(Scalars);
+			const Scalar values[]{(std::forward<Scalars>(scalars))...};
+
+			Scalar prefix[N + 1];
+			Scalar suffix[N + 1];
+
+			prefix[0] = Scalar{1};
+			for (std::size_t i = 0; i < N; ++i)
+			{
+				prefix[i + 1] = prefix[i] * values[i];
+			}
+
+			suffix[N] = Scalar{1};
+			for (std::size_t i = N; i-- > 0;)
+			{
+				suffix[i] = suffix[i + 1] * values[i];
+			}
+
+			Output denominator{};
+
+			for (std::size_t i = 0; i < N; ++i)
+			{
+				denominator += prefix[i] * suffix[i + 1];
+			}
+
+			return prefix[N] / denominator;
 		}
+	}
+
+	template <typename... Scalars>
+	constexpr auto HarmonicMean(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
+	{
+		const auto term = InverseSumOfReciprocals(std::forward<Scalars>(scalars)...);
+		using Scalar = decltype(term);
+		return static_cast<Scalar>(sizeof...(Scalars)) * term;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
