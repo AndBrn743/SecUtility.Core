@@ -3,9 +3,10 @@
 
 #pragma once
 
-#include <cstddef>
-#include <type_traits>
 #include <SecUtility/Collection/TypeTuple.hpp>
+#include <type_traits>
+#include <array>
+#include <cstddef>
 
 
 namespace SecUtility
@@ -92,5 +93,19 @@ namespace std
 
 	template <typename T>
 	using type_identity_t = typename type_identity<T>::type;
+}
+#endif
+
+#if !(defined(__cpp_lib_remove_cvref) && __cpp_lib_remove_cvref >= 201711L)
+namespace std
+{
+	template <class T>
+	struct remove_cvref
+	{
+		using type = std::remove_cv_t<std::remove_reference_t<T>>;
+	};
+
+	template <class T>
+	using remove_cvref_t = typename remove_cvref<T>::type;
 }
 #endif
