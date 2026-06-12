@@ -585,10 +585,7 @@ namespace SecUtility::Math
 		}
 		if constexpr (sizeof...(Scalars) == 2)
 		{
-			return [](auto x, auto y) -> Output
-			{
-				return x * y / (x + y);
-			}(scalars...);
+			return [](auto x, auto y) -> Output { return x * y / (x + y); }(scalars...);
 		}
 		else
 		{
@@ -624,9 +621,18 @@ namespace SecUtility::Math
 	template <typename... Scalars>
 	constexpr auto HarmonicMean(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
 	{
-		const auto term = InverseSumOfReciprocals(std::forward<Scalars>(scalars)...);
-		using Scalar = decltype(term);
-		return static_cast<Scalar>(sizeof...(Scalars)) * term;
+		if constexpr (sizeof...(Scalars) == 1)
+		{
+			using Scalar = std::decay_t<decltype((scalars + ...))>;
+			using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
+
+			return static_cast<Output>((scalars, ...));
+		}
+		else
+		{
+			return static_cast<decltype(InverseSumOfReciprocals(std::forward<Scalars>(scalars)...))>(sizeof...(Scalars))
+			       * InverseSumOfReciprocals(std::forward<Scalars>(scalars)...);
+		}
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
