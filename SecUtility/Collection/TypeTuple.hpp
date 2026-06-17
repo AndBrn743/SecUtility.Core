@@ -3,10 +3,20 @@
 
 #pragma once
 
+#include <cstddef>
+#include <tuple>
+
+
 namespace SecUtility
 {
-	template <typename...>
-	/* INCOMPLETE */ struct TypeTuple;
+	template <typename... Ts>
+	struct TypeTuple
+	{
+		~TypeTuple() = delete;  // prevent runtime instantiation
+
+		template <std::size_t Index>
+		using TypeAt = std::tuple_element_t<Index, std::tuple<Ts...>>;
+	};
 
 	template <typename T, typename U>
 	using TypePair = TypeTuple<T, U>;
