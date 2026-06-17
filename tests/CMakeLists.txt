@@ -69,6 +69,7 @@ add_secutility_test(RoundRobinOrderingGeneratorTest RoundRobinOrderingGeneratorT
 add_secutility_test(ChecksumTest ChecksumTest.cpp)
 add_secutility_test(MacroTest MacroTest.cpp)
 add_secutility_test(TypeNameTest TypeNameTest.cpp)
+add_secutility_test(TypeTupleTest TypeTupleTest.cpp)
 add_secutility_test(FunctionTraitsTest FunctionTraitsTest.cpp)
 add_secutility_test(StopwatchTest StopwatchTest.cpp)
 add_secutility_test(StaticForeachTest StaticForeachTest.cpp)
