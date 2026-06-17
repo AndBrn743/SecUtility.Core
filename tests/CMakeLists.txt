@@ -5,7 +5,7 @@ endif ()
 option(USE_SYSTEM_CATCH2 NO)
 
 if (USE_SYSTEM_CATCH2)
-    find_package(Catch2 3.7.1 CONFIG)
+    find_package(Catch2 3.15.1 CONFIG)
 endif ()
 
 if (NOT USE_SYSTEM_CATCH2 OR NOT Catch2_FOUND)
@@ -26,7 +26,7 @@ if (NOT USE_SYSTEM_CATCH2 OR NOT Catch2_FOUND)
                 catch2
                 GIT_REPOSITORY https://github.com/catchorg/Catch2.git
                 GIT_PROGRESS TRUE
-                GIT_TAG v3.7.1)
+                GIT_TAG v3.15.1)
     endif ()
     FetchContent_MakeAvailable(catch2)
 else ()
@@ -81,6 +81,7 @@ add_secutility_test(MathContinuedFractionTest MathContinuedFractionTest.cpp)
 add_secutility_test(MathSpecialTest MathSpecialTest.cpp)
 add_secutility_test(MathReginTest MathReginTest.cpp)
 add_secutility_test(MathOrthonormalizationTest MathOrthonormalizationTest.cpp)
+add_secutility_test(MathSearchTest MathSearchTest.cpp)
 add_secutility_test(MathStructuredMatrixTest MathStructuredMatrixTest.cpp)
 add_secutility_test(MathMatrixFreeLinearOperatorTest MathMatrixFreeLinearOperatorTest.cpp)
 add_secutility_test(MathHornerPolynomialTest MathHornerPolynomialTest.cpp)
