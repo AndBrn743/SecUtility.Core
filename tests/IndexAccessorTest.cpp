@@ -10,7 +10,7 @@
 
 using namespace SecUtility;
 
-// LCOV_EXCL_START
+
 TEST_CASE("MakeIndexAccessor - std::vector by value (pointer)")
 {
 	SECTION("Access elements using call operator")
@@ -486,4 +486,3 @@ TEST_CASE("MakeIndexAccessor - Multiple accessors")
 		CHECK(acc1(1) == 20);
 	}
 }
-// LCOV_EXCL_STOP
