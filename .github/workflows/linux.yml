@@ -1,0 +1,257 @@
+name: Linux CI
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/linux.yml'
+      - 'CMakeLists.txt'
+      - 'SecChem/**'
+      - 'tests/**'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/linux.yml'
+      - 'CMakeLists.txt'
+      - 'SecChem/**'
+      - 'tests/**'
+  workflow_dispatch:
+
+jobs:
+  gcc:
+    name: GCC
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build ccache
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure --verbose
+
+  clang-libstdcxx:
+    name: Clang (libstdc++)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build ccache
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure --verbose
+
+#  clang-libcxx:
+#    name: Clang (libc++)
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
+#
+#      - name: Install dependencies
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install -y cmake ninja-build ccache libc++-dev libc++abi-dev
+#
+#      - name: Configure CMake
+#        run: |
+#          cmake -S . -B build \
+#            -DCMAKE_BUILD_TYPE=Debug \
+#            -DCMAKE_C_COMPILER=clang \
+#            -DCMAKE_CXX_COMPILER=clang++ \
+#            -DCMAKE_CXX_STANDARD=17 \
+#            -DCMAKE_CXX_EXTENSIONS=OFF \
+#            -DCMAKE_CXX_FLAGS=-stdlib=libc++ \
+#            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -rtlib=compiler-rt -unwindlib=libunwind" \
+#            -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++ -rtlib=compiler-rt -unwindlib=libunwind" \
+#            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+#            -G Ninja
+#
+#      - name: Build
+#        run: cmake --build build --parallel
+#
+#      - name: Run tests
+#        working-directory: build/tests
+#        run: ctest --output-on-failure --verbose
+
+  clang-asan-ubsan:
+    name: Clang (asan, ubsan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build ccache
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls -D_GLIBCXX_DEBUG -fsanitize=address -march=native" \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Set stack limit
+        run: ulimit -s 1048576
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure --verbose
+
+  coverage-clang:
+    name: Coverage (Clang/LLVM)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build ccache clang llvm
+
+      - name: Configure CMake with LLVM coverage
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_FLAGS="-fprofile-instr-generate -fcoverage-mapping" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate" \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests with profile generation
+        working-directory: build
+        run: |
+          LLVM_PROFILE_FILE="coverage-%p.profraw" ctest --output-on-failure
+
+      - name: Merge raw profiles
+        working-directory: build
+        run: |
+          llvm-profdata merge -sparse coverage-*.profraw -o coverage.profdata
+
+      - name: Generate coverage report (lcov format for Codecov)
+        working-directory: build
+        run: |
+          llvm-cov export \
+            ./tests/<your-test-binary> \
+            -instr-profile=coverage.profdata \
+            -format=lcov > coverage.info
+
+      - name: Show summary in CI logs
+        working-directory: build
+        run: |
+          llvm-cov report \
+            ./tests/<your-test-binary> \
+            -instr-profile=coverage.profdata
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/coverage.info
+          fail_ci_if_error: false
+          verbose: true
+
+#  coverage:
+#    name: Coverage (GCC)
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
+#
+#      - name: Install dependencies
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install -y cmake ninja-build ccache lcov
+#
+#      - name: Configure CMake with coverage
+#        run: |
+#          cmake -S . -B build \
+#            -DCMAKE_BUILD_TYPE=Debug \
+#            -DBUILD_TESTING=ON \
+#            -DCMAKE_CXX_COMPILER=g++ \
+#            -DCMAKE_CXX_STANDARD=20 \
+#            -DCMAKE_CXX_EXTENSIONS=OFF \
+#            -DCMAKE_CXX_FLAGS="--coverage" \
+#            -DCMAKE_CXX_FLAGS="-march=native" \
+#            -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+#            -G Ninja
+#
+#      - name: Build
+#        run: cmake --build build --parallel
+#
+#      - name: List all cmake scripts to find where is CTestTestfile.cmake hiding
+#        working-directory: build
+#        run: find . -name "*.cmake"
+#
+#      - name: Run tests
+#        working-directory: build/tests
+#        run: ctest --output-on-failure
+#
+#      - name: Generate coverage report
+#        working-directory: build
+#        run: |
+#          find . -name "*.gcda"
+#          lcov --ignore-errors empty,unused,inconsistent --capture --directory . --output-file coverage.raw.info --rc geninfo_unexecuted_blocks=1 --ignore-errors source
+#          lcov --ignore-errors empty,unused --remove coverage.raw.info '/usr/*' '*/_deps/*' "*/catch2/*" --output-file coverage.info
+#          lcov --list coverage.info
+#
+#      - name: Upload coverage to Codecov
+#        uses: codecov/codecov-action@v5
+#        with:
+#          token: ${{ secrets.CODECOV_TOKEN }}
+#          files: build/coverage.info
+#          fail_ci_if_error: false
+#          verbose: true
