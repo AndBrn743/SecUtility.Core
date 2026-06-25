@@ -191,6 +191,7 @@ jobs:
           llvm-cov export \
             -instr-profile=coverage.profdata \
             $ARGS \
+            -sources ../SecUtility \
             -format=lcov > coverage.info
 
       - name: Show summary in CI logs
