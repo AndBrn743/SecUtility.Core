@@ -180,22 +180,26 @@ jobs:
       - name: Merge raw profiles
         working-directory: build
         run: |
-          llvm-profdata merge -sparse coverage-*.profraw -o coverage.profdata
+          llvm-profdata merge -sparse $(find . -name "*.profraw") -o coverage.profdata
 
       - name: Generate coverage report (lcov format for Codecov)
         working-directory: build
         run: |
           llvm-cov export \
-            ./tests/<your-test-binary> \
+            $(find tests -type f -executable) \
             -instr-profile=coverage.profdata \
             -format=lcov > coverage.info
 
       - name: Show summary in CI logs
         working-directory: build
         run: |
+          OBJECTS=$(find tests -type f -executable)
+          ARGS=""
+          for obj in $OBJECTS; do ARGS="$ARGS -object $obj"; done
           llvm-cov report \
-            ./tests/<your-test-binary> \
-            -instr-profile=coverage.profdata
+            -instr-profile=coverage.profdata \
+            $ARGS \
+            -sources ../SecUtility
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
