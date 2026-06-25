@@ -19,11 +19,6 @@
 
 namespace SecUtility::Math
 {
-	namespace Detail::ExpIntegral
-	{
-
-	}
-
 	template <std::size_t N, typename T>
 	SEC_MATH_CONDITIONAL_CONSTEXPR T ExpIntegral(const T x) noexcept
 	{
