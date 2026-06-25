@@ -158,14 +158,14 @@ namespace SecUtility::Math
 
 	template <typename Arg>
 	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept(noexcept(
-	        std::signbit(std::forward<Arg>(arg)))) -> std::enable_if_t<!std::is_integral_v<std::decay_t<Arg>>, int>
+	        std::signbit(std::forward<Arg>(arg)))) -> std::enable_if_t<!std::is_integral_v<std::decay_t<Arg>>, bool>
 	{
 #if defined(SEC_IF_CONSTEVAL)
 		SEC_IF_CONSTEVAL
 		{
-#if defined(_MSC_VER)
-#define SEC_SIGNBIT(x) _signbit(x)
-#endif
+// #if defined(_MSC_VER)
+// #define SEC_SIGNBIT(x) _signbit(x)
+// #endif
 #if defined(__clang__)
 #if defined(__has_constexpr_builtin)
 #if __has_constexpr_builtin(__builtin_signbit)
