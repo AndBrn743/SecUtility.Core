@@ -192,6 +192,7 @@ jobs:
             -instr-profile=coverage.profdata \
             $ARGS \
             -sources ../SecUtility \
+            -path-equivalence="$GITHUB_WORKSPACE",. \
             -format=lcov > coverage.info
 
       - name: Show summary in CI logs
