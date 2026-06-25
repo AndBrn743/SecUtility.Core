@@ -159,10 +159,28 @@ namespace SecUtility::Math
 	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept(noexcept(
 	        std::signbit(std::forward<Arg>(arg)))) -> std::enable_if_t<!std::is_integral_v<std::decay_t<Arg>>, int>
 	{
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL)
 		SEC_IF_CONSTEVAL
 		{
-			return gcem::signbit(std::forward<Arg>(arg));
+#if defined(_MSC_VER)
+#define SEC_SIGNBIT(x) _signbit(x)
+#endif
+#if defined(__clang__)
+#if defined(__has_constexpr_builtin)
+#if __has_constexpr_builtin(__builtin_signbit)
+#define SEC_SIGNBIT(x) __builtin_signbit(x)
+#endif
+#endif
+#elif defined(__GNUC__)
+#define SEC_SIGNBIT(x) __builtin_signbit(x)
+#endif
+
+#if defined(SEC_SIGNBIT)
+			return SEC_SIGNBIT(arg);
+#undef SEC_SIGNBIT
+#else
+			return arg < Arg{0} || (arg == Arg{0} && Arg{1} / arg < 0);
+#endif
 		}
 #endif
 
@@ -187,10 +205,10 @@ namespace SecUtility::Math
 	        noexcept(std::copysign(to, from)))
 	        -> std::enable_if_t<!std::is_integral_v<std::decay_t<To>>, decltype(std::copysign(to, from))>
 	{
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL)
 		SEC_IF_CONSTEVAL
 		{
-			return gcem::copysign(to, from);
+			return SignBit(to) != SignBit(from) ? -to : to;
 		}
 #endif
 		return std::copysign(to, from);
