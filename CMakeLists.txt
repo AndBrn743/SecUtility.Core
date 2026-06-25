@@ -123,7 +123,7 @@ else ()
     find_package(gcem NO_MODULE)
 
     if (NOT gcem_FOUND)
-        if (NOT DEFINED GCEM_REPO AND NOT DEFINED GCEM_TAG AND NOT DEFINED GCEM_SOURCE)
+        if ((NOT DEFINED GCEM_REPO OR GCEM_REPO STREQUAL "") AND NOT DEFINED GCEM_TAG AND (NOT DEFINED GCEM_SOURCE OR GCEM_SOURCE STREQUAL ""))
             set(GCEM_SOURCE "https://github.com/kthohr/gcem/archive/refs/tags/v1.18.0.tar.gz")
             message(STATUS "Gcem library will be fetched from `${GCEM_SOURCE}`")
         endif ()
