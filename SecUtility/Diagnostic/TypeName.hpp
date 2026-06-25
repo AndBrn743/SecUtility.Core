@@ -16,7 +16,12 @@ namespace SecUtility
 	namespace Detail
 	{
 		template <typename T /* do not remove or rename `T`*/>
-		constexpr std::string_view TypeName()
+#if defined(__cpp_consteval) && __cpp_consteval >= 201811L
+		consteval
+#else
+		constexpr
+#endif
+		        std::string_view TypeName()
 		{
 			// clang-format off
 #if defined(__clang__)
