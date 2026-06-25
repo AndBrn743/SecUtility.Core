@@ -185,9 +185,12 @@ jobs:
       - name: Generate coverage report (lcov format for Codecov)
         working-directory: build
         run: |
+          OBJECTS=$(find tests -type f -executable)
+          ARGS=""
+          for obj in $OBJECTS; do ARGS="$ARGS -object $obj"; done
           llvm-cov export \
-            $(find tests -type f -executable) \
             -instr-profile=coverage.profdata \
+            $ARGS \
             -format=lcov > coverage.info
 
       - name: Show summary in CI logs
