@@ -22,6 +22,7 @@
 #endif
 
 #include <SecUtility/Math/Complex.hpp>
+#include <SecUtility/Meta/TypeTrait.hpp>
 #include <cmath>
 #include <utility>
 
@@ -179,7 +180,8 @@ namespace SecUtility::Math
 			return SEC_SIGNBIT(arg);
 #undef SEC_SIGNBIT
 #else
-			return arg < static_cast<Arg>(0) || (arg == static_cast<Arg>(0) && static_cast<Arg>(1) / arg < 0);
+			using Scalar = std::decay_t<Arg>;
+			return arg < static_cast<Scalar>(0) || (arg == static_cast<Scalar>(0) && static_cast<Scalar>(1) / arg < 0);
 #endif
 		}
 #endif
