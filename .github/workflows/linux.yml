@@ -154,7 +154,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build ccache clang llvm
+          sudo apt-get install -y cmake ninja-build ccache clang llvm lcov
 
       - name: Configure CMake with LLVM coverage
         run: |
@@ -191,9 +191,16 @@ jobs:
           llvm-cov export \
             -instr-profile=coverage.profdata \
             $ARGS \
-            -sources ../SecUtility \
-            -path-equivalence="$GITHUB_WORKSPACE",. \
+#            -sources ../SecUtility \
+#            -path-equivalence="$GITHUB_WORKSPACE",. \
             -format=lcov > coverage.info
+
+      - name: Apply LCOV exclusion markers
+        run: |
+          lcov --filter excl_line --filter excl_br \
+            --ignore-errors empty,unused \
+            build/coverage.info --output-file build/coverage.excluded.info
+          mv build/coverage.excluded.info build/coverage.info
 
       - name: Show summary in CI logs
         working-directory: build
