@@ -179,7 +179,7 @@ namespace SecUtility::Math
 			return SEC_SIGNBIT(arg);
 #undef SEC_SIGNBIT
 #else
-			return arg < Arg{0} || (arg == Arg{0} && Arg{1} / arg < 0);
+			return arg < static_cast<Arg>(0) || (arg == static_cast<Arg>(0) && static_cast<Arg>(1) / arg < 0);
 #endif
 		}
 #endif
