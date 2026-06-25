@@ -91,7 +91,9 @@ namespace SecUtility
 		/* NO CODE */
 	};
 
-	template <SplitOptions Options = {}, typename DelimiterPredicate, typename TParser = Parser<std::string>>
+	template <SplitOptions Options = SplitOptions{},
+	          typename DelimiterPredicate,
+	          typename TParser = Parser<std::string>>
 	auto Split(const std::string_view text, DelimiterPredicate isDelimiter, TParser parser = {})
 	{
 		std::vector<std::decay_t<decltype(parser(std::declval<std::string_view>()))>> result;
@@ -185,7 +187,7 @@ namespace SecUtility
 		return result;
 	}
 
-	template <SplitOptions Options = {}, typename TParser = Parser<std::string>>
+	template <SplitOptions Options = SplitOptions{}, typename TParser = Parser<std::string>>
 	auto Split(std::string_view text, char delimiter, TParser parser = {})
 	{
 		return Split<Options>(text, [delimiter](const char c) { return c == delimiter; }, parser);
