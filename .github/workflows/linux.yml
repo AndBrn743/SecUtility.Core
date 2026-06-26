@@ -252,8 +252,8 @@ jobs:
         working-directory: build
         run: |
           find . -name "*.gcda"
-          lcov --ignore-errors empty,unused,inconsistent --capture --directory . --output-file coverage.raw.info --rc geninfo_unexecuted_blocks=1 --ignore-errors source
-          lcov --ignore-errors empty,unused --remove coverage.raw.info '/usr/*' '*/_deps/*' "*/catch2/*" --output-file coverage.info
+          lcov --ignore-errors empty,unused,inconsistent,mismatch --capture --directory . --output-file coverage.raw.info --rc geninfo_unexecuted_blocks=1 --ignore-errors source,mismatch
+          lcov --ignore-errors empty,unused,mismatch --remove coverage.raw.info '/usr/*' '*/_deps/*' "*/catch2/*" --output-file coverage.info
           lcov --list coverage.info
 
       - name: Upload coverage to Codecov
