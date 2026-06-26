@@ -1696,12 +1696,6 @@ TEST_CASE("CalculateFactorial")
 		CHECK(CalculateFactorial<Int64>(5) == 120);
 	}
 
-	SECTION("Negative input returns 1 (current behavior)")
-	{
-		CHECK(CalculateFactorial<int>(-1) == 1);
-		CHECK(CalculateFactorial<int>(-5) == 1);
-	}
-
 	SECTION("constexpr evaluation")
 	{
 		static_assert(CalculateFactorial<int>(0) == 1);
@@ -1777,12 +1771,19 @@ TEST_CASE("CalculateDoubleFactorial")
 
 	SECTION("constexpr evaluation")
 	{
-		static_assert(CalculateDoubleFactorial<int>(0) == 1);
-		static_assert(CalculateDoubleFactorial<int>(1) == 1);
-		static_assert(CalculateDoubleFactorial<int>(5) == 15);
-		static_assert(CalculateDoubleFactorial<int>(10) == 3840);
-		static_assert(CalculateDoubleFactorial<Int64>(-1) == 1);
-		static_assert(CalculateDoubleFactorial<Int64>(-3) == -1);
+		STATIC_CHECK(CalculateDoubleFactorial<int>(0) == 1);
+		STATIC_CHECK(CalculateDoubleFactorial<int>(1) == 1);
+		STATIC_CHECK(CalculateDoubleFactorial<int>(5) == 15);
+		STATIC_CHECK(CalculateDoubleFactorial<int>(10) == 3840);
+		STATIC_CHECK(CalculateDoubleFactorial<Int64>(-1) == 1);
+		STATIC_CHECK(CalculateDoubleFactorial<Int64>(-3) == -1);
+
+		STATIC_CHECK(CalculateDoubleFactorial<int>(-5) == 0);
+		STATIC_CHECK(CalculateDoubleFactorial<int>(-7) == 0);
+		STATIC_CHECK(CalculateDoubleFactorial<int>(-9) == 0);
+		CHECK(CalculateDoubleFactorial<double>(-5) == Catch::Approx(1. / 3.));
+		CHECK(CalculateDoubleFactorial<double>(-7) == Catch::Approx(-1. / 15.));
+		CHECK(CalculateDoubleFactorial<double>(-9) == Catch::Approx(1. / 105.));
 	}
 }
 

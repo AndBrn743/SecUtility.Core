@@ -4,6 +4,7 @@
 #pragma once
 
 #include <SecUtility/Raw/Int.hpp>
+#include <SecUtility/Macro/ForceInline.hpp>
 #include <array>
 #include <cassert>
 
@@ -16,6 +17,7 @@ namespace SecUtility::Math
 	template <typename T>
 	constexpr T CalculateFactorial(const T n)  // NOLINT(*-no-recursion)
 	{
+		assert(n >= 0);
 		return n <= 1 ? 1 : n * CalculateFactorial(n - 1);
 	}
 
@@ -23,12 +25,17 @@ namespace SecUtility::Math
 	/// Calculate and returns the factorial of given number with recursive function calls.
 	/// The number can either be positive or negative odd number
 	/// </summary>
+	/// <remarks>
+	/// always return same type as input. For negative odd numbers which was less than -3, this means truncate to 0
+	/// </remarks>
 	template <typename T>
 	constexpr T CalculateDoubleFactorial(const T n)  // NOLINT(*-no-recursion)
 	{
 		if (n < 0)
 		{
-			return CalculateDoubleFactorial(n + 2) / (n + 2);
+			assert(static_cast<int>(n) % 2 != 0);
+			auto sign = (static_cast<int>(n) - 1) % 4 == 0 ? 1 : -1;
+			return sign * n / CalculateDoubleFactorial(-n);
 		}
 
 		return n <= 1 ? 1 : n * CalculateDoubleFactorial(n - 2);
@@ -36,6 +43,7 @@ namespace SecUtility::Math
 
 	namespace Detail::Factorial
 	{
+		// 20! = 2,432,902,008,176,640,000 is the largest factorial that fits in Int64; 21! would overflow.
 		inline constexpr auto Factorials = []() constexpr
 		{
 			std::array<Int64, 21> data = {};
@@ -48,6 +56,8 @@ namespace SecUtility::Math
 			return data;
 		}();
 
+		// 33!! = 6,332,659,870,762,850,625 is the largest double factorial that fits in Int64; 34!! would overflow.
+		// OneOffsettedDoubleFactorials is sized 34+1 to additionally hold (-1)!! at index 0.
 		inline constexpr auto DoubleFactorials = []() constexpr
 		{
 			std::array<Int64, 34> data = {};
@@ -89,7 +99,7 @@ namespace SecUtility::Math
 	/// For the double factorials of negative odd number, use <c>CalculateDoubleFactorial</c> method instead.
 	/// This method uses compile-time generated table and does not perform actual calculation.
 	/// </summary>
-	constexpr Int64 DoubleFactorial(const Int64 i) noexcept
+	constexpr SEC_FORCE_INLINE Int64 DoubleFactorial(const Int64 i) noexcept
 	{
 		assert(i >= -1 && i <= 33);
 		return Detail::Factorial::OneOffsettedDoubleFactorials[i + 1];
