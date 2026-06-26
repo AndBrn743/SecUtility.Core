@@ -57,10 +57,10 @@ namespace SecUtility::Math
 	public:
 		template <typename ParallelizationOrdering, typename IndexPairFilter = DefaultIndexPairFilter>
 		SelfAdjointJacobiEigenSolver(/*COPY*/ Eigen::MatrixX<Scalar> matrix,
-		                              ParallelizationOrdering parallelizationOrdering,
-		                              const RealScalar tolerance = 1e-10,
-		                              const Eigen::Index maxIterations = 64,
-		                              IndexPairFilter filter = {})
+		                             ParallelizationOrdering parallelizationOrdering,
+		                             const RealScalar tolerance = 1e-10,
+		                             const Eigen::Index maxIterations = 64,
+		                             IndexPairFilter filter = {})
 		    : m_TransformedMatrix(std::move(matrix))
 		{
 			static_assert(
@@ -69,13 +69,12 @@ namespace SecUtility::Math
 		}
 
 		explicit SelfAdjointJacobiEigenSolver(const Eigen::MatrixX<Scalar>& matrix,
-		                                       const RealScalar tolerance = 1e-10,
-		                                       const Eigen::Index maxIterations = 64)
-		    : SelfAdjointJacobiEigenSolver{
-		              matrix,
-		              RoundRobinOrdering{ranges::views::iota(Eigen::Index{0}, matrix.rows()), -1},
-		              tolerance,
-		              maxIterations}
+		                                      const RealScalar tolerance = 1e-10,
+		                                      const Eigen::Index maxIterations = 64)
+		    : SelfAdjointJacobiEigenSolver{matrix,
+		                                   RoundRobinOrdering{ranges::views::iota(Eigen::Index{0}, matrix.rows()), -1},
+		                                   tolerance,
+		                                   maxIterations}
 		{
 			/* NO CODE */
 		}
