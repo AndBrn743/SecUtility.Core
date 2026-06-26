@@ -10,6 +10,7 @@
 #include <SecUtility/Diagnostic/Unreachable.hpp>
 
 
+#if __cplusplus >= 202002L
 struct MyInt
 {
 	[[maybe_unused]] int Value;
@@ -37,6 +38,7 @@ struct BindTypes
 
 template <auto... Vs>
 using BindTypesToo = MyClassToo<char, long double, Vs...>;
+#endif
 
 using namespace SecUtility;
 
