@@ -1659,3 +1659,202 @@ TEST_CASE("BinomialCoefficient")
 		static_assert(BinomialCoefficient(3, 5) == 0);
 	}
 }
+
+
+TEST_CASE("CalculateFactorial")
+{
+	SECTION("Base cases")
+	{
+		CHECK(CalculateFactorial<int>(0) == 1);
+		CHECK(CalculateFactorial<int>(1) == 1);
+	}
+
+	SECTION("Known values")
+	{
+		CHECK(CalculateFactorial<int>(2) == 2);
+		CHECK(CalculateFactorial<int>(3) == 6);
+		CHECK(CalculateFactorial<int>(4) == 24);
+		CHECK(CalculateFactorial<int>(5) == 120);
+		CHECK(CalculateFactorial<int>(6) == 720);
+		CHECK(CalculateFactorial<int>(10) == 3628800);
+		CHECK(CalculateFactorial<int>(12) == 479001600);
+		CHECK(CalculateFactorial<Int64>(15) == 1307674368000LL);
+	}
+
+	SECTION("Largest value before Int64 overflow")
+	{
+		// 20! = 2,432,902,008,176,640,000 fits in Int64; 21! would overflow
+		CHECK(CalculateFactorial<Int64>(20) == 2432902008176640000LL);
+	}
+
+	SECTION("Different integer types")
+	{
+		CHECK(CalculateFactorial<int>(5) == 120);
+		CHECK(CalculateFactorial<long>(5) == 120L);
+		CHECK(CalculateFactorial<long long>(5) == 120LL);
+		CHECK(CalculateFactorial<unsigned>(5) == 120U);
+		CHECK(CalculateFactorial<Int64>(5) == 120);
+	}
+
+	SECTION("Negative input returns 1 (current behavior)")
+	{
+		CHECK(CalculateFactorial<int>(-1) == 1);
+		CHECK(CalculateFactorial<int>(-5) == 1);
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		static_assert(CalculateFactorial<int>(0) == 1);
+		static_assert(CalculateFactorial<int>(1) == 1);
+		static_assert(CalculateFactorial<int>(5) == 120);
+		static_assert(CalculateFactorial<int>(10) == 3628800);
+		static_assert(CalculateFactorial<Int64>(20) == 2432902008176640000LL);
+	}
+}
+
+
+TEST_CASE("CalculateDoubleFactorial")
+{
+	SECTION("Base cases")
+	{
+		CHECK(CalculateDoubleFactorial<int>(0) == 1);
+		CHECK(CalculateDoubleFactorial<int>(1) == 1);
+	}
+
+	SECTION("Known positive even values")
+	{
+		// n!! for even n = 2 * 4 * 6 * ... * n
+		CHECK(CalculateDoubleFactorial<int>(2) == 2);
+		CHECK(CalculateDoubleFactorial<int>(4) == 8);
+		CHECK(CalculateDoubleFactorial<int>(6) == 48);
+		CHECK(CalculateDoubleFactorial<int>(8) == 384);
+		CHECK(CalculateDoubleFactorial<int>(10) == 3840);
+	}
+
+	SECTION("Known positive odd values")
+	{
+		// n!! for odd n = 1 * 3 * 5 * ... * n
+		CHECK(CalculateDoubleFactorial<int>(3) == 3);
+		CHECK(CalculateDoubleFactorial<int>(5) == 15);
+		CHECK(CalculateDoubleFactorial<int>(7) == 105);
+		CHECK(CalculateDoubleFactorial<int>(9) == 945);
+		CHECK(CalculateDoubleFactorial<int>(11) == 10395);
+		CHECK(CalculateDoubleFactorial<int>(15) == 2027025);
+	}
+
+	SECTION("Largest values before Int64 overflow")
+	{
+		// 33!! = 6,332,659,870,762,850,625 fits in Int64; 35!! would overflow
+		CHECK(CalculateDoubleFactorial<Int64>(33) == 6332659870762850625LL);
+		// 32!! = 2^16 * 16! also fits; 34!! would overflow
+		CHECK(CalculateDoubleFactorial<Int64>(32) == 1371195958099968000LL);
+	}
+
+	SECTION("Negative odd integers within representable range")
+	{
+		// (-1)!! = 1, (-3)!! = -1 — only two negative values that Int64 can represent exactly
+		CHECK(CalculateDoubleFactorial<Int64>(-1) == 1);
+		CHECK(CalculateDoubleFactorial<Int64>(-3) == -1);
+	}
+
+	SECTION("Negative odd integers beyond representable range (current behavior)")
+	{
+		// True values are fractional: (-5)!! = -1/3, (-7)!! = 1/15, (-9)!! = -8/945.
+		// Integer division in the recursion truncates toward zero, yielding 0.
+		CHECK(CalculateDoubleFactorial<Int64>(-5) == 0);
+		CHECK(CalculateDoubleFactorial<Int64>(-7) == 0);
+		CHECK(CalculateDoubleFactorial<Int64>(-9) == 0);
+	}
+
+	SECTION("Different integer types")
+	{
+		CHECK(CalculateDoubleFactorial<int>(5) == 15);
+		CHECK(CalculateDoubleFactorial<long>(5) == 15L);
+		CHECK(CalculateDoubleFactorial<long long>(5) == 15LL);
+		CHECK(CalculateDoubleFactorial<unsigned>(5) == 15U);
+		CHECK(CalculateDoubleFactorial<Int64>(5) == 15);
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		static_assert(CalculateDoubleFactorial<int>(0) == 1);
+		static_assert(CalculateDoubleFactorial<int>(1) == 1);
+		static_assert(CalculateDoubleFactorial<int>(5) == 15);
+		static_assert(CalculateDoubleFactorial<int>(10) == 3840);
+		static_assert(CalculateDoubleFactorial<Int64>(-1) == 1);
+		static_assert(CalculateDoubleFactorial<Int64>(-3) == -1);
+	}
+}
+
+
+TEST_CASE("Factorial (table lookup)")
+{
+	SECTION("Boundary values")
+	{
+		CHECK(Factorial(0) == 1);
+		CHECK(Factorial(1) == 1);
+		CHECK(Factorial(20) == 2432902008176640000LL);
+	}
+
+	SECTION("Known values")
+	{
+		CHECK(Factorial(5) == 120);
+		CHECK(Factorial(10) == 3628800);
+		CHECK(Factorial(15) == 1307674368000);
+	}
+
+	SECTION("Matches CalculateFactorial across the full table range")
+	{
+		for (Int64 i = 0; i <= 20; ++i)
+		{
+			CHECK(Factorial(i) == CalculateFactorial<Int64>(i));
+		}
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		static_assert(Factorial(0) == 1);
+		static_assert(Factorial(1) == 1);
+		static_assert(Factorial(5) == 120);
+		static_assert(Factorial(10) == 3628800);
+		static_assert(Factorial(20) == 2432902008176640000LL);
+	}
+}
+
+
+TEST_CASE("DoubleFactorial (table lookup)")
+{
+	SECTION("Boundary values")
+	{
+		CHECK(DoubleFactorial(-1) == 1);  // (-1)!! = 1
+		CHECK(DoubleFactorial(0) == 1);
+		CHECK(DoubleFactorial(1) == 1);
+		CHECK(DoubleFactorial(33) == 6332659870762850625LL);
+	}
+
+	SECTION("Known values")
+	{
+		CHECK(DoubleFactorial(3) == 3);
+		CHECK(DoubleFactorial(5) == 15);
+		CHECK(DoubleFactorial(7) == 105);
+		CHECK(DoubleFactorial(10) == 3840);
+		CHECK(DoubleFactorial(15) == 2027025);
+	}
+
+	SECTION("Matches CalculateDoubleFactorial across the full table range")
+	{
+		for (Int64 i = -1; i <= 33; ++i)
+		{
+			CHECK(DoubleFactorial(i) == CalculateDoubleFactorial<Int64>(i));
+		}
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		static_assert(DoubleFactorial(-1) == 1);
+		static_assert(DoubleFactorial(0) == 1);
+		static_assert(DoubleFactorial(1) == 1);
+		static_assert(DoubleFactorial(5) == 15);
+		static_assert(DoubleFactorial(33) == 6332659870762850625LL);
+	}
+}
