@@ -29,11 +29,11 @@ class MyClassToo
 	/* NO CODE */
 };
 
-template <typename... Ts>
+template <typename T, typename U>
 struct BindTypes
 {
 	template <auto... Vs>
-	using Apply = MyClassToo<Ts..., Vs...>;
+	using Apply = MyClassToo<T, U, Vs...>;
 };
 
 template <auto... Vs>
