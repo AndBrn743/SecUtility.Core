@@ -583,3 +583,64 @@ TEST_CASE("BiPartiteRoundRobinOrdering multiple passes with rotation")
 		REQUIRE(rr[1] == std::pair{1, 101});
 	}
 }
+
+TEST_CASE("BiPartiteRoundRobinOrdering first range larger than second")
+{
+	std::vector<int> a{0, 1, 2, 3};
+	std::vector<int> b{10, 11};
+	SecUtility::BiPartiteRoundRobinOrdering rr(a, b);
+
+	SECTION("Pairs per round is min(a,b)")
+	{
+		REQUIRE(rr.PairsPerCycle() == 2);
+	}
+
+	SECTION("Period is max(a,b)")
+	{
+		REQUIRE(rr.Period() == 4);
+	}
+
+	SECTION("Round 0 yields correct pairs")
+	{
+		REQUIRE(rr[0] == std::pair{0, 10});
+		REQUIRE(rr[1] == std::pair{1, 11});
+	}
+
+	SECTION("Rotation walks the larger range while the smaller stays fixed")
+	{
+		rr.NextCycle();  // round 1
+		REQUIRE(rr[0] == std::pair{1, 10});
+		REQUIRE(rr[1] == std::pair{2, 11});
+
+		rr.NextCycle();  // round 2
+		REQUIRE(rr[0] == std::pair{2, 10});
+		REQUIRE(rr[1] == std::pair{3, 11});
+
+		rr.NextCycle();  // round 3
+		REQUIRE(rr[0] == std::pair{3, 10});
+		REQUIRE(rr[1] == std::pair{0, 11});
+	}
+
+	SECTION("All pairs eventually appear")
+	{
+		std::set<std::pair<int, int>> seen;
+		for (int round = 0; round < rr.Period(); ++round)
+		{
+			for (int i = 0; i < rr.PairsPerCycle(); ++i)
+			{
+				seen.insert(rr[i]);
+			}
+			rr.NextCycle();
+		}
+
+		std::set<std::pair<int, int>> expected{{0, 10},
+		                                       {0, 11},
+		                                       {1, 10},
+		                                       {1, 11},
+		                                       {2, 10},
+		                                       {2, 11},
+		                                       {3, 10},
+		                                       {3, 11}};
+		REQUIRE(seen == expected);
+	}
+}
