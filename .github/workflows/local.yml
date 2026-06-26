@@ -36,6 +36,7 @@ jobs:
             -DCMAKE_CXX_EXTENSIONS=OFF \
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
@@ -64,6 +65,7 @@ jobs:
             -DCMAKE_CXX_EXTENSIONS=OFF \
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
@@ -94,6 +96,7 @@ jobs:
             -DCMAKE_CXX_FLAGS=-stdlib=libc++ \
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
@@ -125,6 +128,7 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
@@ -161,6 +165,7 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate" \
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build

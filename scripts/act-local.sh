@@ -80,6 +80,16 @@ else
     echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o nlohmann_json-v3.12.0.tar.xz https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz"
 fi
 
+# Check for cached range-v3 tarball
+RANGE_V3_TARBALL="$PROJECT_ROOT/.cache/range-v3-0.12.0.tar.gz"
+if [ -f "$RANGE_V3_TARBALL" ]; then
+    echo_info "Using cached range-v3 tarball: $RANGE_V3_TARBALL"
+    export RANGE_V3_SOURCE="$RANGE_V3_TARBALL"
+else
+    echo_warn "No cached range-v3 tarball found at $RANGE_V3_TARBALL"
+    echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o range-v3-0.12.0.tar.gz https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz"
+fi
+
 # Parse arguments
 JOB=""
 WORKFLOW=".github/workflows/local.yml"
@@ -113,7 +123,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-cache)
             unset CATCH2_SOURCE
-            echo_info "Catch2 cache disabled"
+            unset NLOHMANN_JSON_SOURCE
+            unset RANGE_V3_SOURCE
+            echo_info "Dependency caches disabled"
             shift
             ;;
         *)
@@ -134,6 +146,18 @@ ACT_CMD="$ACT_CMD -P self-hosted=-self-hosted"
 if [ -n "$CATCH2_SOURCE" ]; then
     ACT_CMD="$ACT_CMD --env CATCH2_SOURCE=$CATCH2_SOURCE"
     echo_info "Using local Catch2 cache"
+fi
+
+# Pass NLOHMANN_JSON_SOURCE as environment variable if set
+if [ -n "$NLOHMANN_JSON_SOURCE" ]; then
+    ACT_CMD="$ACT_CMD --env NLOHMANN_JSON_SOURCE=$NLOHMANN_JSON_SOURCE"
+    echo_info "Using local nlohmann/json cache"
+fi
+
+# Pass RANGE_V3_SOURCE as environment variable if set
+if [ -n "$RANGE_V3_SOURCE" ]; then
+    ACT_CMD="$ACT_CMD --env RANGE_V3_SOURCE=$RANGE_V3_SOURCE"
+    echo_info "Using local range-v3 cache"
 fi
 
 if [ -n "$JOB" ]; then
