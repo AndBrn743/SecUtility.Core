@@ -360,7 +360,7 @@ TEST_CASE("HornerTaylorPolynomial - N=3")
 // Mathematical Identities - Power Polynomial
 //----------------------------------------------------------------------------------------------------------------------
 
-TEST_CASE("HornerPowerPolynomial - Geometric series: 1 + x + x² + ... = 1/(1-x)")
+TEST_CASE("HornerPowerPolynomial - Geometric series: 1 + x + x^2 + ... = 1/(1-x)")
 {
 	// All coefficients are 1
 	constexpr auto coeff = [](std::size_t) constexpr noexcept { return 1.0; };

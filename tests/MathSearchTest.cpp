@@ -243,7 +243,7 @@ namespace
 }
 
 
-TEST_CASE("GoldenSectionSearch minimizes (x-3)² on a bracketing interval", "[Math][Search]")
+TEST_CASE("GoldenSectionSearch minimizes (x-3)^2 on a bracketing interval", "[Math][Search]")
 {
 	const auto result = GoldenSectionSearch(
 	        [](const double x) { return (x - 3.0) * (x - 3.0); }, Interval<double>{0.0, 5.0});
