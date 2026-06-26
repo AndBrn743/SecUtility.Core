@@ -90,6 +90,16 @@ else
     echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o range-v3-0.12.0.tar.gz https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz"
 fi
 
+# Check for cached gcem tarball
+GCEM_TARBALL="$PROJECT_ROOT/.cache/gcem-v1.18.0.tar.gz"
+if [ -f "$GCEM_TARBALL" ]; then
+    echo_info "Using cached gcem tarball: $GCEM_TARBALL"
+    export GCEM_SOURCE="$GCEM_TARBALL"
+else
+    echo_warn "No cached gcem tarball found at $GCEM_TARBALL"
+    echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o gcem-v1.18.0.tar.gz https://github.com/kthohr/gcem/archive/refs/tags/v1.18.0.tar.gz"
+fi
+
 # Parse arguments
 JOB=""
 WORKFLOW=".github/workflows/local.yml"
@@ -125,6 +135,7 @@ while [[ $# -gt 0 ]]; do
             unset CATCH2_SOURCE
             unset NLOHMANN_JSON_SOURCE
             unset RANGE_V3_SOURCE
+            unset GCEM_SOURCE
             echo_info "Dependency caches disabled"
             shift
             ;;
@@ -158,6 +169,12 @@ fi
 if [ -n "$RANGE_V3_SOURCE" ]; then
     ACT_CMD="$ACT_CMD --env RANGE_V3_SOURCE=$RANGE_V3_SOURCE"
     echo_info "Using local range-v3 cache"
+fi
+
+# Pass GCEM_SOURCE as environment variable if set
+if [ -n "$GCEM_SOURCE" ]; then
+    ACT_CMD="$ACT_CMD --env GCEM_SOURCE=$GCEM_SOURCE"
+    echo_info "Using local gcem cache"
 fi
 
 if [ -n "$JOB" ]; then

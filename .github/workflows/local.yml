@@ -37,6 +37,7 @@ jobs:
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
             ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
+            ${{ env.GCEM_SOURCE != '' && format('-DGCEM_SOURCE={0}', env.GCEM_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
@@ -66,6 +67,7 @@ jobs:
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
             ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
+            ${{ env.GCEM_SOURCE != '' && format('-DGCEM_SOURCE={0}', env.GCEM_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
@@ -97,6 +99,7 @@ jobs:
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
             ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
+            ${{ env.GCEM_SOURCE != '' && format('-DGCEM_SOURCE={0}', env.GCEM_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
@@ -129,6 +132,7 @@ jobs:
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
             ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
+            ${{ env.GCEM_SOURCE != '' && format('-DGCEM_SOURCE={0}', env.GCEM_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
@@ -166,6 +170,7 @@ jobs:
             ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
             ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
             ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
+            ${{ env.GCEM_SOURCE != '' && format('-DGCEM_SOURCE={0}', env.GCEM_SOURCE) || '' }} \
             -G Ninja
 
       - name: Build
