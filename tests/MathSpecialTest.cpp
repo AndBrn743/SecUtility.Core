@@ -13,6 +13,10 @@
 using namespace SecUtility::Math;
 using Catch::Approx;
 
+#define DUAL_CHECK(...)                                                                                                \
+	CHECK(__VA_ARGS__);                                                                                                \
+	STATIC_CHECK(__VA_ARGS__)
+
 TEST_CASE("Erf function")
 {
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
@@ -683,7 +687,7 @@ TEST_CASE("ClebschGordanCoefficient")
 			                  Catch::Matchers::ContainsSubstring("Unphysical m1, m2, and m combination"));
 
 			CHECK_THROWS_WITH(ClebschGordanCoefficient(5 / 2., 5 / 2., 1 / 2., -5 / 2., 2, 0),
-			                 Catch::Matchers::ContainsSubstring("Unphysical j2, m2 combination"));
+			                  Catch::Matchers::ContainsSubstring("Unphysical j2, m2 combination"));
 
 			CHECK_THROWS_WITH(ClebschGordanCoefficient(5 / 2., 5 / 2., 5 / 2., -3 / 2., 6, 1),
 			                  Catch::Matchers::ContainsSubstring("Unphysical j1, j2, and j combination"));
@@ -1698,11 +1702,12 @@ TEST_CASE("CalculateFactorial")
 
 	SECTION("constexpr evaluation")
 	{
-		static_assert(CalculateFactorial<int>(0) == 1);
-		static_assert(CalculateFactorial<int>(1) == 1);
-		static_assert(CalculateFactorial<int>(5) == 120);
-		static_assert(CalculateFactorial<int>(10) == 3628800);
-		static_assert(CalculateFactorial<Int64>(20) == 2432902008176640000LL);
+		DUAL_CHECK(CalculateFactorial<int>(0) == 1);
+		DUAL_CHECK(CalculateFactorial<int>(1) == 1);
+		DUAL_CHECK(CalculateFactorial<int>(5) == 120);
+		DUAL_CHECK(CalculateFactorial<int>(10) == 3628800);
+		DUAL_CHECK(CalculateFactorial<Int64>(20) == 2432902008176640000LL);
+		DUAL_CHECK(CalculateFactorial(static_cast<Int64>(20)) == 2432902008176640000LL);
 	}
 }
 
@@ -1771,16 +1776,16 @@ TEST_CASE("CalculateDoubleFactorial")
 
 	SECTION("constexpr evaluation")
 	{
-		STATIC_CHECK(CalculateDoubleFactorial<int>(0) == 1);
-		STATIC_CHECK(CalculateDoubleFactorial<int>(1) == 1);
-		STATIC_CHECK(CalculateDoubleFactorial<int>(5) == 15);
-		STATIC_CHECK(CalculateDoubleFactorial<int>(10) == 3840);
-		STATIC_CHECK(CalculateDoubleFactorial<Int64>(-1) == 1);
-		STATIC_CHECK(CalculateDoubleFactorial<Int64>(-3) == -1);
+		DUAL_CHECK(CalculateDoubleFactorial<int>(0) == 1);
+		DUAL_CHECK(CalculateDoubleFactorial<int>(1) == 1);
+		DUAL_CHECK(CalculateDoubleFactorial<int>(5) == 15);
+		DUAL_CHECK(CalculateDoubleFactorial<int>(10) == 3840);
+		DUAL_CHECK(CalculateDoubleFactorial<Int64>(-1) == 1);
+		DUAL_CHECK(CalculateDoubleFactorial<Int64>(-3) == -1);
 
-		STATIC_CHECK(CalculateDoubleFactorial<int>(-5) == 0);
-		STATIC_CHECK(CalculateDoubleFactorial<int>(-7) == 0);
-		STATIC_CHECK(CalculateDoubleFactorial<int>(-9) == 0);
+		DUAL_CHECK(CalculateDoubleFactorial(-5) == 0);
+		DUAL_CHECK(CalculateDoubleFactorial(-7) == 0);
+		DUAL_CHECK(CalculateDoubleFactorial(-9) == 0);
 		CHECK(CalculateDoubleFactorial<double>(-5) == Catch::Approx(1. / 3.));
 		CHECK(CalculateDoubleFactorial<double>(-7) == Catch::Approx(-1. / 15.));
 		CHECK(CalculateDoubleFactorial<double>(-9) == Catch::Approx(1. / 105.));
@@ -1814,11 +1819,11 @@ TEST_CASE("Factorial (table lookup)")
 
 	SECTION("constexpr evaluation")
 	{
-		static_assert(Factorial(0) == 1);
-		static_assert(Factorial(1) == 1);
-		static_assert(Factorial(5) == 120);
-		static_assert(Factorial(10) == 3628800);
-		static_assert(Factorial(20) == 2432902008176640000LL);
+		STATIC_CHECK(Factorial(0) == 1);
+		STATIC_CHECK(Factorial(1) == 1);
+		STATIC_CHECK(Factorial(5) == 120);
+		STATIC_CHECK(Factorial(10) == 3628800);
+		STATIC_CHECK(Factorial(20) == 2432902008176640000LL);
 	}
 }
 
@@ -1852,10 +1857,10 @@ TEST_CASE("DoubleFactorial (table lookup)")
 
 	SECTION("constexpr evaluation")
 	{
-		static_assert(DoubleFactorial(-1) == 1);
-		static_assert(DoubleFactorial(0) == 1);
-		static_assert(DoubleFactorial(1) == 1);
-		static_assert(DoubleFactorial(5) == 15);
-		static_assert(DoubleFactorial(33) == 6332659870762850625LL);
+		STATIC_CHECK(DoubleFactorial(-1) == 1);
+		STATIC_CHECK(DoubleFactorial(0) == 1);
+		STATIC_CHECK(DoubleFactorial(1) == 1);
+		STATIC_CHECK(DoubleFactorial(5) == 15);
+		STATIC_CHECK(DoubleFactorial(33) == 6332659870762850625LL);
 	}
 }

@@ -5,40 +5,62 @@
 
 #include <SecUtility/Raw/Int.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
+#include <type_traits>
 #include <array>
 #include <cassert>
 
 
 namespace SecUtility::Math
 {
+	// Two overloads: explicit return type via CalculateFactorial<T>(n), or T deduced from n.
+	// The empty pack between Scalar and Int permits explicit Scalar specification while still deducing Int from n.
 	/// <summary>
-	/// Calculate and returns the factorial of given non-negative number with recursive function calls
+	/// Computes n! for non-negative integers.
 	/// </summary>
-	template <typename T>
-	constexpr T CalculateFactorial(const T n)  // NOLINT(*-no-recursion)
+	/// <remarks>
+	/// Return type is the explicit template argument Scalar when supplied, otherwise deduced from n.
+	/// Requires n &gt;= 0 (asserted) and Int to be an integral type (static_asserted).
+	/// </remarks>
+	template <typename Scalar, typename..., typename Int>
+	constexpr std::enable_if_t<!std::is_same_v<Scalar, void>, Scalar> CalculateFactorial(const Int n) noexcept
 	{
+		static_assert(std::is_integral_v<Int>);
 		assert(n >= 0);
-		return n <= 1 ? 1 : n * CalculateFactorial(n - 1);
+		return n <= 1 ? static_cast<Scalar>(1) : static_cast<Scalar>(n) * CalculateFactorial<Scalar>(n - 1);
+	}
+
+	template <typename X = void, typename..., typename Int>
+	constexpr std::enable_if_t<std::is_same_v<X, void>, Int> CalculateFactorial(const Int n) noexcept
+	{
+		return CalculateFactorial<Int>(n);
 	}
 
 	/// <summary>
-	/// Calculate and returns the factorial of given number with recursive function calls.
-	/// The number can either be positive or negative odd number
+	/// Computes n!! (double factorial). Accepts non-negative integers and negative odd integers.
 	/// </summary>
 	/// <remarks>
-	/// always return same type as input. For negative odd numbers which was less than -3, this means truncate to 0
+	/// Return type is the explicit template argument Scalar when supplied, otherwise deduced from n.
+	/// Requires Int to be an integral type (static_asserted) and n to be odd when negative (asserted).
+	/// For negative odd n &lt;= -5 the true value is fractional and integer division truncates it to 0.
 	/// </remarks>
-	template <typename T>
-	constexpr T CalculateDoubleFactorial(const T n)  // NOLINT(*-no-recursion)
+	template <typename Scalar, typename..., typename Int>
+	constexpr std::enable_if_t<!std::is_same_v<Scalar, void>, Scalar> CalculateDoubleFactorial(const Int n) noexcept
 	{
+		static_assert(std::is_integral_v<Int>);
 		if (n < 0)
 		{
-			assert(static_cast<int>(n) % 2 != 0);
-			auto sign = (static_cast<int>(n) - 1) % 4 == 0 ? 1 : -1;
-			return sign * n / CalculateDoubleFactorial(-n);
+			assert(n % 2 != 0);
+			const auto sign = (n - 1) % 4 == 0 ? 1 : -1;
+			return static_cast<Scalar>(sign * n) / CalculateDoubleFactorial<Scalar>(-n);
 		}
 
-		return n <= 1 ? 1 : n * CalculateDoubleFactorial(n - 2);
+		return n <= 1 ? static_cast<Scalar>(1) : static_cast<Scalar>(n) * CalculateDoubleFactorial<Scalar>(n - 2);
+	}
+
+	template <typename X = void, typename..., typename Int>
+	constexpr std::enable_if_t<std::is_same_v<X, void>, Int> CalculateDoubleFactorial(const Int n) noexcept
+	{
+		return CalculateDoubleFactorial<Int>(n);
 	}
 
 	namespace Detail::Factorial
@@ -85,9 +107,11 @@ namespace SecUtility::Math
 	}
 
 	/// <summary>
-	/// Returns factorial of number that's within the range of [0, 20].
-	/// This method uses compile-time generated table and does not perform actual calculation.
+	/// Returns n! for n in [0, 20] from a compile-time table.
 	/// </summary>
+	/// <remarks>
+	/// 20! is the largest factorial that fits in Int64, so the table does not extend past n = 20.
+	/// </remarks>
 	constexpr SEC_FORCE_INLINE Int64 Factorial(const Int64 i) noexcept
 	{
 		assert(i >= 0 && i <= 20);
@@ -95,10 +119,12 @@ namespace SecUtility::Math
 	}
 
 	/// <summary>
-	/// Returns double factorial of number that's within the range of [-1, 33].
-	/// For the double factorials of negative odd number, use <c>CalculateDoubleFactorial</c> method instead.
-	/// This method uses compile-time generated table and does not perform actual calculation.
+	/// Returns n!! for n in [-1, 33] from a compile-time table.
 	/// </summary>
+	/// <remarks>
+	/// Only (-1)!! is tabulated on the negative side; for other negative odd integers use CalculateDoubleFactorial.
+	/// 33!! is the largest double factorial that fits in Int64.
+	/// </remarks>
 	constexpr SEC_FORCE_INLINE Int64 DoubleFactorial(const Int64 i) noexcept
 	{
 		assert(i >= -1 && i <= 33);

@@ -126,7 +126,7 @@ namespace SecUtility::Math
 			{
 				// The equation used here can be found in Wikipedia, under "Particular values of the gamma function"
 				result[i] = Constant::SqrtOfPi<Scalar>
-				            * CalculateDoubleFactorial<Scalar>(static_cast<Scalar>(2 * i - 1)) / (UInt64{1} << i);
+				            * CalculateDoubleFactorial<Scalar>(2 * i - 1) / (UInt64{1} << i);
 			}
 			return result;
 		}();
@@ -139,7 +139,7 @@ namespace SecUtility::Math
 			{
 				// The equation used here can be found in Wikipedia, under "Particular values of the gamma function"
 				result[i] = MinusOneToThePowerOf<Scalar>(i + 1) * Constant::SqrtOfPi<Scalar> * (UInt64{1} << (i + 1))
-				            / CalculateDoubleFactorial<Scalar>(static_cast<Scalar>(2 * (i + 1) - 1));
+				            / CalculateDoubleFactorial<Scalar>(2 * (i + 1) - 1);
 			}
 			return result;
 		}();
