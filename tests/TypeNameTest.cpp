@@ -11,7 +11,7 @@
 
 static bool Matched(const std::string_view sv, const std::regex& regex)
 {
-	std::cmatch m;
+	std::match_results<std::string_view::const_iterator> m;
 	return std::regex_match(sv.cbegin(), sv.cend(), m, regex);
 }
 
