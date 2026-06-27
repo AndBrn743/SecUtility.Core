@@ -31,6 +31,7 @@ Exception
 │   ├── TimeoutException
 │   ├── OperationCanceledException
 │   └── ResourceException
+│   └── FormatException
 └── ~~AggregateException~~
 
  */
@@ -233,6 +234,7 @@ namespace SecUtility
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(TimeoutException, RuntimeException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(OperationCanceledException, RuntimeException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ResourceException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(FormatException, RuntimeException)
 	// clang-format on
 
 #undef SEC_DEFINE_DERIVED_EXCEPTION_TYPE
