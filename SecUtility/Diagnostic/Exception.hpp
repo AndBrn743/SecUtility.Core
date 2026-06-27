@@ -32,7 +32,9 @@ Exception
 │   ├── OperationCanceledException
 │   ├── ResourceException
 │   ├── FormatException
-│   └── ConfigurationException
+│   ├── ConfigurationException
+│   ├── NoSuchElementException
+│   └── OperationFailedException
 └── ~~AggregateException~~
 
  */
@@ -237,6 +239,8 @@ namespace SecUtility
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ResourceException, RuntimeException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(FormatException, RuntimeException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ConfigurationException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(NoSuchElementException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(OperationFailedException, RuntimeException)
 	// clang-format on
 
 #undef SEC_DEFINE_DERIVED_EXCEPTION_TYPE
