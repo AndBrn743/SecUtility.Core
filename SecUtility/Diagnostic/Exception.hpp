@@ -34,7 +34,8 @@ Exception
 │   ├── FormatException
 │   ├── ConfigurationException
 │   ├── NoSuchElementException
-│   └── OperationFailedException
+│   ├── OperationFailedException
+│   └── InvalidCastException
 └── ~~AggregateException~~
 
  */
@@ -241,6 +242,7 @@ namespace SecUtility
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ConfigurationException, RuntimeException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(NoSuchElementException, RuntimeException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(OperationFailedException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(InvalidCastException, RuntimeException)
 	// clang-format on
 
 #undef SEC_DEFINE_DERIVED_EXCEPTION_TYPE
