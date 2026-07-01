@@ -149,9 +149,14 @@ namespace SecUtility::Math
 	                                               const Scalar zerothMoment = 1)
 	{
 		eigen_assert(rule.Alphas.size() == rule.Gammas.size());
-		eigen_assert(rule.Alphas.size() > 1);
+		eigen_assert(rule.Alphas.size() >= 1);
 
 		const auto n = rule.Alphas.size();
+
+		if (n == 1)
+		{
+			return {Eigen::Vector<Scalar, 1>{1}, Eigen::Vector<Scalar, 1>{zerothMoment}};
+		}
 
 		Eigen::MatrixX<Scalar> jacobian = Eigen::MatrixX<Scalar>::Zero(n, n);
 		jacobian.diagonal() = rule.Alphas;
