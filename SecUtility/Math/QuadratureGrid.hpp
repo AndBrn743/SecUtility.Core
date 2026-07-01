@@ -210,7 +210,7 @@ namespace SecUtility::Math
 		                         {
 			                         QuadratureGrid<Scalar> grid = FejerQuadratureGrid<Scalar>(_size);
 			                         grid.Nodes() =
-			                                 (grid.Nodes() + Eigen::VectorX<long double>::Constant(_size, 1)) / 2;
+			                                 (grid.Nodes() + Eigen::VectorX<Scalar>::Constant(_size, 1)) / 2;
 			                         grid.Weights() *= Scalar{0.5};
 			                         return grid;
 		                         }};
