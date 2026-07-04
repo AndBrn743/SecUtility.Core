@@ -856,4 +856,24 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(referenceMoments[i]).margin(1e-14));
 		}
 	}
+
+	SECTION("Order-1 recurrence hits n==1 early return")
+	{
+		using Scalar = long double;
+
+		// Directly construct a size-1 recurrence to exercise the early-return branch
+		// at QuadratureGrid.hpp:166 without depending on Lanczos.
+		OrthogonalPolynomialRecurrence<Scalar> rule{};
+		rule.Alphas.resize(1);
+		rule.Gammas.resize(1);
+		rule.Alphas[0] = 0.5L;
+		rule.Gammas[0] = 0.0L;
+
+		constexpr Scalar zerothMoment = 2.5L;
+		const auto grid = ConstructQuadratureGrid(rule, zerothMoment);
+
+		REQUIRE(grid.Size() == 1);
+		CHECK(grid.Node(0) == 1.0L);
+		CHECK(grid.Weight(0) == zerothMoment);
+	}
 }
