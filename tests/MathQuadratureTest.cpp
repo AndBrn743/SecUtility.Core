@@ -877,3 +877,227 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		CHECK(grid.Weight(0) == zerothMoment);
 	}
 }
+
+TEST_CASE("Fixed-size quadrature grid and recurrence")
+{
+	using namespace SecUtility::Math;
+	using Scalar = long double;
+
+	SECTION("FejerQuadratureGrid<Scalar,N> matches FejerQuadratureGrid<Scalar>(N)")
+	{
+		constexpr int N = 20;
+		const auto& dyn = FejerQuadratureGrid<Scalar>(N);
+		const auto& fix = FejerQuadratureGrid<Scalar, N>();
+
+		REQUIRE(dyn.Size() == N);
+		REQUIRE(fix.Size() == N);
+
+		for (int i = 0; i < N; ++i)
+		{
+			CHECK(fix.Node(i) == Catch::Approx(dyn.Node(i)).margin(1e-30));
+			CHECK(fix.Weight(i) == Catch::Approx(dyn.Weight(i)).margin(1e-30));
+		}
+	}
+
+	SECTION("FejerQuadratureGrid01<Scalar,N> matches dynamic")
+	{
+		constexpr int N = 20;
+		const auto& dyn = FejerQuadratureGrid01<Scalar>(N);
+		const auto& fix = FejerQuadratureGrid01<Scalar, N>();
+
+		REQUIRE(dyn.Size() == N);
+		REQUIRE(fix.Size() == N);
+
+		for (int i = 0; i < N; ++i)
+		{
+			CHECK(fix.Node(i) == Catch::Approx(dyn.Node(i)).margin(1e-30));
+			CHECK(fix.Weight(i) == Catch::Approx(dyn.Weight(i)).margin(1e-30));
+		}
+	}
+
+	SECTION("FirstKindOfChebyshevGaussQuadratureGrid<Scalar,N> matches dynamic")
+	{
+		constexpr int N = 20;
+		const auto& dyn = FirstKindOfChebyshevGaussQuadratureGrid<Scalar>(N);
+		const auto& fix = FirstKindOfChebyshevGaussQuadratureGrid<Scalar, N>();
+
+		for (int i = 0; i < N; ++i)
+		{
+			CHECK(fix.Node(i) == Catch::Approx(dyn.Node(i)).margin(1e-30));
+			CHECK(fix.Weight(i) == Catch::Approx(dyn.Weight(i)).margin(1e-30));
+		}
+	}
+
+	SECTION("SecondKindOfChebyshevGaussQuadratureGrid<Scalar,N> matches dynamic")
+	{
+		constexpr int N = 20;
+		const auto& dyn = SecondKindOfChebyshevGaussQuadratureGrid<Scalar>(N);
+		const auto& fix = SecondKindOfChebyshevGaussQuadratureGrid<Scalar, N>();
+
+		for (int i = 0; i < N; ++i)
+		{
+			CHECK(fix.Node(i) == Catch::Approx(dyn.Node(i)).margin(1e-30));
+			CHECK(fix.Weight(i) == Catch::Approx(dyn.Weight(i)).margin(1e-30));
+		}
+	}
+
+	SECTION("Shifted Legendre via fixed-Order recurrence (fixed GridSize)")
+	{
+		constexpr int AuxSize = 50;
+		constexpr int Degree = 20;
+
+		// Fejer rule on [0,1] has constant weight => Lanczos yields shifted Legendre recurrence
+		const auto& grid = FejerQuadratureGrid01<Scalar, AuxSize>();
+		const auto rule = ConstructOrthogonalPolynomialRecurrence<Degree>(grid);
+
+		STATIC_REQUIRE(std::is_same_v<std::remove_cvref_t<decltype(rule)>, OrthogonalPolynomialRecurrence<Scalar, Degree>>);
+
+		REQUIRE(rule.Alphas.size() == Degree);
+		REQUIRE(rule.Gammas.size() == Degree);
+
+		// alpha_k = 1/2
+		for (const auto alpha : rule.Alphas)
+		{
+			CHECK(alpha == Catch::Approx(0.5L).margin(1e-16));
+		}
+
+		// gamma_0 = 0, gamma_k = k / (2 * sqrt(4k^2 - 1)) for k >= 1
+		CHECK(rule.Gammas[0] == 0.0L);
+		for (int i = 1; i < Degree; ++i)
+		{
+			const auto expected = i / (2.0L * Sqrt(4.0L * i * i - 1.0L));
+			CHECK(rule.Gammas[i] == Catch::Approx(expected).margin(1e-16));
+		}
+
+		// Build a Degree-point quadrature rule and verify moments of x^n on [0,1] => 1/(n+1)
+		const auto qGrid = ConstructQuadratureGrid(rule, 1.0L);
+		const auto& [roots, weights] = qGrid;
+
+		for (int i = 0; i < Degree * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(1.0L / (i + 1)).margin(1e-14));
+		}
+	}
+
+	SECTION("Fixed-Order recurrence with dynamic GridSize")
+	{
+		constexpr int AuxSize = 50;
+		constexpr int Degree = 20;
+
+		// Dynamic-size input grid; Order is still fixed via the template parameter
+		const auto& grid = FejerQuadratureGrid01<Scalar>(AuxSize);
+		const auto rule = ConstructOrthogonalPolynomialRecurrence<Degree>(grid);
+
+		STATIC_REQUIRE(std::is_same_v<std::remove_cvref_t<decltype(rule)>, OrthogonalPolynomialRecurrence<Scalar, Degree>>);
+		REQUIRE(rule.Alphas.size() == Degree);
+		REQUIRE(rule.Gammas.size() == Degree);
+
+		// Same shifted Legendre coefficients as the all-fixed path
+		for (const auto alpha : rule.Alphas)
+		{
+			CHECK(alpha == Catch::Approx(0.5L).margin(1e-16));
+		}
+		CHECK(rule.Gammas[0] == 0.0L);
+		for (int i = 1; i < Degree; ++i)
+		{
+			const auto expected = i / (2.0L * Sqrt(4.0L * i * i - 1.0L));
+			CHECK(rule.Gammas[i] == Catch::Approx(expected).margin(1e-16));
+		}
+	}
+
+	SECTION("Fixed-Order overload throws on Lanczos early termination")
+	{
+		constexpr int N = 5;
+
+		QuadratureGrid<Scalar, N> grid;
+		// All nodes at the same x forces the Lanczos residual to 0 after k=0,
+		// so requesting any Order >= 2 must throw (cannot resize fixed-size output).
+		for (int i = 0; i < N; ++i)
+		{
+			grid.Node(i) = 0.5L;
+			grid.Weight(i) = 1.0L;
+		}
+
+		// Sanity: Order=1 still succeeds and reports the weighted mean
+		const auto rule1 = ConstructOrthogonalPolynomialRecurrence<1>(grid);
+		REQUIRE(rule1.Alphas.size() == 1);
+		CHECK(rule1.Alphas[0] == 0.5L);
+
+		REQUIRE_THROWS_AS(ConstructOrthogonalPolynomialRecurrence<2>(grid),
+		                  SecUtility::OperationFailedException);
+	}
+
+	SECTION("ConstructQuadratureGrid<Order>(grid) — shifted Legendre, fixed input")
+	{
+		constexpr int AuxSize = 50;
+		constexpr int Order = 20;
+
+		const auto& auxGrid = FejerQuadratureGrid01<Scalar, AuxSize>();
+		const auto qGrid = ConstructQuadratureGrid<Order>(auxGrid);
+
+		STATIC_REQUIRE(std::is_same_v<decltype(qGrid), const QuadratureGrid<Scalar, Order>>);
+		REQUIRE(qGrid.Size() == Order);
+
+		// Fejer on [0,1] has constant weight => quadrature should integrate x^n on [0,1] exactly
+		// for n up to 2*Order-1: integral_0^1 x^n dx = 1/(n+1)
+		const auto& [roots, weights] = qGrid;
+		for (int i = 0; i < Order * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(1.0L / (i + 1)).margin(1e-14));
+		}
+	}
+
+	SECTION("ConstructQuadratureGrid<Order>(grid) — shifted Legendre, dynamic input")
+	{
+		constexpr int AuxSize = 50;
+		constexpr int Order = 20;
+
+		const auto& auxGrid = FejerQuadratureGrid01<Scalar>(AuxSize);
+		const auto qGrid = ConstructQuadratureGrid<Order>(auxGrid);
+
+		STATIC_REQUIRE(std::is_same_v<decltype(qGrid), const QuadratureGrid<Scalar, Order>>);
+		REQUIRE(qGrid.Size() == Order);
+
+		const auto& [roots, weights] = qGrid;
+		for (int i = 0; i < Order * 2; ++i)
+		{
+			CHECK(roots.cwisePow(i).dot(weights) == Catch::Approx(1.0L / (i + 1)).margin(1e-14));
+		}
+	}
+
+	SECTION("ConstructQuadratureGrid<1>(grid) — Order=1 hits inner early-return")
+	{
+		constexpr int AuxSize = 50;
+
+		const auto& auxGrid = FejerQuadratureGrid01<Scalar, AuxSize>();
+		const auto qGrid = ConstructQuadratureGrid<1>(auxGrid);
+
+		STATIC_REQUIRE(std::is_same_v<decltype(qGrid), const QuadratureGrid<Scalar, 1>>);
+		REQUIRE(qGrid.Size() == 1);
+
+		// The early-return at QuadratureGrid.hpp:198 produces node=1, weight=zerothMoment
+		CHECK(qGrid.Node(0) == 1.0L);
+		const auto expectedWeight = auxGrid.Weights().sum();
+		CHECK(qGrid.Weight(0) == Catch::Approx(expectedWeight).margin(1e-30));
+	}
+
+	SECTION("ConstructQuadratureGrid<Order>(grid) — throws on Lanczos breakdown")
+	{
+		constexpr int N = 5;
+
+		QuadratureGrid<Scalar, N> grid;
+		// All nodes at the same x forces Lanczos to break down at k=0
+		for (int i = 0; i < N; ++i)
+		{
+			grid.Node(i) = 0.5L;
+			grid.Weight(i) = 1.0L;
+		}
+
+		// Sanity: Order=1 still succeeds
+		const auto q1 = ConstructQuadratureGrid<1>(grid);
+		REQUIRE(q1.Size() == 1);
+
+		// Order=2 throws — Lanczos inside ConstructOrthogonalPolynomialRecurrence terminates at k=0
+		REQUIRE_THROWS_AS(ConstructQuadratureGrid<2>(grid), SecUtility::OperationFailedException);
+	}
+}

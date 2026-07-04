@@ -13,9 +13,13 @@
 
 namespace SecUtility::Math
 {
-	template <typename Scalar>
+	template <typename Scalar, int SizeAtCompileTime = Eigen::Dynamic>
 	class QuadratureGrid
 	{
+		template <typename, int>
+		friend class QuadratureGrid;
+
+
 	public:
 		QuadratureGrid() noexcept = default;
 
@@ -33,14 +37,41 @@ namespace SecUtility::Math
 			eigen_assert(nodes.rows() == 1 || nodes.cols() == 1);
 			eigen_assert(weights.rows() == 1 || weights.cols() == 1);
 
-			m_Data.resize(nodes.size(), Eigen::NoChange);
+			if constexpr (SizeAtCompileTime == Eigen::Dynamic)
+			{
+				m_Data.resize(nodes.size(), Eigen::NoChange);
+			}
+			else
+			{
+				eigen_assert(nodes.size() == SizeAtCompileTime);
+			}
+
 			m_Data.col(0) = nodes;
 			m_Data.col(1) = weights;
 		}
 
+		template <int OtherSizeAtCompileTime,
+		          typename...,
+		          typename = std::enable_if_t<(SizeAtCompileTime == Eigen::Dynamic)
+		                                      != (OtherSizeAtCompileTime == Eigen::Dynamic)>>
+		explicit QuadratureGrid(const QuadratureGrid<Scalar, OtherSizeAtCompileTime>& other) : m_Data(other.m_Data)
+		{
+			/* NO CODE */
+		}
+
+		template <int OtherSizeAtCompileTime,
+		          typename...,
+		          typename = std::enable_if_t<(SizeAtCompileTime == Eigen::Dynamic)
+		                                      != (OtherSizeAtCompileTime == Eigen::Dynamic)>>
+		QuadratureGrid& operator=(const QuadratureGrid<Scalar, OtherSizeAtCompileTime>& other)
+		{
+			m_Data = other.m_Data;
+			return *this;
+		}
+
 		constexpr Eigen::Index Size() const noexcept
 		{
-			return m_Data.rows();
+			return SizeAtCompileTime == Eigen::Dynamic ? m_Data.rows() : SizeAtCompileTime;
 		}
 
 		constexpr void Resize(const Eigen::Index size)
@@ -134,45 +165,68 @@ namespace SecUtility::Math
 #undef SEC_MATH_QUADRATURE_GRID_DEFINE_GET
 
 	private:
-		Eigen::Matrix<Scalar, Eigen::Dynamic, 2> m_Data{};
+		Eigen::Matrix<Scalar, SizeAtCompileTime, 2> m_Data{};
 	};
 
-	template <typename Scalar>
+	template <typename Scalar, int SizeAtCompileTime = Eigen::Dynamic>
 	struct OrthogonalPolynomialRecurrence;
 
-	template <typename Scalar>
-	OrthogonalPolynomialRecurrence<Scalar> ConstructOrthogonalPolynomialRecurrence(
-	        const QuadratureGrid<Scalar>& weightedGrid, Eigen::Index order);
+	/// Fixed-Order overload. Order is the first explicit template parameter; GridSize is deduced from the
+	/// grid argument. Throws OperationFailedException if Lanczos terminates before reaching Order.
+	template <int OrderAtCompileTime, typename Scalar, int GridSizeAtCompileTime>
+	OrthogonalPolynomialRecurrence<Scalar, OrderAtCompileTime> ConstructOrthogonalPolynomialRecurrence(
+	        const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid);
 
-	template <typename Scalar>
-	QuadratureGrid<Scalar> ConstructQuadratureGrid(const OrthogonalPolynomialRecurrence<Scalar>& rule,
-	                                               const Scalar zerothMoment = 1)
+	/// Dynamic overload — kept for backward compatibility.
+	template <typename Scalar, int GridSizeAtCompileTime>
+	OrthogonalPolynomialRecurrence<Scalar> ConstructOrthogonalPolynomialRecurrence(
+	        const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid, Eigen::Index order);
+
+	template <typename Scalar, int SizeAtCompileTime>
+	QuadratureGrid<Scalar, SizeAtCompileTime> ConstructQuadratureGrid(
+	        const OrthogonalPolynomialRecurrence<Scalar, SizeAtCompileTime>& rule, const Scalar zerothMoment = 1)
 	{
 		eigen_assert(rule.Alphas.size() == rule.Gammas.size());
 		eigen_assert(rule.Alphas.size() >= 1);
 
 		const auto n = rule.Alphas.size();
 
-		if (n == 1)
+		if constexpr (SizeAtCompileTime == Eigen::Dynamic || SizeAtCompileTime == 1)
 		{
-			return {Eigen::Vector<Scalar, 1>{1}, Eigen::Vector<Scalar, 1>{zerothMoment}};
+			if (n == 1)
+			{
+				return {Eigen::Vector<Scalar, 1>{1}, Eigen::Vector<Scalar, 1>{zerothMoment}};
+			}
 		}
 
-		Eigen::MatrixX<Scalar> jacobian = Eigen::MatrixX<Scalar>::Zero(n, n);
+		using Jacobian = Eigen::MatrixX<Scalar>;  // we don't want to have a huge object on stack
+		Jacobian jacobian = Jacobian::Zero(n, n);
 		jacobian.diagonal() = rule.Alphas;
 		jacobian.diagonal(1) = rule.Gammas.tail(n - 1);
 		jacobian.diagonal(-1) = rule.Gammas.tail(n - 1);
 
-		Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> es(jacobian);
+		Eigen::SelfAdjointEigenSolver<Jacobian> es(jacobian);
 
 		return {std::move(es.eigenvalues()), zerothMoment * es.eigenvectors().row(0).cwiseAbs2()};
 	}
 
 	/// This is not a copy construction! This is not a grid truncation operation neither!
-	template <typename Scalar>
-	QuadratureGrid<Scalar> ConstructQuadratureGrid(const QuadratureGrid<Scalar>& weightedGrid, Eigen::Index order)
+	template <typename Scalar, int GridSizeAtCompileTime>
+	QuadratureGrid<Scalar> ConstructQuadratureGrid(const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid,
+	                                               const Eigen::Index order)
 	{
 		const auto opr = ConstructOrthogonalPolynomialRecurrence(weightedGrid, order);
+		const auto zerothMoment = weightedGrid.Weights().sum();
+		return ConstructQuadratureGrid(opr, zerothMoment);
+	}
+
+	/// This is not a copy construction! This is not a grid truncation operation neither!
+	template <int Order, typename Scalar, int GridSizeAtCompileTime>
+	QuadratureGrid<Scalar, Order> ConstructQuadratureGrid(
+	        const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid)
+	{
+		static_assert(Order > 0);
+		const auto opr = ConstructOrthogonalPolynomialRecurrence<Order>(weightedGrid);
 		const auto zerothMoment = weightedGrid.Weights().sum();
 		return ConstructQuadratureGrid(opr, zerothMoment);
 	}
@@ -207,6 +261,15 @@ namespace SecUtility::Math
 		return gg(size);
 	}
 
+	// works on [-1, 1], fixed-size
+	template <typename Scalar, int SizeAtCompileTime>
+	const QuadratureGrid<Scalar, SizeAtCompileTime>& FejerQuadratureGrid()
+	{
+		static_assert(SizeAtCompileTime > 0);
+		static const QuadratureGrid<Scalar, SizeAtCompileTime> gird{FejerQuadratureGrid<Scalar>(SizeAtCompileTime)};
+		return gird;
+	}
+
 	// works on [0, 1]
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& FejerQuadratureGrid01(const Eigen::Index size)
@@ -214,13 +277,21 @@ namespace SecUtility::Math
 		static CachedFunction gg{[](const Eigen::Index _size)
 		                         {
 			                         QuadratureGrid<Scalar> grid = FejerQuadratureGrid<Scalar>(_size);
-			                         grid.Nodes() =
-			                                 (grid.Nodes() + Eigen::VectorX<Scalar>::Constant(_size, 1)) / 2;
+			                         grid.Nodes() = (grid.Nodes() + Eigen::VectorX<Scalar>::Constant(_size, 1)) / 2;
 			                         grid.Weights() *= Scalar{0.5};
 			                         return grid;
 		                         }};
 
 		return gg(size);
+	}
+
+	// works on [0, 1], fixed-size
+	template <typename Scalar, int SizeAtCompileTime>
+	const QuadratureGrid<Scalar, SizeAtCompileTime>& FejerQuadratureGrid01()
+	{
+		static_assert(SizeAtCompileTime > 0);
+		static const QuadratureGrid<Scalar, SizeAtCompileTime> grid{FejerQuadratureGrid01<Scalar>(SizeAtCompileTime)};
+		return grid;
 	}
 
 	// works on (-1, 1). notice that the first kind of Chebyshev-Gauss calculates f(x) / sqrt(1 - x^2), not f(x)
@@ -244,6 +315,16 @@ namespace SecUtility::Math
 		return gg(size);
 	}
 
+	// works on (-1, 1), fixed-size
+	template <typename Scalar, int SizeAtCompileTime>
+	const QuadratureGrid<Scalar, SizeAtCompileTime>& FirstKindOfChebyshevGaussQuadratureGrid()
+	{
+		static_assert(SizeAtCompileTime > 0);
+		static const QuadratureGrid<Scalar, SizeAtCompileTime> grid{
+		        FirstKindOfChebyshevGaussQuadratureGrid<Scalar>(SizeAtCompileTime)};
+		return grid;
+	}
+
 	// works on [-1, 1]. notice that the second kind of Chebyshev-Gauss calculates f(x) * sqrt(1 - x^2), not f(x)
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& SecondKindOfChebyshevGaussQuadratureGrid(const Eigen::Index size)
@@ -264,28 +345,41 @@ namespace SecUtility::Math
 
 		return gg(size);
 	}
+
+	// works on [-1, 1], fixed-size
+	template <typename Scalar, int SizeAtCompileTime>
+	const QuadratureGrid<Scalar, SizeAtCompileTime>& SecondKindOfChebyshevGaussQuadratureGrid()
+	{
+		static_assert(SizeAtCompileTime > 0);
+		static const QuadratureGrid<Scalar, SizeAtCompileTime> grid{
+		        SecondKindOfChebyshevGaussQuadratureGrid<Scalar>(SizeAtCompileTime)};
+		return grid;
+	}
 }
 
 
 namespace std
 {
-	template <typename Scalar>
-	struct tuple_size<SecUtility::Math::QuadratureGrid<Scalar>> : std::integral_constant<std::size_t, 2>
+	template <typename Scalar, int SizeAtCompileTime>
+	struct tuple_size<SecUtility::Math::QuadratureGrid<Scalar, SizeAtCompileTime>>
+	    : std::integral_constant<std::size_t, 2>
 	{
 		/* NO CODE */
 	};
 
 #define SEC_MATH_QUADRATURE_GRID_DEFINE_TUPLE_ELEMENT(QUALIFIER)                                                       \
-	template <typename Scalar>                                                                                         \
-	struct tuple_element<std::size_t{0}, QUALIFIER SecUtility::Math::QuadratureGrid<Scalar>>                           \
+	template <typename Scalar, int SizeAtCompileTime>                                                                  \
+	struct tuple_element<std::size_t{0}, QUALIFIER SecUtility::Math::QuadratureGrid<Scalar, SizeAtCompileTime>>        \
 	{                                                                                                                  \
-		using type = decltype(std::declval<QUALIFIER SecUtility::Math::QuadratureGrid<Scalar>&>().Nodes());            \
+		using type = decltype(std::declval<QUALIFIER SecUtility::Math::QuadratureGrid<Scalar, SizeAtCompileTime>&>()   \
+		                              .Nodes());                                                                       \
 	};                                                                                                                 \
                                                                                                                        \
-	template <typename Scalar>                                                                                         \
-	struct tuple_element<std::size_t{1}, QUALIFIER SecUtility::Math::QuadratureGrid<Scalar>>                           \
+	template <typename Scalar, int SizeAtCompileTime>                                                                  \
+	struct tuple_element<std::size_t{1}, QUALIFIER SecUtility::Math::QuadratureGrid<Scalar, SizeAtCompileTime>>        \
 	{                                                                                                                  \
-		using type = decltype(std::declval<QUALIFIER SecUtility::Math::QuadratureGrid<Scalar>&>().Weights());          \
+		using type = decltype(std::declval<QUALIFIER SecUtility::Math::QuadratureGrid<Scalar, SizeAtCompileTime>&>()   \
+		                              .Weights());                                                                     \
 	};
 
 	SEC_MATH_QUADRATURE_GRID_DEFINE_TUPLE_ELEMENT()
