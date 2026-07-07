@@ -235,28 +235,28 @@ namespace SecUtility::Math
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& FejerQuadratureGrid(const Eigen::Index size)
 	{
-		static CachedFunction gg{[](const Eigen::Index _size)
-		                         {
-			                         QuadratureGrid<Scalar> grid(_size);
+		static ConcurrentCachedFunction gg{[](const Eigen::Index _size)
+		                                   {
+			                                   QuadratureGrid<Scalar> grid(_size);
 
-			                         for (Eigen::Index i = 0; i < _size; ++i)
-			                         {
-				                         grid.Node(i) = Cos((2 * i + 1) * Constant::Pi<Scalar> / (2 * _size));
-			                         }
+			                                   for (Eigen::Index i = 0; i < _size; ++i)
+			                                   {
+				                                   grid.Node(i) = Cos((2 * i + 1) * Constant::Pi<Scalar> / (2 * _size));
+			                                   }
 
-			                         for (Eigen::Index i = 0; i < _size; ++i)
-			                         {
-				                         Scalar sum = 0;
-				                         for (Eigen::Index m = 1; m <= _size / 2; ++m)
-				                         {
-					                         sum += Cos(2 * m * ACos(grid.Node(i))) / (4 * m * m - 1);
-				                         }
+			                                   for (Eigen::Index i = 0; i < _size; ++i)
+			                                   {
+				                                   Scalar sum = 0;
+				                                   for (Eigen::Index m = 1; m <= _size / 2; ++m)
+				                                   {
+					                                   sum += Cos(2 * m * ACos(grid.Node(i))) / (4 * m * m - 1);
+				                                   }
 
-				                         grid.Weight(i) = (1 - 2 * sum) * 2 / _size;
-			                         }
+				                                   grid.Weight(i) = (1 - 2 * sum) * 2 / _size;
+			                                   }
 
-			                         return grid;
-		                         }};
+			                                   return grid;
+		                                   }};
 
 		return gg(size);
 	}
@@ -274,13 +274,14 @@ namespace SecUtility::Math
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& FejerQuadratureGrid01(const Eigen::Index size)
 	{
-		static CachedFunction gg{[](const Eigen::Index _size)
-		                         {
-			                         QuadratureGrid<Scalar> grid = FejerQuadratureGrid<Scalar>(_size);
-			                         grid.Nodes() = (grid.Nodes() + Eigen::VectorX<Scalar>::Constant(_size, 1)) / 2;
-			                         grid.Weights() *= Scalar{0.5};
-			                         return grid;
-		                         }};
+		static ConcurrentCachedFunction gg{[](const Eigen::Index _size)
+		                                   {
+			                                   QuadratureGrid<Scalar> grid = FejerQuadratureGrid<Scalar>(_size);
+			                                   grid.Nodes() =
+			                                           (grid.Nodes() + Eigen::VectorX<Scalar>::Constant(_size, 1)) / 2;
+			                                   grid.Weights() *= Scalar{0.5};
+			                                   return grid;
+		                                   }};
 
 		return gg(size);
 	}
@@ -298,19 +299,19 @@ namespace SecUtility::Math
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& FirstKindOfChebyshevGaussQuadratureGrid(const Eigen::Index size)
 	{
-		static CachedFunction gg{[](const Eigen::Index _size)
-		                         {
-			                         QuadratureGrid<Scalar> grid(_size);
+		static ConcurrentCachedFunction gg{[](const Eigen::Index _size)
+		                                   {
+			                                   QuadratureGrid<Scalar> grid(_size);
 
-			                         for (Eigen::Index i = 0; i < _size; ++i)
-			                         {
-				                         grid.Node(i) = Cos((2 * i + 1) * Constant::Pi<Scalar> / (2 * _size));
-			                         }
+			                                   for (Eigen::Index i = 0; i < _size; ++i)
+			                                   {
+				                                   grid.Node(i) = Cos((2 * i + 1) * Constant::Pi<Scalar> / (2 * _size));
+			                                   }
 
-			                         grid.Weights().setConstant(Constant::Pi<Scalar> / _size);
+			                                   grid.Weights().setConstant(Constant::Pi<Scalar> / _size);
 
-			                         return grid;
-		                         }};
+			                                   return grid;
+		                                   }};
 
 		return gg(size);
 	}
@@ -329,19 +330,20 @@ namespace SecUtility::Math
 	template <typename Scalar>
 	const QuadratureGrid<Scalar>& SecondKindOfChebyshevGaussQuadratureGrid(const Eigen::Index size)
 	{
-		static CachedFunction gg{[](const Eigen::Index _size)
-		                         {
-			                         QuadratureGrid<Scalar> grid(_size);
+		static ConcurrentCachedFunction gg{[](const Eigen::Index _size)
+		                                   {
+			                                   QuadratureGrid<Scalar> grid(_size);
 
-			                         for (Eigen::Index i = 0; i < _size; ++i)
-			                         {
-				                         grid.Node(i) = Cos((i + 1) * Constant::Pi<Scalar> / (_size + 1));
-				                         grid.Weight(i) = PowInt(Sin((i + 1) * Constant::Pi<Scalar> / (_size + 1)), 2)
-				                                          * Constant::Pi<Scalar> / (_size + 1);
-			                         }
+			                                   for (Eigen::Index i = 0; i < _size; ++i)
+			                                   {
+				                                   grid.Node(i) = Cos((i + 1) * Constant::Pi<Scalar> / (_size + 1));
+				                                   grid.Weight(i) =
+				                                           PowInt(Sin((i + 1) * Constant::Pi<Scalar> / (_size + 1)), 2)
+				                                           * Constant::Pi<Scalar> / (_size + 1);
+			                                   }
 
-			                         return grid;
-		                         }};
+			                                   return grid;
+		                                   }};
 
 		return gg(size);
 	}
