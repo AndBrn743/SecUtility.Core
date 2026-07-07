@@ -9,28 +9,21 @@
 #include <stdexcept>
 #include <tuple>
 #include <utility>
+#include <mutex>
+#include <shared_mutex>
 
 #include <SecUtility/Meta/TypeTrait.hpp>
+#include <SecUtility/Misc/NullMutex.hpp>
 
 
 namespace SecUtility
 {
-	template <typename... Args>
-	class CachedFunction;
+	template <typename Mutex, typename... Args>
+	class BasicCachedFunction;
 
 
-	template <typename Result, typename... Args>
-	class CachedFunction<Result(Args...)> : public CachedFunction<std::function<Result(Args...)>>
-	{
-		using Base = CachedFunction<std::function<Result(Args...)>>;
-
-	public:
-		using Base::Base;
-	};
-
-
-	template <typename Callable>
-	class CachedFunction<Callable>
+	template <typename Mutex, typename Callable>
+	class BasicCachedFunction<Mutex, Callable>
 	{
 		using Traits = FunctionTraits<Callable>;
 		using Result = typename Traits::ReturnType;
@@ -54,12 +47,11 @@ namespace SecUtility
 		static_assert(!std::is_reference_v<Result>, "CachedFunction does not support reference types");
 		static_assert(!std::is_void_v<Result>, "CachedFunction does not support void return types");
 
-		explicit CachedFunction(Callable function) : m_Function(std::move(function))
+		explicit BasicCachedFunction(Callable function) : m_Function(std::move(function))
 		{
 			/* NO CODE */
 		}
 
-		// the call operator is not thread-safe. user should guard the calls to it with synchronization primitives
 		template <typename... Args>
 		const Result& operator()(Args&&... args) noexcept(
 		        noexcept(std::declval<Callable>()(std::forward<Args>(args)...)))
@@ -68,6 +60,15 @@ namespace SecUtility
 
 			if constexpr (Traits::Arity == 0)
 			{
+				{
+					std::shared_lock lock(m_Mutex);
+					if (m_Cache.has_value())
+					{
+						return m_Cache.value();
+					}
+				}
+
+				std::lock_guard lock(m_Mutex);
 				if (!m_Cache.has_value())
 				{
 					m_Cache = m_Function();
@@ -78,8 +79,18 @@ namespace SecUtility
 			else
 			{
 				auto argTuple = std::make_tuple(std::forward<Args>(args)...);
-				const auto iterator = m_Cache.find(argTuple);
 
+				{
+					std::shared_lock lock(m_Mutex);
+					const auto iterator = m_Cache.find(argTuple);
+					if (iterator != m_Cache.end())
+					{
+						return iterator->second;
+					}
+				}
+
+				std::lock_guard lock(m_Mutex);
+				const auto iterator = m_Cache.find(argTuple);
 				if (iterator != m_Cache.end())
 				{
 					return iterator->second;
@@ -93,6 +104,8 @@ namespace SecUtility
 		const Result& operator()(Args&&... args) const
 		{
 			static_assert(sizeof...(Args) == Traits::Arity);
+
+			std::shared_lock lock(m_Mutex);
 
 			if constexpr (Traits::Arity == 0)
 			{
@@ -116,8 +129,9 @@ namespace SecUtility
 			}
 		}
 
-		void Clear() noexcept
+		void Clear()
 		{
+			std::lock_guard lock(m_Mutex);
 			if constexpr (Traits::Arity == 0)
 			{
 				m_Cache = std::nullopt;
@@ -128,8 +142,9 @@ namespace SecUtility
 			}
 		}
 
-		std::size_t Size() const noexcept
+		std::size_t Size() const
 		{
+			std::shared_lock lock(m_Mutex);
 			if constexpr (Traits::Arity == 0)
 			{
 				return m_Cache.has_value() ? 1 : 0;
@@ -141,6 +156,7 @@ namespace SecUtility
 		}
 
 	private:
+		[[no_unique_address]] mutable Mutex m_Mutex;
 		Callable m_Function;
 		std::conditional_t<Traits::Arity == 0,
 		                   std::optional<Result>,
@@ -149,6 +165,51 @@ namespace SecUtility
 	};
 
 
+	template <typename... Args>
+	class CachedFunction;
+
+	template <typename Result, typename... Args>
+	class CachedFunction<Result(Args...)> : public BasicCachedFunction<NullMutex, std::function<Result(Args...)>>
+	{
+		using Base = BasicCachedFunction<NullMutex, std::function<Result(Args...)>>;
+
+	public:
+		using Base::Base;
+	};
+
+	template <typename Callable>
+	class CachedFunction<Callable> : public BasicCachedFunction<NullMutex, Callable>
+	{
+		using Base = BasicCachedFunction<NullMutex, Callable>;
+
+	public:
+		using Base::Base;
+	};
+
 	template <typename Callable>
 	CachedFunction(Callable) -> CachedFunction<Callable>;
+
+	template <typename... Args>
+	class ConcurrentCachedFunction;
+
+	template <typename Result, typename... Args>
+	class ConcurrentCachedFunction<Result(Args...)> : public BasicCachedFunction<std::shared_mutex, std::function<Result(Args...)>>
+	{
+		using Base = BasicCachedFunction<std::shared_mutex, std::function<Result(Args...)>>;
+
+	public:
+		using Base::Base;
+	};
+
+	template <typename Callable>
+	class ConcurrentCachedFunction<Callable> : public BasicCachedFunction<std::shared_mutex, Callable>
+	{
+		using Base = BasicCachedFunction<std::shared_mutex, Callable>;
+
+	public:
+		using Base::Base;
+	};
+
+	template <typename Callable>
+	ConcurrentCachedFunction(Callable) -> ConcurrentCachedFunction<Callable>;
 }
