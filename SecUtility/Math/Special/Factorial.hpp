@@ -26,7 +26,12 @@ namespace SecUtility::Math
 	{
 		static_assert(std::is_integral_v<Int>);
 		assert(n >= 0);
-		return n <= 1 ? static_cast<Scalar>(1) : static_cast<Scalar>(n) * CalculateFactorial<Scalar>(n - 1);
+		Scalar result = 1;
+		for (Int i = 2; i <= n; i++)
+		{
+			result *= static_cast<Scalar>(i);
+		}
+		return result;
 	}
 
 	template <typename X = void, typename..., typename Int>
@@ -54,7 +59,12 @@ namespace SecUtility::Math
 			return static_cast<Scalar>(sign * n) / CalculateDoubleFactorial<Scalar>(-n);
 		}
 
-		return n <= 1 ? static_cast<Scalar>(1) : static_cast<Scalar>(n) * CalculateDoubleFactorial<Scalar>(n - 2);
+		Scalar result = 1;
+		for (Int i = n; i > 1; i -= 2)
+		{
+			result *= static_cast<Scalar>(i);
+		}
+		return result;
 	}
 
 	template <typename X = void, typename..., typename Int>
