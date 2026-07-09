@@ -1,0 +1,63 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/windows.yml'
+      - 'CMakeLists.txt'
+      - 'SecUtility/**'
+      - 'tests/**'
+      - 'cmake/**'
+      - 'patches/**'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/windows.yml'
+      - 'CMakeLists.txt'
+      - 'SecUtility/**'
+      - 'tests/**'
+      - 'cmake/**'
+      - 'patches/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.compiler }} / ${{ matrix.build_type }} / C++${{ matrix.cxx_standard }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [msvc, clang-cl]
+        build_type: [Debug, Release]
+        cxx_standard: ['17', '20']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build `
+            ${{ matrix.compiler == 'clang-cl' && '-T ClangCL' || '' }} `
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+            -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} `
+            -DCMAKE_CXX_EXTENSIONS=OFF `
+            -DCMAKE_CXX_FLAGS="/EHsc"
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest -C ${{ matrix.build_type }} --output-on-failure
