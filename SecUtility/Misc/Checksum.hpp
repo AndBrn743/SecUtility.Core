@@ -3,21 +3,41 @@
 
 #pragma once
 
-#include <SecUtility/Misc/Enum.hpp>
-#include <SecUtility/Misc/Endian.hpp>
-#include <SecUtility/Misc/Prefetch.hpp>
 #include <SecUtility/Macro/ConstevalIf.hpp>
+#include <SecUtility/Misc/Endian.hpp>
+#include <SecUtility/Misc/Enum.hpp>
+#include <SecUtility/Misc/Prefetch.hpp>
 #include <SecUtility/Raw/Int.hpp>
 
+#include <array>
 #include <iomanip>
 #include <ostream>
-#include <array>
 
 #if defined(__SSE4_2__)
-#include <nmmintrin.h>  // CRC-32C intrinsics (x86/x64 + SSE4.2)
+#include <nmmintrin.h>  // CRC-32C intrinsics (GCC/Clang on x86/x64 with -msse4.2)
+#define SECUTILITY_HAS_X86_CRC32C true
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+#include <intrin.h>  // CRC-32C intrinsics (MSVC/clang-cl on Windows x86/x64)
+#define SECUTILITY_HAS_X86_CRC32C true
+#elif defined(__ARM_FEATURE_CRC32)
+#include <arm_acle.h>  // CRC-32C intrinsics (ARMv8 + CRC32 extension)
+#define SECUTILITY_HAS_ARM_CRC32C true
+#endif
+
+#if (defined(SECUTILITY_HAS_X86_CRC32C) && SECUTILITY_HAS_X86_CRC32C)                                                  \
+        || (defined(SECUTILITY_HAS_ARM_CRC32C) && SECUTILITY_HAS_ARM_CRC32C)
 #define SECUTILITY_HAS_HARDWARE_CRC32C true
 #endif
 
+// clang-cl mimics MSVC's /arch model and doesn't enable SSE4.2 globally even when
+// the intrinsics are callable. Function-level target attribution is required for
+// clang to emit the SSE4.2 instructions; MSVC doesn't check features, and POSIX
+// clang gets the feature globally via -msse4.2 (so the attribute is redundant).
+#if defined(__clang__) && defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86)) && !defined(__SSE4_2__)
+#define SECUTILITY_CRC32C_X86_TARGET __attribute__((target("sse4.2")))
+#else
+#define SECUTILITY_CRC32C_X86_TARGET
+#endif
 
 namespace SecUtility::Checksum
 {
@@ -344,6 +364,7 @@ namespace SecUtility::Checksum
 
 
 #if defined(SECUTILITY_HAS_HARDWARE_CRC32C) && SECUTILITY_HAS_HARDWARE_CRC32C
+	SECUTILITY_CRC32C_X86_TARGET
 	inline Checksum32 HardwareCrc32C(const std::uint8_t* const data,
 	                                 std::size_t byteCount,
 	                                 const Checksum32 crc = Checksum32{0xFFFFFFFF}) noexcept
@@ -353,14 +374,22 @@ namespace SecUtility::Checksum
 
 		while (byteCount >= sizeof(std::uint64_t))
 		{
+#if defined(SECUTILITY_HAS_X86_CRC32C) && SECUTILITY_HAS_X86_CRC32C
 			_crc = _mm_crc32_u64(_crc, *reinterpret_cast<const std::uint64_t*>(p));
+#elif defined(SECUTILITY_HAS_ARM_CRC32C) && SECUTILITY_HAS_ARM_CRC32C
+			_crc = __crc32cd(_crc, *reinterpret_cast<const std::uint64_t*>(p));
+#endif
 			p += sizeof(std::uint64_t);
 			byteCount -= sizeof(std::uint64_t);
 		}
 
 		while (byteCount--)
 		{
+#if defined(SECUTILITY_HAS_X86_CRC32C) && SECUTILITY_HAS_X86_CRC32C
 			_crc = _mm_crc32_u8(static_cast<std::uint32_t>(_crc), *p++);
+#elif defined(SECUTILITY_HAS_ARM_CRC32C) && SECUTILITY_HAS_ARM_CRC32C
+			_crc = __crc32cb(static_cast<std::uint32_t>(_crc), *p++);
+#endif
 		}
 
 		return static_cast<Checksum32>(_crc ^ 0xFFFFFFFF);
