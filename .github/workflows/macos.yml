@@ -1,0 +1,57 @@
+name: macOS CI
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/macos.yml'
+      - 'CMakeLists.txt'
+      - 'SecUtility/**'
+      - 'tests/**'
+      - 'cmake/**'
+      - 'patches/**'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/macos.yml'
+      - 'CMakeLists.txt'
+      - 'SecUtility/**'
+      - 'tests/**'
+      - 'cmake/**'
+      - 'patches/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  xcode-clang:
+    name: Xcode Clang / ${{ matrix.build_type }} / C++${{ matrix.cxx_standard }}
+    runs-on: macos-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+        cxx_standard: ['17', '20']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} \
+            -DCMAKE_CXX_EXTENSIONS=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure
