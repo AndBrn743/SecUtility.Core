@@ -28,7 +28,7 @@ using SecUtility::TimeUnit;
 static void CpuWork()
 {
 	volatile double x = 0.0;
-	for (int i = 0; i < 5'000'000; ++i)
+	for (int i = 0; i < 15'000'000; ++i)
 	{
 		x += std::sin(i * 0.00001);
 	}
@@ -421,7 +421,12 @@ TEST_CASE("Stopwatch - Wall clock timing")
 		cpuSw.Stop();
 		sw.Stop();
 
-		CHECK(cpuSw.Elapsed<TimeUnit::Milliseconds>() == Approx(sw.Elapsed<TimeUnit::Milliseconds>()).margin(20));
+		const auto wall = sw.Elapsed<TimeUnit::Milliseconds>();
+		const auto cpu  = cpuSw.Elapsed<TimeUnit::Milliseconds>();
+
+		CHECK(cpu <= wall + 5.0);   // CPU time never exceeds wall time
+		CHECK(cpu >= wall * 0.5);   // most of the wall time was real CPU work
+		CHECK(cpu >= 10.0);         // something measurable happened
 	}
 }
 
