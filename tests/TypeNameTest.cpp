@@ -79,7 +79,7 @@ TEST_CASE("Constexpr TypeName should work with user defined")
 
 TEST_CASE("Demangle should work")
 {
-#if defined(_MSC_VER) && !defined(__clang__)
+#if defined(_MSC_VER)
 	REQUIRE(SecUtility::Demangle(typeid(Example::Internal::Array<int, 3>).name())
 	        == std::string_view{"class Example::Internal::Array<int,3>"});
 #else
