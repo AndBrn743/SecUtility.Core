@@ -3,6 +3,9 @@
 //
 
 #include <algorithm>
+#include <array>
+#include <iterator>
+#include <vector>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -1862,5 +1865,246 @@ TEST_CASE("DoubleFactorial (table lookup)")
 		STATIC_CHECK(DoubleFactorial(1) == 1);
 		STATIC_CHECK(DoubleFactorial(5) == 15);
 		STATIC_CHECK(DoubleFactorial(33) == 6332659870762850625LL);
+	}
+}
+
+
+TEST_CASE("CalculatePascalRow")
+{
+	SECTION("Base cases")
+	{
+		SECTION("n = 0 produces a single 1")
+		{
+			std::vector<Int64> row;
+			CalculatePascalRow<Int64>(0, std::back_inserter(row));
+			REQUIRE(row.size() == 1);
+			CHECK(row[0] == 1);
+		}
+
+		SECTION("n = 1 produces [1, 1]")
+		{
+			std::vector<Int64> row;
+			CalculatePascalRow<Int64>(1, std::back_inserter(row));
+			REQUIRE(row.size() == 2);
+			CHECK(row[0] == 1);
+			CHECK(row[1] == 1);
+		}
+	}
+
+	SECTION("Known small rows")
+	{
+		SECTION("Row 4 = [1, 4, 6, 4, 1]")
+		{
+			std::vector<Int64> row;
+			CalculatePascalRow<Int64>(4, std::back_inserter(row));
+			REQUIRE(row.size() == 5);
+			CHECK(row == std::vector<Int64>{1, 4, 6, 4, 1});
+		}
+
+		SECTION("Row 5 = [1, 5, 10, 10, 5, 1]")
+		{
+			std::vector<Int64> row;
+			CalculatePascalRow<Int64>(5, std::back_inserter(row));
+			REQUIRE(row.size() == 6);
+			CHECK(row == std::vector<Int64>{1, 5, 10, 10, 5, 1});
+		}
+
+		SECTION("Row 10 = [1, 10, 45, 120, 210, 252, 210, 120, 45, 10, 1]")
+		{
+			std::vector<Int64> row;
+			CalculatePascalRow<Int64>(10, std::back_inserter(row));
+			REQUIRE(row.size() == 11);
+			CHECK(row == std::vector<Int64>{1, 10, 45, 120, 210, 252, 210, 120, 45, 10, 1});
+		}
+	}
+
+	SECTION("Row writes exactly n+1 elements")
+	{
+		for (Int64 n = 0; n <= 30; ++n)
+		{
+			std::vector<Int64> row;
+			CalculatePascalRow<Int64>(n, std::back_inserter(row));
+			CHECK(static_cast<Int64>(row.size()) == n + 1);
+		}
+	}
+
+	SECTION("Symmetry: row[k] == row[n-k]")
+	{
+		for (Int64 n = 0; n <= 20; ++n)
+		{
+			std::vector<Int64> row;
+			CalculatePascalRow<Int64>(n, std::back_inserter(row));
+			for (Int64 k = 0; k <= n / 2; ++k)
+			{
+				CHECK(row[k] == row[n - k]);
+			}
+		}
+	}
+
+	SECTION("Entries match BinomialCoefficient")
+	{
+		for (Int64 n = 0; n <= 30; ++n)
+		{
+			std::vector<Int64> row;
+			CalculatePascalRow<Int64>(n, std::back_inserter(row));
+			for (Int64 k = 0; k <= n; ++k)
+			{
+				CHECK(row[k] == BinomialCoefficient(n, k));
+			}
+		}
+	}
+
+	SECTION("Boundary: row 61 stays inside Int64")
+	{
+		// C(61,30) = C(61,31) = 232,714,176,627,630,544 — central peak of the largest tabulated row.
+		std::vector<Int64> row;
+		CalculatePascalRow<Int64>(61, std::back_inserter(row));
+		REQUIRE(row.size() == 62);
+		CHECK(row[0] == 1);
+		CHECK(row[30] == 232714176627630544LL);
+		CHECK(row[31] == 232714176627630544LL);
+		CHECK(row[61] == 1);
+	}
+
+	SECTION("Scalar type flexibility")
+	{
+		SECTION("int")
+		{
+			std::vector<int> row;
+			CalculatePascalRow<int>(10, std::back_inserter(row));
+			CHECK(row[5] == 252);
+		}
+
+		SECTION("unsigned")
+		{
+			std::vector<unsigned> row;
+			CalculatePascalRow<unsigned>(10, std::back_inserter(row));
+			CHECK(row[5] == 252u);
+		}
+
+		SECTION("double")
+		{
+			std::vector<double> row;
+			CalculatePascalRow<double>(10, std::back_inserter(row));
+			CHECK(row[5] == 252.0);
+		}
+	}
+
+	SECTION("Deduced Scalar (no explicit template argument)")
+	{
+		std::vector<int> row;
+		CalculatePascalRow(5, std::back_inserter(row));
+		REQUIRE(row.size() == 6);
+		CHECK(row[0] == 1);
+		CHECK(row[2] == 10);
+		CHECK(row[5] == 1);
+	}
+
+	SECTION("Writes into a raw pointer")
+	{
+		Int64 buffer[11];
+		CalculatePascalRow<Int64>(10, buffer);
+		CHECK(buffer[0] == 1);
+		CHECK(buffer[5] == 252);
+		CHECK(buffer[10] == 1);
+	}
+
+	SECTION("Writes into std::array")
+	{
+		std::array<Int64, 6> row{};
+		CalculatePascalRow<Int64>(5, row.begin());
+		CHECK(row == (std::array<Int64, 6>{1, 5, 10, 10, 5, 1}));
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		constexpr auto row5 = [] {
+			std::array<Int64, 6> data{};
+			CalculatePascalRow<Int64>(5, data.begin());
+			return data;
+		}();
+		STATIC_CHECK(row5[0] == 1);
+		STATIC_CHECK(row5[2] == 10);
+		STATIC_CHECK(row5[5] == 1);
+
+		// Deduced-Scalar version
+		constexpr auto row4 = [] {
+			std::array<int, 5> data{};
+			CalculatePascalRow(4, data.begin());
+			return data;
+		}();
+		STATIC_CHECK(row4[2] == 6);
+	}
+}
+
+
+TEST_CASE("PascalRow (table lookup)")
+{
+	SECTION("Boundary values")
+	{
+		const auto row0 = PascalRow(0);
+		CHECK(row0.size() == 1);
+		CHECK(row0[0] == 1);
+
+		const auto row61 = PascalRow(61);
+		CHECK(row61.size() == 62);
+		CHECK(row61[0] == 1);
+		CHECK(row61[30] == 232714176627630544LL);
+		CHECK(row61[61] == 1);
+	}
+
+	SECTION("Known values")
+	{
+		const auto row5 = PascalRow(5);
+		CHECK(row5.size() == 6);
+		const std::vector<Int64> actual(row5.begin(), row5.end());
+		CHECK(actual == std::vector<Int64>{1, 5, 10, 10, 5, 1});
+	}
+
+	SECTION("Length is n+1 across the table range")
+	{
+		for (Int64 n = 0; n <= 61; ++n)
+		{
+			CHECK(PascalRow(n).size() == static_cast<std::size_t>(n + 1));
+		}
+	}
+
+	SECTION("Matches CalculatePascalRow across the full table range")
+	{
+		for (Int64 n = 0; n <= 61; ++n)
+		{
+			std::vector<Int64> computed;
+			computed.reserve(static_cast<std::size_t>(n + 1));
+			CalculatePascalRow<Int64>(n, std::back_inserter(computed));
+
+			const auto row = PascalRow(n);
+			CHECK(computed.size() == row.size());
+			for (std::size_t k = 0; k < row.size(); ++k)
+			{
+				CHECK(computed[k] == row[k]);
+			}
+		}
+	}
+
+	SECTION("Entries match BinomialCoefficient across the table range")
+	{
+		for (Int64 n = 0; n <= 61; ++n)
+		{
+			const auto row = PascalRow(n);
+			for (std::size_t k = 0; k < row.size(); ++k)
+			{
+				CHECK(row[k] == BinomialCoefficient(n, static_cast<Int64>(k)));
+			}
+		}
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		constexpr auto row5 = PascalRow(5);
+		static_assert(sizeof(row5) == 2 * sizeof(nullptr));
+		STATIC_CHECK(row5.size() == 6);
+		STATIC_CHECK(row5[0] == 1);
+		STATIC_CHECK(row5[2] == 10);
+		STATIC_CHECK(row5[5] == 1);
 	}
 }

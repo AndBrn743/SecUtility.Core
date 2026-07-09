@@ -12,3 +12,4 @@
 #include <SecUtility/Math/Special/Factorial.hpp>
 #include <SecUtility/Math/Special/Gamma.hpp>
 #include <SecUtility/Math/Special/HarmonicNumber.hpp>
+#include <SecUtility/Math/Special/PascalTriangle.hpp>
