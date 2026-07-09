@@ -88,32 +88,28 @@ if (TARGET range-v3::range-v3)
             "an ancestor-defined range-v3 target, which is not the current case. SecUtility.Core recommends that you "
             "manually apply the patch at patches/range-v3/include/range/v3/view/zip_with.hpp.patch")
 else ()
-    # if (NOT RANGE_V3_SOURCE AND NOT RANGE_V3_REPO AND NOT RANGE_V3_TAG)
-    #     find_package(range-v3)
-    # endif ()
+    # find_package(range-v3) is not viable: the recommended patch must be applied to source.
 
-    if (NOT range-v3_FOUND)
-        if (NOT RANGE_V3_SOURCE AND NOT RANGE_V3_REPO AND NOT RANGE_V3_TAG)
-            set(RANGE_V3_SOURCE https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz)
-            # set(RANGE_V3_REPO https://github.com/ericniebler/range-v3.git)
-            # set(RANGE_V3_TAG 0.12.0)
-            message(STATUS "Building range-v3 from ${RANGE_V3_SOURCE}")
-        endif ()
-
-        include(FetchContent)
-        FetchContent_Declare(
-                range-v3
-                URL ${RANGE_V3_SOURCE}
-                GIT_REPOSITORY ${RANGE_V3_REPO}
-                GIT_TAG ${RANGE_V3_TAG}
-                UPDATE_DISCONNECTED ON
-                PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching range-v3..."
-                && cd ${CMAKE_BINARY_DIR}/_deps/range-v3-src/include/range/v3/view
-                && ${PATCH_EXECUTABLE} --forward --batch --silent < ${CMAKE_CURRENT_SOURCE_DIR}/patches/range-v3/include/range/v3/view/zip_with.hpp.patch
-                || ${CMAKE_COMMAND} -E echo "range-v3 patch skipped"
-        )
-        FetchContent_MakeAvailable(range-v3)
+    if (NOT RANGE_V3_SOURCE AND NOT RANGE_V3_REPO AND NOT RANGE_V3_TAG)
+        set(RANGE_V3_SOURCE https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz)
+        message(STATUS "Building range-v3 from ${RANGE_V3_SOURCE}")
     endif ()
+
+    include(FetchContent)
+    FetchContent_Declare(
+            range-v3
+            URL ${RANGE_V3_SOURCE}
+            GIT_REPOSITORY ${RANGE_V3_REPO}
+            GIT_TAG ${RANGE_V3_TAG}
+            UPDATE_DISCONNECTED ON
+            PATCH_COMMAND ${CMAKE_COMMAND}
+                    -DPATCH_EXE=${PATCH_EXECUTABLE}
+                    -DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/patches/range-v3/include/range/v3/view/zip_with.hpp.patch
+                    -DSOURCE_DIR=${CMAKE_BINARY_DIR}/_deps/range-v3-src/include/range/v3/view
+                    -DSTRIP=0
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchIfNeeded.cmake
+    )
+    FetchContent_MakeAvailable(range-v3)
 endif ()
 target_link_libraries(SecUtility.Core INTERFACE range-v3::range-v3)
 
@@ -136,12 +132,18 @@ else ()
                 GIT_REPOSITORY ${GCEM_REPO}
                 GIT_TAG ${GCEM_TAG}
                 SOURCE_DIR ${GcemSourceDir}
-                PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching GCEM..."
-                && cd ${GcemSourceDir}
-                && ${PATCH_EXECUTABLE} --forward --batch --silent < ${CMAKE_CURRENT_SOURCE_DIR}/patches/gcem/CMakeLists.txt.patch
-                && cd ${GcemSourceDir}/include/gcem_incl
-                && ${PATCH_EXECUTABLE} --forward --batch --silent < ${CMAKE_CURRENT_SOURCE_DIR}/patches/gcem/include/gcem_incl/erf.hpp.patch
-                || ${CMAKE_COMMAND} -E echo "GCEM erf.hpp patch skipped")
+                PATCH_COMMAND ${CMAKE_COMMAND}
+                        -DPATCH_EXE=${PATCH_EXECUTABLE}
+                        -DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/patches/gcem/CMakeLists.txt.patch
+                        -DSOURCE_DIR=${GcemSourceDir}
+                        -DSTRIP=0
+                        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchIfNeeded.cmake
+                COMMAND ${CMAKE_COMMAND}
+                        -DPATCH_EXE=${PATCH_EXECUTABLE}
+                        -DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/patches/gcem/include/gcem_incl/erf.hpp.patch
+                        -DSOURCE_DIR=${GcemSourceDir}/include/gcem_incl
+                        -DSTRIP=0
+                        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchIfNeeded.cmake)
         FetchContent_MakeAvailable(gcem)
         add_library(gcem::gcem ALIAS gcem)
     endif ()
