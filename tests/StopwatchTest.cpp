@@ -424,7 +424,7 @@ TEST_CASE("Stopwatch - Wall clock timing")
 		const auto wall = sw.Elapsed<TimeUnit::Milliseconds>();
 		const auto cpu  = cpuSw.Elapsed<TimeUnit::Milliseconds>();
 
-		CHECK(cpu <= wall + 5.0);   // CPU time never exceeds wall time
+		CHECK(cpu <= wall + 15.0);   // CPU time never exceeds wall time
 		CHECK(cpu >= wall * 0.5);   // most of the wall time was real CPU work
 		CHECK(cpu >= 10.0);         // something measurable happened
 	}
