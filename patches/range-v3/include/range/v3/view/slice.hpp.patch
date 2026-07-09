@@ -1,0 +1,38 @@
+--- slice.hpp       2026-07-09 16:21:41.493918845 +0800
++++ slice.hpp       2026-07-09 16:22:13.841393481 +0800
+@@ -43,14 +43,14 @@
+     namespace detail
+     {
+         template<typename Rng, typename Int>
+-        iterator_t<Rng> pos_at_(Rng && rng, Int i, input_range_tag, std::true_type)
++        constexpr iterator_t<Rng> pos_at_(Rng && rng, Int i, input_range_tag, std::true_type)
+         {
+             RANGES_EXPECT(0 <= i);
+             return next(ranges::begin(rng), i);
+         }
+
+         template<typename Rng, typename Int>
+-        iterator_t<Rng> pos_at_(Rng && rng, Int i, bidirectional_range_tag,
++        constexpr iterator_t<Rng> pos_at_(Rng && rng, Int i, bidirectional_range_tag,
+                                 std::false_type)
+         {
+             if(0 > i)
+@@ -65,7 +65,7 @@
+         }
+
+         template<typename Rng, typename Int>
+-        iterator_t<Rng> pos_at_(Rng && rng, Int i, input_range_tag, std::false_type)
++        constexpr iterator_t<Rng> pos_at_(Rng && rng, Int i, input_range_tag, std::false_type)
+         {
+             RANGES_EXPECT(i >= 0 || (bool)sized_range<Rng> || (bool)forward_range<Rng>);
+             if(0 > i)
+@@ -204,7 +204,7 @@
+             }
+             template(typename Rng)(
+                 requires borrowed_range<Rng>)
+-            static subrange<iterator_t<Rng>> impl_(Rng && rng,
++            static constexpr subrange<iterator_t<Rng>> impl_(Rng && rng,
+                                                    range_difference_t<Rng> from,
+                                                    range_difference_t<Rng> count,
+                                                    random_access_range_tag,
+

@@ -83,10 +83,11 @@ endif ()
 
 if (TARGET range-v3::range-v3)
     message(WARNING "SecUtility.Core will use the range-v3 target defined by the ancestor project. "
-            "For best user experience, SecUtility.Core recommends applying a patch to range-v3. "
-            "SecUtility.Core will automatically apply the recommended patch for standalone builds and builds without "
+            "For best user experience, SecUtility.Core recommends applying patches to range-v3. "
+            "SecUtility.Core will automatically apply the recommended patches for standalone builds and builds without "
             "an ancestor-defined range-v3 target, which is not the current case. SecUtility.Core recommends that you "
-            "manually apply the patch at patches/range-v3/include/range/v3/view/zip_with.hpp.patch")
+            "manually apply the patches at patches/range-v3/include/range/v3/view/zip_with.hpp.patch "
+            "and patches/range-v3/include/range/v3/view/slice.hpp.patch")
 else ()
     # find_package(range-v3) is not viable: the recommended patch must be applied to source.
 
@@ -105,6 +106,12 @@ else ()
             PATCH_COMMAND ${CMAKE_COMMAND}
                     -DPATCH_EXE=${PATCH_EXECUTABLE}
                     -DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/patches/range-v3/include/range/v3/view/zip_with.hpp.patch
+                    -DSOURCE_DIR=${CMAKE_BINARY_DIR}/_deps/range-v3-src/include/range/v3/view
+                    -DSTRIP=0
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchIfNeeded.cmake
+            COMMAND ${CMAKE_COMMAND}
+                    -DPATCH_EXE=${PATCH_EXECUTABLE}
+                    -DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/patches/range-v3/include/range/v3/view/slice.hpp.patch
                     -DSOURCE_DIR=${CMAKE_BINARY_DIR}/_deps/range-v3-src/include/range/v3/view
                     -DSTRIP=0
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchIfNeeded.cmake
