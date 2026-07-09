@@ -348,3 +348,79 @@ TEMPLATE_TEST_CASE("QR Orthogonalization: nearly dependent columns", "[template]
 
 	SecUtility::Math::CheckOrthonormal(n, 5e-8);  // Use looser tolerance
 }
+
+
+TEMPLATE_TEST_CASE("SVD Orthogonalization: all columns same", "[template]", double, (std::complex<double>))
+{
+	// All columns are identical (highly dependent)
+	Eigen::MatrixX<TestType> m(5, 4);
+	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(1) = m.col(0);
+	m.col(2) = m.col(0);
+	m.col(3) = m.col(0);
+
+	SECTION("JacobiSVD")
+	{
+		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(m);
+		REQUIRE(n.cols() == 1);
+		CHECK(n.col(0).norm() == Catch::Approx(1.0).margin(1e-12));
+	}
+
+	SECTION("BDCSVD")
+	{
+		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(m);
+		REQUIRE(n.cols() == 1);
+		CHECK(n.col(0).norm() == Catch::Approx(1.0).margin(1e-12));
+	}
+}
+
+
+TEMPLATE_TEST_CASE("SVD Orthogonalization: nearly dependent columns", "[template]", double, (std::complex<double>))
+{
+	// Create nearly dependent columns (ill-conditioned matrix)
+	Eigen::MatrixX<TestType> m(5, 3);
+	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorXd::Random(5);  // Nearly parallel
+	m.col(2) = Eigen::VectorXd::Random(5);
+
+	SECTION("JacobiSVD")
+	{
+		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(m);
+		SecUtility::Math::CheckOrthonormal(n, 5e-8);
+	}
+
+	SECTION("BDCSVD")
+	{
+		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(m);
+		SecUtility::Math::CheckOrthonormal(n, 5e-8);
+	}
+}
+
+
+TEMPLATE_TEST_CASE("SVD Orthogonalization: complex fixed columns need adjoint projection",
+                   "[template]", (std::complex<double>))
+{
+	// First two columns are orthonormal with non-zero imaginary parts; cols 2-4 are arbitrary.
+	Eigen::MatrixX<TestType> m = Eigen::MatrixX<TestType>::Random(6, 5);
+	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m.leftCols(2));
+
+	SECTION("JacobiSVD")
+	{
+		const auto result = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(m, 2);
+
+		REQUIRE(result.cols() == 5);
+		CHECK((result.col(0) - m.col(0)).norm() < 1e-14);
+		CHECK((result.col(1) - m.col(1)).norm() < 1e-14);
+		SecUtility::Math::CheckOrthonormal(result);
+	}
+
+	SECTION("BDCSVD")
+	{
+		const auto result = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(m, 2);
+
+		REQUIRE(result.cols() == 5);
+		CHECK((result.col(0) - m.col(0)).norm() < 1e-14);
+		CHECK((result.col(1) - m.col(1)).norm() < 1e-14);
+		SecUtility::Math::CheckOrthonormal(result);
+	}
+}
