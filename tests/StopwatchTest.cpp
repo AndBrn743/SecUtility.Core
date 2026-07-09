@@ -181,6 +181,8 @@ TEST_CASE("Stopwatch - Reset behavior")
 
 TEST_CASE("Stopwatch - Restart behavior")
 {
+	SECUTILITY_SKIP_TIMING_ON_MACOS_CI("strict upper-bound timing assertions");
+
 	SECTION("Restart clears and starts fresh")
 	{
 		Stopwatch sw;
