@@ -46,16 +46,9 @@ jobs:
       - name: Setup MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Cache FetchContent downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/cmake/fetchcontent
-          key: fetchcontent-${{ hashFiles('CMakeLists.txt', 'patches/**') }}
-
       - name: Configure CMake
         run: |
           cmake -S . -B build `
-            -DFETCHCONTENT_CACHE_DIR=$HOME/.cache/cmake/fetchcontent `
             ${{ matrix.compiler == 'clang-cl' && '-T ClangCL' || '' }} `
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
             -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} `
