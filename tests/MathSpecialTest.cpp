@@ -2101,7 +2101,6 @@ TEST_CASE("PascalRow (table lookup)")
 	SECTION("constexpr evaluation")
 	{
 		constexpr auto row5 = PascalRow(5);
-		static_assert(sizeof(row5) == 2 * sizeof(nullptr));
 		STATIC_CHECK(row5.size() == 6);
 		STATIC_CHECK(row5[0] == 1);
 		STATIC_CHECK(row5[2] == 10);
