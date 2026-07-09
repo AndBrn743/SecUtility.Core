@@ -148,6 +148,41 @@ TEMPLATE_TEST_CASE("QR Orthogonalization w/ startColumn", "[template]", double, 
 }
 
 
+TEMPLATE_TEST_CASE("QR Orthogonalization: complex fixed columns need adjoint projection",
+                   "[template]", (std::complex<double>))
+{
+	// First two columns are orthonormal with non-zero imaginary parts; cols 2-4 are arbitrary
+	// complex (not orthogonal to cols 0-1).
+	Eigen::MatrixX<TestType> m = Eigen::MatrixX<TestType>::Random(6, 5);
+	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m.leftCols(2));
+
+	const auto result = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithQR(m, 2);
+
+	REQUIRE(result.cols() == 5);  // 2 fixed + 3 new
+	CHECK((result.col(0) - m.col(0)).norm() < 1e-14);
+	CHECK((result.col(1) - m.col(1)).norm() < 1e-14);
+
+	// Full orthonormality — cross terms between fixed and new columns vanish only if the
+	// projection used Q^H (adjoint). The Q^T (transpose) variant leaves an O(1) residual when
+	// the fixed columns carry non-zero imaginary parts, which CheckOrthonormal catches.
+	SecUtility::Math::CheckOrthonormal(result);
+}
+
+
+TEMPLATE_TEST_CASE("QR Orthogonalization: single complex fixed column",
+                   "[template]", (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> m = Eigen::MatrixX<TestType>::Random(6, 4);
+	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m.leftCols(1));
+
+	const auto result = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithQR(m, 1);
+
+	REQUIRE(result.cols() == 4);  // 1 fixed + 3 new
+	CHECK((result.col(0) - m.col(0)).norm() < 1e-14);
+	SecUtility::Math::CheckOrthonormal(result);
+}
+
+
 TEMPLATE_TEST_CASE("GramSchmidt startColumn boundary", "[template]", double, (std::complex<double>))
 {
 	const Eigen::MatrixX<TestType> m = Eigen::MatrixX<TestType>::Random(5, 4);

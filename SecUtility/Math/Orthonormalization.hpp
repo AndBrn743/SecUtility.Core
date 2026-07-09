@@ -174,7 +174,7 @@ namespace SecUtility::Math
 
 		// Step 1: project out the orthogonal complement
 		Eigen::MatrixX<Scalar> projectedX =
-		        toBeOrthonormalized - fixedOrthonormal * (fixedOrthonormal.transpose() * toBeOrthonormalized);
+		        toBeOrthonormalized - fixedOrthonormal * (fixedOrthonormal.adjoint() * toBeOrthonormalized);
 
 		// Step 2: QR on projected part
 		const Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(projectedX);
