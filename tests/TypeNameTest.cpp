@@ -48,7 +48,7 @@ namespace Example::Internal
 
 TEST_CASE("Constexpr TypeName should work with user defined")
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
 	STATIC_REQUIRE(SecUtility::TypeName<Example::Internal::Array<int, 3>>
 	               == std::string_view{"class Example::Internal::Array<int,3>"});
 
@@ -79,7 +79,7 @@ TEST_CASE("Constexpr TypeName should work with user defined")
 
 TEST_CASE("Demangle should work")
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
 	REQUIRE(SecUtility::Demangle(typeid(Example::Internal::Array<int, 3>).name())
 	        == std::string_view{"class Example::Internal::Array<int,3>"});
 #else
