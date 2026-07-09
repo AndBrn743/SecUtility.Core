@@ -13,11 +13,9 @@
 #include <ostream>
 #include <array>
 
-#if defined(__has_include) && __has_include(<immintrin.h>)
-#include <nmmintrin.h>  // CRC-32C intrinsics
 #if defined(__SSE4_2__)
+#include <nmmintrin.h>  // CRC-32C intrinsics (x86/x64 + SSE4.2)
 #define SECUTILITY_HAS_HARDWARE_CRC32C true
-#endif
 #endif
 
 
