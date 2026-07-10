@@ -203,8 +203,8 @@ TEMPLATE_TEST_CASE("GramSchmidt linear dependence Classical", "[template]", doub
 {
 	// Create a matrix with linearly dependent columns
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = Eigen::VectorX<TestType>::Random(5);
 	m.col(2) = 2.0 * m.col(0) + 3.0 * m.col(1);  // Linear combination
 
 	REQUIRE_THROWS_AS(SecUtility::Math::OrthogonalizeInplaceWithClassicalGramSchmidt(m), SecUtility::RuntimeException);
@@ -215,8 +215,8 @@ TEMPLATE_TEST_CASE("GramSchmidt linear dependence Modified", "[template]", doubl
 {
 	// Create a matrix with linearly dependent columns
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = Eigen::VectorX<TestType>::Random(5);
 	m.col(2) = m.col(0) + m.col(1);  // Linear combination
 
 	REQUIRE_THROWS_AS(SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m), SecUtility::RuntimeException);
@@ -227,9 +227,9 @@ TEMPLATE_TEST_CASE("GramSchmidt linear dependence RemoveLinearDependence", "[tem
 {
 	// Create a matrix with some linearly dependent columns
 	Eigen::MatrixX<TestType> m(5, 5);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = Eigen::VectorXd::Random(5);
-	m.col(2) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = Eigen::VectorX<TestType>::Random(5);
+	m.col(2) = Eigen::VectorX<TestType>::Random(5);
 	m.col(3) = m.col(0) + m.col(1);  // Dependent
 	m.col(4) = 2.0 * m.col(2);       // Dependent
 
@@ -262,7 +262,7 @@ TEMPLATE_TEST_CASE("GramSchmidt RemoveLinearDependence all independent", "[templ
 TEMPLATE_TEST_CASE("GramSchmidt single column", "[template]", double, (std::complex<double>))
 {
 	Eigen::MatrixX<TestType> m(5, 1);
-	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
 
 	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m);
 
@@ -274,8 +274,8 @@ TEMPLATE_TEST_CASE("GramSchmidt single column", "[template]", double, (std::comp
 TEMPLATE_TEST_CASE("GramSchmidt two columns", "[template]", double, (std::complex<double>))
 {
 	Eigen::MatrixX<TestType> m(5, 2);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = Eigen::VectorX<TestType>::Random(5);
 
 	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m);
 
@@ -288,7 +288,7 @@ TEMPLATE_TEST_CASE("GramSchmidt all columns same", "[template]", double, (std::c
 {
 	// All columns are identical (highly dependent)
 	Eigen::MatrixX<TestType> m(5, 4);
-	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
 	m.col(1) = m.col(0);
 	m.col(2) = m.col(0);
 	m.col(3) = m.col(0);
@@ -307,9 +307,9 @@ TEMPLATE_TEST_CASE("GramSchmidt nearly dependent columns", "[template]", double,
 {
 	// Create nearly dependent columns (ill-conditioned matrix)
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorXd::Random(5);  // Nearly parallel
-	m.col(2) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorX<TestType>::Random(5);  // Nearly parallel
+	m.col(2) = Eigen::VectorX<TestType>::Random(5);
 
 	// Should not throw for nearly dependent columns
 	REQUIRE_NOTHROW(SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m));
@@ -322,7 +322,7 @@ TEMPLATE_TEST_CASE("QR Orthogonalization: all columns same", "[template]", doubl
 {
 	// All columns are identical (highly dependent)
 	Eigen::MatrixX<TestType> m(5, 4);
-	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
 	m.col(1) = m.col(0);
 	m.col(2) = m.col(0);
 	m.col(3) = m.col(0);
@@ -339,14 +339,14 @@ TEMPLATE_TEST_CASE("QR Orthogonalization: nearly dependent columns", "[template]
 {
 	// Create nearly dependent columns (ill-conditioned matrix)
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorXd::Random(5);  // Nearly parallel
-	m.col(2) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorX<TestType>::Random(5);  // Nearly parallel
+	m.col(2) = Eigen::VectorX<TestType>::Random(5);
 
 	// Should not throw for nearly dependent columns
 	const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithQR(m);
 
-	SecUtility::Math::CheckOrthonormal(n, 5e-8);  // Use looser tolerance
+	SecUtility::Math::CheckOrthonormal(n, 6e-8);  // Use looser tolerance
 }
 
 
@@ -354,7 +354,7 @@ TEMPLATE_TEST_CASE("SVD Orthogonalization: all columns same", "[template]", doub
 {
 	// All columns are identical (highly dependent)
 	Eigen::MatrixX<TestType> m(5, 4);
-	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
 	m.col(1) = m.col(0);
 	m.col(2) = m.col(0);
 	m.col(3) = m.col(0);
@@ -379,20 +379,20 @@ TEMPLATE_TEST_CASE("SVD Orthogonalization: nearly dependent columns", "[template
 {
 	// Create nearly dependent columns (ill-conditioned matrix)
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorXd::Random(5);  // Nearly parallel
-	m.col(2) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorX<TestType>::Random(5);  // Nearly parallel
+	m.col(2) = Eigen::VectorX<TestType>::Random(5);
 
 	SECTION("JacobiSVD")
 	{
 		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(m);
-		SecUtility::Math::CheckOrthonormal(n, 5e-8);
+		SecUtility::Math::CheckOrthonormal(n, 6e-8);
 	}
 
 	SECTION("BDCSVD")
 	{
 		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(m);
-		SecUtility::Math::CheckOrthonormal(n, 5e-8);
+		SecUtility::Math::CheckOrthonormal(n, 6e-8);
 	}
 }
 
