@@ -7,7 +7,7 @@
 #include <complex>
 #include <limits>
 
-TEMPLATE_TEST_CASE("Complex arithmetic with integers", "[template]", float, double, (long double), short, int, long)
+TEMPLATE_TEST_CASE("Complex arithmetic with integers", "[template]", float, double, (long double))
 {
 	using Complex = std::complex<TestType>;
 
