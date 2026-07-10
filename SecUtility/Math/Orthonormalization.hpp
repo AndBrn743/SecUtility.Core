@@ -156,7 +156,7 @@ namespace SecUtility::Math
 		if (numberOfLeftColumnsToExclude == 0)
 		{
 			const Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(matrix);
-			return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(matrix.rows(), qr.nonzeroPivots());
+			return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(matrix.rows(), qr.rank());
 		}
 
 		const auto fixedOrthonormal = matrix.leftCols(numberOfLeftColumnsToExclude);
@@ -169,7 +169,7 @@ namespace SecUtility::Math
 		// Step 2: QR on projected part
 		const Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(projectedX);
 		Eigen::MatrixX<Scalar> orthonormalized =
-		        qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(projectedX.rows(), qr.nonzeroPivots());
+		        qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(projectedX.rows(), qr.rank());
 
 		// Step 3: concatenate
 		Eigen::MatrixX<Scalar> result(fixedOrthonormal.rows(), fixedOrthonormal.cols() + orthonormalized.cols());
