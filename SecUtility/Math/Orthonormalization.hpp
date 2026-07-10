@@ -147,18 +147,7 @@ namespace SecUtility::Math
 
 	template <typename Matrix>
 	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar> OrthogonalizedAndLinearDependenceRemovedWithQR(
-	        const Eigen::MatrixBase<Matrix>& matrix)
-	{
-		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
-
-		const Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(matrix);
-		return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(matrix.rows(), qr.nonzeroPivots());
-	}
-
-
-	template <typename Matrix>
-	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar> OrthogonalizedAndLinearDependenceRemovedWithQR(
-	        const Eigen::MatrixBase<Matrix>& matrix, const Eigen::Index numberOfLeftColumnsToExclude)
+	        const Eigen::MatrixBase<Matrix>& matrix, const Eigen::Index numberOfLeftColumnsToExclude = 0)
 	{
 		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
 
@@ -166,7 +155,8 @@ namespace SecUtility::Math
 
 		if (numberOfLeftColumnsToExclude == 0)
 		{
-			return OrthogonalizedAndLinearDependenceRemovedWithQR(matrix);
+			const Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(matrix);
+			return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(matrix.rows(), qr.nonzeroPivots());
 		}
 
 		const auto fixedOrthonormal = matrix.leftCols(numberOfLeftColumnsToExclude);
@@ -190,19 +180,8 @@ namespace SecUtility::Math
 
 	template <typename Matrix>
 	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar>
-	OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(const Eigen::MatrixBase<Matrix>& matrix)
-	{
-		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
-
-		const Eigen::JacobiSVD<Eigen::MatrixX<Scalar>, Eigen::ComputeThinU> svd(matrix);
-		return svd.matrixU().leftCols(svd.rank());
-	}
-
-
-	template <typename Matrix>
-	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar>
 	OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(const Eigen::MatrixBase<Matrix>& matrix,
-	                                                      const Eigen::Index numberOfLeftColumnsToExclude)
+	                                                      const Eigen::Index numberOfLeftColumnsToExclude = 0)
 	{
 		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
 
@@ -210,7 +189,8 @@ namespace SecUtility::Math
 
 		if (numberOfLeftColumnsToExclude == 0)
 		{
-			return OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(matrix);
+			const Eigen::JacobiSVD<Eigen::MatrixX<Scalar>, Eigen::ComputeThinU> svd(matrix);
+			return svd.matrixU().leftCols(svd.rank());
 		}
 
 		const auto fixedOrthonormal = matrix.leftCols(numberOfLeftColumnsToExclude);
@@ -233,18 +213,7 @@ namespace SecUtility::Math
 
 	template <typename Matrix>
 	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar> OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(
-	        const Eigen::MatrixBase<Matrix>& matrix)
-	{
-		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
-
-		const Eigen::BDCSVD<Eigen::MatrixX<Scalar>, Eigen::ComputeThinU> svd(matrix);
-		return svd.matrixU().leftCols(svd.rank());
-	}
-
-
-	template <typename Matrix>
-	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar> OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(
-	        const Eigen::MatrixBase<Matrix>& matrix, const Eigen::Index numberOfLeftColumnsToExclude)
+	        const Eigen::MatrixBase<Matrix>& matrix, const Eigen::Index numberOfLeftColumnsToExclude = 0)
 	{
 		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
 
@@ -252,7 +221,8 @@ namespace SecUtility::Math
 
 		if (numberOfLeftColumnsToExclude == 0)
 		{
-			return OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(matrix);
+			const Eigen::BDCSVD<Eigen::MatrixX<Scalar>, Eigen::ComputeThinU> svd(matrix);
+			return svd.matrixU().leftCols(svd.rank());
 		}
 
 		const auto fixedOrthonormal = matrix.leftCols(numberOfLeftColumnsToExclude);
