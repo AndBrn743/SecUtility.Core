@@ -212,57 +212,6 @@ jobs:
 #          fail_ci_if_error: false
 #          verbose: true
 
-  coverage:
-    name: Coverage (GCC)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build ccache lcov
-
-      - name: Configure CMake with coverage
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DBUILD_TESTING=ON \
-            -DCMAKE_C_COMPILER=gcc \
-            -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_CXX_STANDARD=20 \
-            -DCMAKE_CXX_EXTENSIONS=OFF \
-            -DCMAKE_CXX_FLAGS="--coverage" \
-            -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
-            -G Ninja
-
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: List all cmake scripts to find where is CTestTestfile.cmake hiding
-        working-directory: build
-        run: find . -name "*.cmake"
-
-      - name: Run tests
-        working-directory: build/tests
-        run: ctest --output-on-failure
-
-      - name: Generate coverage report
-        working-directory: build
-        run: |
-          find . -name "*.gcda"
-          lcov --ignore-errors empty,unused,inconsistent,mismatch,negative --capture --directory . --output-file coverage.raw.info --rc geninfo_unexecuted_blocks=1 --ignore-errors source,mismatch,negative
-          lcov --ignore-errors empty,unused,mismatch,negative --remove coverage.raw.info '/usr/*' '*/_deps/*' "*/catch2/*" --output-file coverage.info
-          lcov --list coverage.info
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: build/coverage.info
-          fail_ci_if_error: false
-          verbose: true
 
 #  coverage:
 #    name: Coverage (GCC)
