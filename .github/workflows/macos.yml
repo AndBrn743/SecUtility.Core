@@ -42,6 +42,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install ccache
+        run: brew install ccache
+
       - name: Configure ccache
         run: |
           ccache --set-config=cache_dir="${{ runner.temp }}/ccache"
