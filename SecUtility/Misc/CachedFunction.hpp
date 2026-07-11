@@ -211,7 +211,12 @@ namespace SecUtility
 		}
 
 	private:
-		[[no_unique_address]] mutable Mutex m_Mutex;
+#if defined(_MSC_VER) && !defined(__clang__)
+		[[msvc::no_unique_address]]
+#else
+		[[no_unique_address]]
+#endif
+		mutable Mutex m_Mutex;
 		Callable m_Function;
 		std::conditional_t<Traits::Arity == 0,
 		                   std::optional<Result>,
