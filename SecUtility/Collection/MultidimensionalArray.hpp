@@ -33,7 +33,7 @@ namespace SecUtility::Detail::MultidimensionalArray
 
 	template <std::size_t N>
 	constexpr std::size_t ComputeFlatIndex(const std::array<std::size_t, N>& strides,
-	                                       const std::array<std::size_t, N>& shape,
+	                                       [[maybe_unused]] const std::array<std::size_t, N>& shape,
 	                                       const std::array<std::size_t, N>& indices) noexcept
 	{
 		std::size_t flat = 0;
@@ -46,10 +46,10 @@ namespace SecUtility::Detail::MultidimensionalArray
 	}
 
 	template <std::size_t N, typename... Indices>
-	constexpr std::array<std::size_t, N> PackIndicesIntoArray(Indices... idxs) noexcept
+	constexpr std::array<std::size_t, N> PackIndicesIntoArray(Indices... indices) noexcept
 	{
 		static_assert(sizeof...(Indices) == N, "Wrong number of indices");
-		return {static_cast<std::size_t>(idxs)...};
+		return {static_cast<std::size_t>(indices)...};
 	}
 
 	template <typename T, std::size_t FlatSize>
