@@ -13,6 +13,14 @@ using Catch::Approx;
 
 static constexpr double Pi = Constant::Pi<double>;
 
+#if defined(SEC_IF_CONSTEVAL)
+#define STATIC_CHECK_IF_POSSIBLE(...) STATIC_CHECK(__VA_ARGS__)
+#define CONSTEXPR_IF_POSSIBLE constexpr
+#else
+#define STATIC_CHECK_IF_POSSIBLE(...) CHECK(__VA_ARGS__)
+#define CONSTEXPR_IF_POSSIBLE const
+#endif
+
 // ============================================================================
 // Basic Math Functions
 // ============================================================================
@@ -25,14 +33,14 @@ TEST_CASE("Abs function")
 		{
 			const auto x = SecUtility::Random::NextDouble(-10, 10);
 			REQUIRE(Abs(x) == Approx(std::abs(x)));
-			STATIC_CHECK(std::is_same_v<decltype(Abs(x)), decltype(std::abs(x))>);
+			STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Abs(x)), decltype(std::abs(x))>);
 		}
 	}
 
 	SECTION("Constexpr evaluation")
 	{
 		constexpr auto result = Abs(-5.0);
-		STATIC_CHECK(result == 5.0);
+		STATIC_CHECK_IF_POSSIBLE(result == 5.0);
 	}
 
 	SECTION("Edge cases")
@@ -58,13 +66,13 @@ TEST_CASE("CopySignToTheLeft function")
 	REQUIRE(CopySignToTheLeft(-5.0, 3.0) == Approx(std::copysign(-5.0, 3.0)));
 	REQUIRE(CopySignToTheLeft(3.0, -0.0) == Approx(std::copysign(3.0, -0.0)));
 
-	STATIC_CHECK(CopySignToTheLeft(-5.0, 3.0) > 5.0 - 1e-9);
-	STATIC_CHECK(CopySignToTheLeft(-5.0, 3.0) < 5.0 + 1e-9);
+	STATIC_CHECK_IF_POSSIBLE(CopySignToTheLeft(-5.0, 3.0) > 5.0 - 1e-9);
+	STATIC_CHECK_IF_POSSIBLE(CopySignToTheLeft(-5.0, 3.0) < 5.0 + 1e-9);
 
-	STATIC_CHECK(CopySignToTheLeft(5, 3) == 5);
-	STATIC_CHECK(CopySignToTheLeft(5, -3) == -5);
-	STATIC_CHECK(CopySignToTheLeft(-5, 3) == 5);
-	STATIC_CHECK(CopySignToTheLeft(-5, -3) == -5);
+	STATIC_CHECK_IF_POSSIBLE(CopySignToTheLeft(5, 3) == 5);
+	STATIC_CHECK_IF_POSSIBLE(CopySignToTheLeft(5, -3) == -5);
+	STATIC_CHECK_IF_POSSIBLE(CopySignToTheLeft(-5, 3) == 5);
+	STATIC_CHECK_IF_POSSIBLE(CopySignToTheLeft(-5, -3) == -5);
 }
 
 TEST_CASE("Rounding functions")
@@ -75,28 +83,28 @@ TEST_CASE("Rounding functions")
 		REQUIRE(Ceil(-3.7) == Approx(-3));
 		REQUIRE(Ceil(3.0) == Approx(3));
 
-		STATIC_CHECK(std::is_same_v<decltype(Ceil(3.7)), double>);
-		STATIC_CHECK(Ceil(3.7) == 4);
-		STATIC_CHECK(Ceil(-3.7) == -3);
-		STATIC_CHECK(Ceil(3.0) == 3);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Ceil(3.7)), double>);
+		STATIC_CHECK_IF_POSSIBLE(Ceil(3.7) == 4);
+		STATIC_CHECK_IF_POSSIBLE(Ceil(-3.7) == -3);
+		STATIC_CHECK_IF_POSSIBLE(Ceil(3.0) == 3);
 
-		STATIC_CHECK(std::is_same_v<decltype(Ceil<long>(3.7)), long>);
-		STATIC_CHECK(Ceil<long>(3.7) == 4L);
-		STATIC_CHECK(Ceil<long>(-3.7) == -3L);
-		STATIC_CHECK(Ceil<long>(3.0) == 3L);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Ceil<long>(3.7)), long>);
+		STATIC_CHECK_IF_POSSIBLE(Ceil<long>(3.7) == 4L);
+		STATIC_CHECK_IF_POSSIBLE(Ceil<long>(-3.7) == -3L);
+		STATIC_CHECK_IF_POSSIBLE(Ceil<long>(3.0) == 3L);
 
-		constexpr auto result = Ceil(2.3);
-		STATIC_CHECK(result == 3.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Ceil(2.3);
+		STATIC_CHECK_IF_POSSIBLE(result == 3.0);
 	}
 
 	SECTION("Floor")
 	{
-		STATIC_CHECK(Floor(3.7) == 3);
-		STATIC_CHECK(Floor(-3.7) == -4);
-		STATIC_CHECK(Floor(3.0) == 3);
+		STATIC_CHECK_IF_POSSIBLE(Floor(3.7) == 3);
+		STATIC_CHECK_IF_POSSIBLE(Floor(-3.7) == -4);
+		STATIC_CHECK_IF_POSSIBLE(Floor(3.0) == 3);
 
-		constexpr auto result = Floor(2.8);
-		STATIC_CHECK(result == 2.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Floor(2.8);
+		STATIC_CHECK_IF_POSSIBLE(result == 2.0);
 	}
 
 	SECTION("Round")
@@ -106,8 +114,8 @@ TEST_CASE("Rounding functions")
 		REQUIRE(Round(-3.7) == Approx(-4));
 		REQUIRE(Round(2.5) == Approx(std::round(2.5)));
 
-		constexpr auto result = Round(2.6);
-		STATIC_CHECK(result == 3.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Round(2.6);
+		STATIC_CHECK_IF_POSSIBLE(result == 3.0);
 	}
 
 	SECTION("Truncate")
@@ -115,8 +123,8 @@ TEST_CASE("Rounding functions")
 		REQUIRE(Truncate(3.7) == Approx(std::trunc(3.7)));
 		REQUIRE(Truncate(-3.7) == Approx(std::trunc(-3.7)));
 
-		constexpr auto result = Truncate(2.9);
-		STATIC_CHECK(result == 2.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Truncate(2.9);
+		STATIC_CHECK_IF_POSSIBLE(result == 2.0);
 	}
 
 	SECTION("NearByInt")
@@ -140,8 +148,8 @@ TEST_CASE("Exp and Log functions")
 			REQUIRE(Exp(x) == Approx(std::exp(x)).epsilon(1e-9));
 		}
 
-		constexpr auto result = Exp(1.0);
-		STATIC_CHECK(result > 2.718 && result < 2.719);
+		CONSTEXPR_IF_POSSIBLE auto result = Exp(1.0);
+		STATIC_CHECK_IF_POSSIBLE((result > 2.718 && result < 2.719));
 	}
 
 	SECTION("Log")
@@ -149,8 +157,8 @@ TEST_CASE("Exp and Log functions")
 		REQUIRE(Log(1.0) == Approx(std::log(1.0)));
 		REQUIRE(Log(std::exp(5.0)) == Approx(5.0).epsilon(1e-9));
 
-		constexpr auto result = Log(1.0);
-		STATIC_CHECK(result == 0.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Log(1.0);
+		STATIC_CHECK_IF_POSSIBLE(result == 0.0);
 	}
 
 	SECTION("Log1p")
@@ -186,7 +194,7 @@ TEST_CASE("Power functions")
 		REQUIRE(Pow(2.0, 3.0) == Approx(std::pow(2.0, 3.0)));
 		REQUIRE(Pow(3.0, 2.0) == Approx(std::pow(3.0, 2.0)));
 
-		constexpr auto result = Pow(2.0, 3.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Pow(2.0, 3.0);
 		CHECK(result == Approx(8.0));
 	}
 
@@ -196,7 +204,7 @@ TEST_CASE("Power functions")
 		REQUIRE(Sqrt(2.0) == Approx(std::sqrt(2.0)));
 		REQUIRE(Sqrt(0.0) == Approx(std::sqrt(0.0)));
 
-		constexpr auto result = Sqrt(4.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Sqrt(4.0);
 		CHECK(result == Approx(2.0));
 	}
 
@@ -206,8 +214,8 @@ TEST_CASE("Power functions")
 		REQUIRE(Hypotenuse(5.0, 12.0) == Approx(13.0));
 		REQUIRE(Hypotenuse(3.0, 4.0, 12.0) == Approx(13.0));
 
-		constexpr auto result = Hypotenuse(3.0, 4.0);
-		STATIC_CHECK(result == 5.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Hypotenuse(3.0, 4.0);
+		STATIC_CHECK_IF_POSSIBLE(result == 5.0);
 	}
 
 	SECTION("Cbrt")
@@ -230,8 +238,8 @@ TEST_CASE("Trigonometric functions")
 		REQUIRE(Sin(Pi / 2) == Approx(std::sin(Pi / 2)).epsilon(1e-9));
 		REQUIRE(Sin(Pi) == Approx(std::sin(Pi)).epsilon(1e-9));
 
-		constexpr auto result = Sin(0.0);
-		STATIC_CHECK(result == 0.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Sin(0.0);
+		STATIC_CHECK_IF_POSSIBLE(result == 0.0);
 	}
 
 	SECTION("Cos")
@@ -240,8 +248,8 @@ TEST_CASE("Trigonometric functions")
 		REQUIRE(Cos(Pi / 2) == Approx(std::cos(Pi / 2)).epsilon(1e-9));
 		REQUIRE(Cos(Pi) == Approx(std::cos(Pi)).epsilon(1e-9));
 
-		constexpr auto result = Cos(0.0);
-		STATIC_CHECK(result == 1.0);
+		CONSTEXPR_IF_POSSIBLE auto result = Cos(0.0);
+		STATIC_CHECK_IF_POSSIBLE(result == 1.0);
 	}
 
 	SECTION("Tan")
@@ -295,8 +303,8 @@ TEST_CASE("Complex number functions")
 		REQUIRE(Im(c) == 4.0);
 
 		constexpr Complex cc{2.0, 5.0};
-		STATIC_CHECK(Re(cc) == 2.0);
-		STATIC_CHECK(Im(cc) == 5.0);
+		STATIC_CHECK_IF_POSSIBLE(Re(cc) == 2.0);
+		STATIC_CHECK_IF_POSSIBLE(Im(cc) == 5.0);
 	}
 
 	SECTION("Re and Im for real numbers")
@@ -305,8 +313,8 @@ TEST_CASE("Complex number functions")
 		REQUIRE(Im(5.0) == 0.0);
 
 		constexpr double x = 7.0;
-		STATIC_CHECK(Re(x) == 7.0);
-		STATIC_CHECK(Im(x) == 0.0);
+		STATIC_CHECK_IF_POSSIBLE(Re(x) == 7.0);
+		STATIC_CHECK_IF_POSSIBLE(Im(x) == 0.0);
 	}
 
 	SECTION("Conj for complex")
@@ -318,8 +326,8 @@ TEST_CASE("Complex number functions")
 
 		constexpr Complex cc{2.0, -3.0};
 		constexpr auto cconj = Conj(cc);
-		STATIC_CHECK(Re(cconj) == 2.0);
-		STATIC_CHECK(Im(cconj) == 3.0);
+		STATIC_CHECK_IF_POSSIBLE(Re(cconj) == 2.0);
+		STATIC_CHECK_IF_POSSIBLE(Im(cconj) == 3.0);
 	}
 
 	SECTION("Conj for real")
@@ -327,7 +335,7 @@ TEST_CASE("Complex number functions")
 		REQUIRE(Conj(5.0) == 5.0);
 
 		constexpr double x = 7.0;
-		STATIC_CHECK(Conj(x) == 7.0);
+		STATIC_CHECK_IF_POSSIBLE(Conj(x) == 7.0);
 	}
 
 	SECTION("Arg for complex")
@@ -358,7 +366,7 @@ TEST_CASE("Complex number functions")
 		REQUIRE(SquaredNorm(c) == Approx(25.0));
 
 		constexpr double x = 5.0;
-		STATIC_CHECK(SquaredNorm(x) == 25.0);
+		STATIC_CHECK_IF_POSSIBLE(SquaredNorm(x) == 25.0);
 	}
 
 	SECTION("Norm")
@@ -367,7 +375,7 @@ TEST_CASE("Complex number functions")
 		REQUIRE(Norm(c) == Approx(5.0));
 
 		constexpr Complex z{3.0, 4.0};
-		STATIC_CHECK(Abs(Norm(z) - 5.0) < 1e-12);
+		STATIC_CHECK_IF_POSSIBLE(Abs(Norm(z) - 5.0) < 1e-12);
 
 		double y = -5.0;
 		CHECK(Norm(y) == 5.0);
@@ -380,7 +388,7 @@ TEST_CASE("Complex number functions")
 
 
 		constexpr Complex z{3.0, 4.0};
-		STATIC_CHECK(Abs(Abs(z) - 5.0) < 1e-12);
+		STATIC_CHECK_IF_POSSIBLE(Abs(Abs(z) - 5.0) < 1e-12);
 	}
 }
 
@@ -400,8 +408,8 @@ TEST_CASE("Integer utility functions")
 		REQUIRE(!IsOdd(2));
 		REQUIRE(!IsOdd(-2));
 
-		STATIC_CHECK(IsOdd(5));
-		STATIC_CHECK(!IsOdd(4));
+		STATIC_CHECK_IF_POSSIBLE(IsOdd(5));
+		STATIC_CHECK_IF_POSSIBLE(!IsOdd(4));
 	}
 
 	SECTION("IsEven")
@@ -412,8 +420,8 @@ TEST_CASE("Integer utility functions")
 		REQUIRE(!IsEven(1));
 		REQUIRE(!IsEven(-1));
 
-		STATIC_CHECK(IsEven(4));
-		STATIC_CHECK(!IsEven(5));
+		STATIC_CHECK_IF_POSSIBLE(IsEven(4));
+		STATIC_CHECK_IF_POSSIBLE(!IsEven(5));
 	}
 
 	SECTION("IsPowerOfTwo")
@@ -432,8 +440,8 @@ TEST_CASE("Integer utility functions")
 		REQUIRE(!IsPowerOfTwo(-2));
 		REQUIRE(!IsPowerOfTwo(-8));
 
-		STATIC_CHECK(IsPowerOfTwo(8));
-		STATIC_CHECK(!IsPowerOfTwo(7));
+		STATIC_CHECK_IF_POSSIBLE(IsPowerOfTwo(8));
+		STATIC_CHECK_IF_POSSIBLE(!IsPowerOfTwo(7));
 	}
 }
 
@@ -452,17 +460,17 @@ TEST_CASE("Comparison functions")
 		REQUIRE(Max(5, 1, 3, 9, 2) == 9);
 
 		constexpr auto result = Max(1, 2, 3);
-		STATIC_CHECK(result == 3);
+		STATIC_CHECK_IF_POSSIBLE(result == 3);
 
 		int a = 3;
 		int b = 5;
 		int c = 42;
 		int d = -1;
 		int e = 27;
-		STATIC_CHECK(std::is_same_v<decltype(Max(a)), int&>);
-		STATIC_CHECK(std::is_same_v<decltype(Max(a, b, c)), int&>);
-		STATIC_CHECK(std::is_same_v<decltype(Max(a, b, 3)), int>);
-		STATIC_CHECK(std::is_same_v<decltype(Max(3)), int&&>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Max(a)), int&>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Max(a, b, c)), int&>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Max(a, b, 3)), int>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Max(3)), int&&>);
 		Max(a, b, c, d, e) *= 10;
 		CHECK(a == 3);
 		CHECK(b == 5);
@@ -483,7 +491,7 @@ TEST_CASE("Comparison functions")
 		REQUIRE(Min(5, 1, 3, 9, 2) == 1);
 
 		constexpr auto result = Min(1, 2, 3);
-		STATIC_CHECK(result == 1);
+		STATIC_CHECK_IF_POSSIBLE(result == 1);
 
 
 		int a = 3;
@@ -491,10 +499,10 @@ TEST_CASE("Comparison functions")
 		int c = 42;
 		int d = -1;
 		int e = 27;
-		STATIC_CHECK(std::is_same_v<decltype(Min(a)), int&>);
-		STATIC_CHECK(std::is_same_v<decltype(Min(a, b, c)), int&>);
-		STATIC_CHECK(std::is_same_v<decltype(Min(a, b, 3)), int>);
-		STATIC_CHECK(std::is_same_v<decltype(Min(3)), int&&>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Min(a)), int&>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Min(a, b, c)), int&>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Min(a, b, 3)), int>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(Min(3)), int&&>);
 		Min(a, b, c, d, e) *= 10;
 		CHECK(a == 3);
 		CHECK(b == 5);
@@ -526,7 +534,7 @@ TEST_CASE("Accumulation functions")
 		REQUIRE(Sum(1) == 1);
 
 		constexpr auto result = Sum(1, 2, 3, 4);
-		STATIC_CHECK(result == 10);
+		STATIC_CHECK_IF_POSSIBLE(result == 10);
 	}
 
 	SECTION("Prod")
@@ -536,7 +544,7 @@ TEST_CASE("Accumulation functions")
 		REQUIRE(Prod(5) == 5);
 
 		constexpr auto result = Prod(2, 3, 4);
-		STATIC_CHECK(result == 24);
+		STATIC_CHECK_IF_POSSIBLE(result == 24);
 	}
 }
 
@@ -566,7 +574,7 @@ TEST_CASE("Identity function")
 	SECTION("Constexpr")
 	{
 		constexpr auto result = Identity(42);
-		STATIC_CHECK(result == 42);
+		STATIC_CHECK_IF_POSSIBLE(result == 42);
 	}
 }
 
@@ -584,8 +592,8 @@ TEST_CASE("FusedMultiplyAdd")
 
 	SECTION("Constexpr")
 	{
-		constexpr auto result = FusedMultiplyAdd(2.0, 3.0, 1.0);
-		STATIC_CHECK(result == 7.0);
+		CONSTEXPR_IF_POSSIBLE auto result = FusedMultiplyAdd(2.0, 3.0, 1.0);
+		STATIC_CHECK_IF_POSSIBLE(result == 7.0);
 	}
 }
 
@@ -619,8 +627,8 @@ TEST_CASE("Clamp function")
 
 	SECTION("Constexpr")
 	{
-		constexpr auto result = Clamp(15, 0, 10);
-		STATIC_CHECK(result == 10);
+		CONSTEXPR_IF_POSSIBLE auto result = Clamp(15, 0, 10);
+		STATIC_CHECK_IF_POSSIBLE(result == 10);
 	}
 }
 
@@ -642,14 +650,14 @@ TEST_CASE("LinearInterpolation")
 
 	SECTION("Integer types")
 	{
-		STATIC_CHECK(LinearInterpolation(0, 10, 0.5) == 5);
-		STATIC_CHECK(LinearInterpolation(0, 100, 0.25) == 25);
+		STATIC_CHECK_IF_POSSIBLE(LinearInterpolation(0, 10, 0.5) == 5);
+		STATIC_CHECK_IF_POSSIBLE(LinearInterpolation(0, 100, 0.25) == 25);
 	}
 
 	SECTION("Constexpr")
 	{
-		constexpr auto result = LinearInterpolation(0.0, 10.0, 0.5);
-		STATIC_CHECK(result == 5.0);
+		CONSTEXPR_IF_POSSIBLE auto result = LinearInterpolation(0.0, 10.0, 0.5);
+		STATIC_CHECK_IF_POSSIBLE(result == 5.0);
 	}
 }
 
@@ -684,9 +692,9 @@ TEST_CASE("Sign function (returns -1, 0, 1)")
 		constexpr auto zero = Sign(0);
 		constexpr auto neg = Sign(-42);
 
-		STATIC_CHECK(pos == 1);
-		STATIC_CHECK(zero == 0);
-		STATIC_CHECK(neg == -1);
+		STATIC_CHECK_IF_POSSIBLE(pos == 1);
+		STATIC_CHECK_IF_POSSIBLE(zero == 0);
+		STATIC_CHECK_IF_POSSIBLE(neg == -1);
 	}
 }
 
@@ -742,7 +750,7 @@ TEST_CASE("Sign function (returns -1, 0, 1)")
 // 	SECTION("Constexpr")
 // 	{
 // 		constexpr auto result = Saturate(1.5);
-// 		STATIC_CHECK(result == 1.0);
+// 		STATIC_CHECK_IF_POSSIBLE(result == 1.0);
 // 	}
 // }
 
@@ -757,7 +765,7 @@ TEST_CASE("Degree/Radian conversion")
 		REQUIRE(Deg2Rad(-90.0) == Approx(-Pi / 2).epsilon(1e-9));
 
 		constexpr auto result = Deg2Rad(180.0);
-		STATIC_CHECK(result > 3.1415 && result < 3.1416);
+		STATIC_CHECK_IF_POSSIBLE((result > 3.1415 && result < 3.1416));
 	}
 
 	SECTION("RadToDeg")
@@ -768,7 +776,7 @@ TEST_CASE("Degree/Radian conversion")
 		REQUIRE(Rad2Deg(2 * Pi) == Approx(360.0).epsilon(1e-9));
 
 		constexpr auto result = Rad2Deg(Pi);
-		STATIC_CHECK(result > 179.9 && result < 180.1);
+		STATIC_CHECK_IF_POSSIBLE((result > 179.9 && result < 180.1));
 	}
 
 	SECTION("Roundtrip conversion")
@@ -828,9 +836,9 @@ TEST_CASE("Degree/Radian conversion")
 //
 // 	SECTION("Constexpr")
 // 	{
-// 		STATIC_CHECK(IsFinite(1.0));
-// 		STATIC_CHECK(!IsInf(1.0));
-// 		STATIC_CHECK(!IsNan(1.0));
+// 		STATIC_CHECK_IF_POSSIBLE(IsFinite(1.0));
+// 		STATIC_CHECK_IF_POSSIBLE(!IsInf(1.0));
+// 		STATIC_CHECK_IF_POSSIBLE(!IsNan(1.0));
 // 	}
 // }
 
@@ -842,11 +850,11 @@ TEST_CASE("ArithmeticMean")
 {
 	SECTION("Basic functionality")
 	{
-		STATIC_CHECK(std::is_same_v<decltype(ArithmeticMean(1, 2, 3, 4, 5)), int>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(ArithmeticMean(1, 2, 3, 4, 5)), int>);
 		REQUIRE(ArithmeticMean(1, 2, 3, 4, 5) == 3);
-		STATIC_CHECK(std::is_same_v<decltype(ArithmeticMean(10.0, 20.0)), double>);
-		STATIC_CHECK(std::is_same_v<decltype(ArithmeticMean(10.f, 20.0)), double>);
-		STATIC_CHECK(std::is_same_v<decltype(ArithmeticMean(10.0f, 20.0f)), float>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(ArithmeticMean(10.0, 20.0)), double>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(ArithmeticMean(10.f, 20.0)), double>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(ArithmeticMean(10.0f, 20.0f)), float>);
 		REQUIRE(ArithmeticMean(10.0, 20.0) == 15.0);
 		REQUIRE(ArithmeticMean(5) == 5);
 		REQUIRE(ArithmeticMean(0.0, 10.0) == 5.0);
@@ -868,11 +876,11 @@ TEST_CASE("ArithmeticMean")
 	SECTION("Constexpr")
 	{
 		constexpr auto result = ArithmeticMean(1., 2, 3, 4);
-		STATIC_CHECK(result == 2.5);
+		STATIC_CHECK_IF_POSSIBLE(result == 2.5);
 		constexpr auto integer = ArithmeticMean(1, 2, 3, 4);
-		STATIC_CHECK(integer == 2);
+		STATIC_CHECK_IF_POSSIBLE(integer == 2);
 		constexpr auto single = ArithmeticMean(42);
-		STATIC_CHECK(single == 42);
+		STATIC_CHECK_IF_POSSIBLE(single == 42);
 	}
 
 	SECTION("Large numbers")
@@ -899,9 +907,9 @@ TEST_CASE("QuadraticMean (RMS)")
 
 	SECTION("Constexpr")
 	{
-		constexpr auto result = QuadraticMean(3.0, 4.0);
-		STATIC_CHECK(result > 3.535533);
-		STATIC_CHECK(result < 3.535534);
+		CONSTEXPR_IF_POSSIBLE auto result = QuadraticMean(3.0, 4.0);
+		STATIC_CHECK_IF_POSSIBLE(result > 3.535533);
+		STATIC_CHECK_IF_POSSIBLE(result < 3.535534);
 	}
 
 	SECTION("Physical interpretation")
@@ -948,14 +956,14 @@ TEST_CASE("GeometricMean")
 
 	SECTION("Constexpr")
 	{
-		constexpr auto twoValues = GeometricMean(1.0, 4.0);
-		STATIC_CHECK(twoValues > 1.9 && twoValues < 2.1);
+		CONSTEXPR_IF_POSSIBLE auto twoValues = GeometricMean(1.0, 4.0);
+		STATIC_CHECK_IF_POSSIBLE((twoValues > 1.9 && twoValues < 2.1));
 
-		constexpr auto threeValues = GeometricMean(1.0, 8.0, 27.0);
-		STATIC_CHECK(threeValues > 5.9 && threeValues < 6.1);
+		CONSTEXPR_IF_POSSIBLE auto threeValues = GeometricMean(1.0, 8.0, 27.0);
+		STATIC_CHECK_IF_POSSIBLE((threeValues > 5.9 && threeValues < 6.1));
 
-		constexpr auto single = GeometricMean(42);
-		STATIC_CHECK(single == 42);
+		CONSTEXPR_IF_POSSIBLE auto single = GeometricMean(42);
+		STATIC_CHECK_IF_POSSIBLE(single == 42);
 	}
 
 	SECTION("Special cases")
@@ -983,7 +991,7 @@ TEST_CASE("HarmonicMean and InverseSumOfReciprocals")
 
 	SECTION("Multiple values")
 	{
-		STATIC_CHECK(std::is_same_v<decltype(HarmonicMean(1, 2, 4)), double>);
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(HarmonicMean(1, 2, 4)), double>);
 		REQUIRE(HarmonicMean(1, 2, 4) == Approx(12. / 7.));
 		REQUIRE(HarmonicMean(2, 3, 6) == Approx(3));
 
@@ -1004,7 +1012,7 @@ TEST_CASE("HarmonicMean and InverseSumOfReciprocals")
 		CHECK(result > 2.4 - 1e-9);
 		CHECK(result < 2.4 + 1e-9);
 		constexpr auto single = HarmonicMean(42);
-		STATIC_CHECK(single == 42);
+		STATIC_CHECK_IF_POSSIBLE(single == 42);
 	}
 
 	SECTION("All same values")
@@ -1026,17 +1034,17 @@ TEST_CASE("Mean functions edge cases")
 	SECTION("Constexpr compilation smoke test")
 	{
 		// Ensure these compile and evaluate at compile time
-		STATIC_CHECK(ArithmeticMean(1, 2, 3) == 2);
-		STATIC_CHECK(ArithmeticMean(10.0, 20.0) == 15.0);
+		STATIC_CHECK_IF_POSSIBLE(ArithmeticMean(1, 2, 3) == 2);
+		STATIC_CHECK_IF_POSSIBLE(ArithmeticMean(10.0, 20.0) == 15.0);
 
-		constexpr auto qm = QuadraticMean(3.0, 4.0);
-		STATIC_CHECK(qm > 3.535533);
-		STATIC_CHECK(qm < 3.535534);
+		CONSTEXPR_IF_POSSIBLE auto qm = QuadraticMean(3.0, 4.0);
+		STATIC_CHECK_IF_POSSIBLE(qm > 3.535533);
+		STATIC_CHECK_IF_POSSIBLE(qm < 3.535534);
 
-		STATIC_CHECK(GeometricMean(4) == 4);
-		STATIC_CHECK(GeometricMean(1, 4) > 1.0 && GeometricMean(1, 4) < 3.0);
+		STATIC_CHECK_IF_POSSIBLE(GeometricMean(4) == 4);
+		STATIC_CHECK_IF_POSSIBLE((GeometricMean(1, 4) > 1.0 && GeometricMean(1, 4) < 3.0));
 
-		STATIC_CHECK(HarmonicMean(5) == 5);
+		STATIC_CHECK_IF_POSSIBLE(HarmonicMean(5) == 5);
 	}
 }
 
@@ -1114,7 +1122,7 @@ TEST_CASE("PowInt function")
 		STATIC_CHECK(result2 == 243.0);
 
 		constexpr auto result3 = PowInt(2.0, -3);
-		STATIC_CHECK(result3 > 0.124 && result3 < 0.126);
+		STATIC_CHECK((result3 > 0.124 && result3 < 0.126));
 
 		// Runtime version
 		const auto result_rt = PowInt(5.0, 3);  // NOLINT

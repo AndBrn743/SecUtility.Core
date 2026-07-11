@@ -26,12 +26,15 @@ namespace SecUtility::Math
 		/// <param name="m2x2">Represents m<sub>2</sub> × 2</param>
 		/// <param name="jx2">Represents J × 2</param>
 		/// <param name="mx2">Represents M × 2</param>
-		constexpr double unsafe_CalculateClebschGordanCoefficientWithDoubledArgs(const Int64 j1x2,
-		                                                                         const Int64 m1x2,
-		                                                                         const Int64 j2x2,
-		                                                                         const Int64 m2x2,
-		                                                                         const Int64 jx2,
-		                                                                         const Int64 mx2) noexcept
+#if defined(SEC_IF_CONSTEVAL)
+		constexpr
+#endif
+		        double unsafe_CalculateClebschGordanCoefficientWithDoubledArgs(const Int64 j1x2,
+		                                                                       const Int64 m1x2,
+		                                                                       const Int64 j2x2,
+		                                                                       const Int64 m2x2,
+		                                                                       const Int64 jx2,
+		                                                                       const Int64 mx2) noexcept
 		{
 			if (j1x2 == 0 || j2x2 == 0)
 			{
@@ -83,8 +86,15 @@ namespace SecUtility::Math
 	/// <param name="m2x2">Represents m<sub>2</sub> × 2</param>
 	/// <param name="jx2">Represents J × 2</param>
 	/// <param name="mx2">Represents M × 2</param>
-	constexpr double ClebschGordanCoefficientWithDoubledArgs(
-	        const Int64 j1x2, const Int64 m1x2, const Int64 j2x2, const Int64 m2x2, const Int64 jx2, const Int64 mx2)
+#if defined(SEC_IF_CONSTEVAL)
+	constexpr
+#endif
+	        double ClebschGordanCoefficientWithDoubledArgs(const Int64 j1x2,
+	                                                       const Int64 m1x2,
+	                                                       const Int64 j2x2,
+	                                                       const Int64 m2x2,
+	                                                       const Int64 jx2,
+	                                                       const Int64 mx2)
 	{
 
 		if (m1x2 + m2x2 != mx2)
@@ -123,8 +133,11 @@ namespace SecUtility::Math
 	/// <param name="m2">Represents m<sub>2</sub></param>
 	/// <param name="j">Represents J</param>
 	/// <param name="m">Represents M</param>
-	constexpr double ClebschGordanCoefficient(
-	        const double j1, const double m1, const double j2, const double m2, const double j, const double m)
+#if defined(SEC_IF_CONSTEVAL)
+	constexpr
+#endif
+	        double ClebschGordanCoefficient(
+	                const double j1, const double m1, const double j2, const double m2, const double j, const double m)
 	{
 		const auto m1x2 = Round<Int64>(m1 * 2);
 		const auto m2x2 = Round<Int64>(m2 * 2);
