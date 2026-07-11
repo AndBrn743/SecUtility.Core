@@ -30,7 +30,10 @@ jobs:
           # - C++20 exercises the C++20-only subset of the library.
           # - Release catches GCC/Clang optimizer-driven diagnostics
           #   (-Wmaybe-uninitialized, -Warray-bounds, etc.) that don't fire in Debug.
+          # cache_key is the cache-key identifier (no commas/special chars;
+          # GitHub cache keys reject them, so matrix.name can't be used directly).
           - name: gcc, Debug, C++17
+            cache_key: gcc-debug-cxx17
             c_compiler: gcc
             cxx_compiler: g++
             build_type: Debug
@@ -39,6 +42,7 @@ jobs:
             linker_flags: ''
             large_stack: false
           - name: gcc, Debug, C++20
+            cache_key: gcc-debug-cxx20
             c_compiler: gcc
             cxx_compiler: g++
             build_type: Debug
@@ -47,6 +51,7 @@ jobs:
             linker_flags: ''
             large_stack: false
           - name: gcc, Release, C++17
+            cache_key: gcc-release-cxx17
             c_compiler: gcc
             cxx_compiler: g++
             build_type: Release
@@ -55,6 +60,7 @@ jobs:
             linker_flags: ''
             large_stack: false
           - name: gcc, Release, C++20
+            cache_key: gcc-release-cxx20
             c_compiler: gcc
             cxx_compiler: g++
             build_type: Release
@@ -63,6 +69,7 @@ jobs:
             linker_flags: ''
             large_stack: false
           - name: clang, Debug, C++17
+            cache_key: clang-debug-cxx17
             c_compiler: clang
             cxx_compiler: clang++
             build_type: Debug
@@ -71,6 +78,7 @@ jobs:
             linker_flags: ''
             large_stack: false
           - name: clang, Debug, C++20
+            cache_key: clang-debug-cxx20
             c_compiler: clang
             cxx_compiler: clang++
             build_type: Debug
@@ -79,6 +87,7 @@ jobs:
             linker_flags: ''
             large_stack: false
           - name: clang, Release, C++17
+            cache_key: clang-release-cxx17
             c_compiler: clang
             cxx_compiler: clang++
             build_type: Release
@@ -87,6 +96,7 @@ jobs:
             linker_flags: ''
             large_stack: false
           - name: clang, Release, C++20
+            cache_key: clang-release-cxx20
             c_compiler: clang
             cxx_compiler: clang++
             build_type: Release
@@ -97,6 +107,7 @@ jobs:
           # Sanitizer jobs (clang, Debug, C++20). tsan is relevant because the
           # library contains thread-using utilities and tests.
           - name: clang, Debug, C++20 (asan+ubsan)
+            cache_key: clang-debug-cxx20-asan-ubsan
             c_compiler: clang
             cxx_compiler: clang++
             build_type: Debug
@@ -105,6 +116,7 @@ jobs:
             linker_flags: '-fsanitize=address,undefined'
             large_stack: true
           - name: clang, Debug, C++20 (tsan)
+            cache_key: clang-debug-cxx20-tsan
             c_compiler: clang
             cxx_compiler: clang++
             build_type: Debug
@@ -133,9 +145,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/ccache
-          key: linux-ccache-${{ matrix.name }}-${{ github.sha }}
+          key: linux-ccache-${{ matrix.cache_key }}-${{ github.sha }}
           restore-keys: |
-            linux-ccache-${{ matrix.name }}-
+            linux-ccache-${{ matrix.cache_key }}-
             linux-ccache-
 
       - name: Configure CMake
