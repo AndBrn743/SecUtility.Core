@@ -79,7 +79,21 @@ TEMPLATE_TEST_CASE("MatrixFreeLinearOperator", "[template]", float, double, (std
 		CHECK(proj.rows() == 3);
 		CHECK(proj.cols() == 5);
 
+		// GCC 13 false positive: -Wstringop-overread fires on the ToDense() call
+		// below. The lambda returns a VectorX<float> with a 12-byte buffer (3
+		// floats); Eigen's SSE-vectorized column assignment inside ToDense() issues
+		// a 16-byte packet load, which GCC's tracking of the initializer-list
+		// allocation correctly reads as overshooting the 12-byte source. The load
+		// is safe at runtime (Eigen's aligned malloc over-allocates), and GCC 14+
+		// no longer flags it.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ == 13
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+#endif
 		CHECK(proj.ToDense() == Eigen::MatrixX<TestType>::Identity(3, 5));
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ == 13
+#pragma GCC diagnostic pop
+#endif
 
 		const Eigen::VectorX<TestType> input{{1, 2, 3, 4, 5}};
 		const auto result = proj.ApplyOn(input);
