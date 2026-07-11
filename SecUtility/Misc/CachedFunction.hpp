@@ -213,7 +213,7 @@ namespace SecUtility
 	private:
 #if defined(_MSC_VER) && !defined(__clang__)
 		[[msvc::no_unique_address]]
-#else
+#elif __cplusplus >= 202002L
 		[[no_unique_address]]
 #endif
 		mutable Mutex m_Mutex;
