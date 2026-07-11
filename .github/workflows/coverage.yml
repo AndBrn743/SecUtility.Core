@@ -54,8 +54,8 @@ jobs:
       - name: Generate coverage report
         working-directory: build
         run: |
-          lcov --ignore-errors empty,unused,inconsistent,mismatch,negative --capture --directory . --output-file coverage.raw.info --rc geninfo_unexecuted_blocks=1
-          lcov --ignore-errors empty,unused,mismatch,negative --remove coverage.raw.info '/usr/*' '*/_deps/*' "*/catch2/*" --output-file coverage.info
+          lcov --ignore-errors empty,unused,inconsistent,mismatch,negative,source --capture --directory . --output-file coverage.raw.info --rc geninfo_unexecuted_blocks=1
+          lcov --ignore-errors empty,unused,mismatch,negative,source --remove coverage.raw.info '/usr/*' '*/_deps/*' "*/catch2/*" --output-file coverage.info
           lcov --list coverage.info
 
       - name: Upload coverage to Codecov
