@@ -159,7 +159,6 @@ jobs:
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }} \
             -DCMAKE_CXX_STANDARD=${{ matrix.standard }} \
             -DCMAKE_CXX_EXTENSIONS=OFF \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DCMAKE_CXX_FLAGS="-march=native ${{ matrix.cxx_flags }}" \
             -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.linker_flags }}" \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -175,4 +174,4 @@ jobs:
         working-directory: build/tests
         run: |
           if [ "${{ matrix.large_stack }}" = "true" ]; then ulimit -s 1048576; fi
-          ctest --output-on-failure --verbose
+          ctest --output-on-failure
