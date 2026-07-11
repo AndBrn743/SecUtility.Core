@@ -42,15 +42,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure ccache
+        run: |
+          ccache --set-config=cache_dir="${{ runner.temp }}/ccache"
+          ccache --set-config=max_size=500M
+          ccache --set-config=compression=true
+          ccache -p
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: macos-ccache-${{ matrix.build_type }}-cxx${{ matrix.cxx_standard }}-${{ github.sha }}
+          restore-keys: |
+            macos-ccache-${{ matrix.build_type }}-cxx${{ matrix.cxx_standard }}-
+            macos-ccache-
+
       - name: Configure CMake
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} \
-            -DCMAKE_CXX_EXTENSIONS=OFF
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: ccache statistics
+        run: ccache -s
 
       - name: Run tests
         working-directory: build/tests
