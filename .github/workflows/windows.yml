@@ -43,8 +43,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install ccache
+        shell: pwsh
+        run: choco install ccache -y --no-progress
+
       - name: Setup MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure ccache
+        shell: pwsh
+        run: |
+          ccache --set-config=cache_dir="$env:RUNNER_TEMP/ccache"
+          ccache --set-config=max_size=500M
+          ccache --set-config=compression=true
+          # MSVC bakes absolute paths into /Zi PDBs; without this the hash
+          # changes per-runner and we never hit the cache.
+          ccache --set-config=hash_dir=false
+          ccache -p
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: windows-ccache-${{ matrix.compiler }}-${{ matrix.build_type }}-cxx${{ matrix.cxx_standard }}-${{ github.sha }}
+          restore-keys: |
+            windows-ccache-${{ matrix.compiler }}-${{ matrix.build_type }}-cxx${{ matrix.cxx_standard }}-
+            windows-ccache-${{ matrix.compiler }}-
+            windows-ccache-
 
       - name: Configure CMake
         run: |
@@ -53,10 +78,15 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
             -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} `
             -DCMAKE_CXX_EXTENSIONS=OFF `
-            -DCMAKE_CXX_FLAGS="/EHsc /bigobj"
+            -DCMAKE_CXX_FLAGS="/EHsc /bigobj" `
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} --parallel
+
+      - name: ccache statistics
+        shell: pwsh
+        run: ccache -s
 
       - name: Run tests
         working-directory: build/tests
