@@ -65,6 +65,7 @@ endfunction()
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)
+add_secutility_test(MiscTest MiscTest.cpp)
 add_secutility_test(CachedFunctionTest CachedFunctionTest.cpp)
 add_secutility_test(CollectionTest CollectionTest.cpp)
 add_secutility_test(RandomTest RandomTest.cpp)
