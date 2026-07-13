@@ -2,6 +2,7 @@
 // Copyright (c) 2024-2026 Andy Brown
 
 #include <SecUtility/Text/CaseConversion.hpp>
+#include <SecUtility/Text/Conversion.hpp>
 #include <SecUtility/Text/Split.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -12,6 +13,19 @@
 
 using namespace SecUtility;
 using Catch::Matchers::Equals;
+
+
+TEST_CASE("Text conversion")
+{
+	CHECK(Parse<Int32>(std::string_view{"42"}) == 42);
+	CHECK(Parse<Int32>(std::string{"43"}) == 43);
+	CHECK(Parse<long long>(std::string_view{"-42"}) == -42);
+	CHECK(Parse<double>(std::string_view{"1.5"}) == 1.5);
+	CHECK(Parse<bool>(std::string_view{"true"}));
+	CHECK(Parse<std::string_view>(std::string_view{"text"}) == "text");
+	CHECK_THROWS_AS(Parse<UInt8>(std::string_view{"256"}), InvalidArgumentException);
+	CHECK_THROWS_AS(Parse<bool>(std::string_view{"yes"}), InvalidOperationException);
+}
 
 
 TEST_CASE("Case conversion tests")
