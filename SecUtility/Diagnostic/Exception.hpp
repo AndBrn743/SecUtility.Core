@@ -3,13 +3,15 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstring>
 #include <exception>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+
+#include <SecUtility/Misc/RefCountedString.hpp>
 
 
 /*
@@ -46,7 +48,7 @@ namespace SecUtility
 	class Exception : public std::exception
 	{
 	public:
-		Exception() noexcept(noexcept(std::exception{}) && noexcept(std::runtime_error{""})) = default;
+		Exception() noexcept(noexcept(std::exception{}) && noexcept(RefCountedString{})) = default;
 
 		template <typename... Messages,
 		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
@@ -60,7 +62,7 @@ namespace SecUtility
 			return m_CMessage;
 		}
 
-		Exception(Exception&& other) noexcept : m_Message(std::move(other.m_Message)), m_CMessage(m_Message.what())
+		Exception(Exception&& other) noexcept : m_Message(std::move(other.m_Message)), m_CMessage(m_Message.CString())
 		{
 			/* NO CODE */
 		}
@@ -68,11 +70,11 @@ namespace SecUtility
 		Exception& operator=(Exception&& other) noexcept
 		{
 			m_Message = std::move(other.m_Message);
-			m_CMessage = m_Message.what();
+			m_CMessage = m_Message.CString();
 			return *this;
 		}
 
-		Exception(const Exception& other) noexcept : m_Message(other.m_Message), m_CMessage(m_Message.what())
+		Exception(const Exception& other) noexcept : m_Message(other.m_Message), m_CMessage(m_Message.CString())
 		{
 			/* NO CODE */
 		}
@@ -82,7 +84,7 @@ namespace SecUtility
 			if (this != &other)
 			{
 				m_Message = other.m_Message;
-				m_CMessage = m_Message.what();
+				m_CMessage = m_Message.CString();
 			}
 
 			return *this;
@@ -134,8 +136,8 @@ namespace SecUtility
 
 				AppendAll(message, std::forward<Messages>(messages)...);
 
-				m_Message = std::runtime_error{std::move(message)};
-				m_CMessage = m_Message.what();
+				m_Message = std::move(message);
+				m_CMessage = m_Message.CString();
 			}
 			catch (...)
 			{
@@ -187,8 +189,7 @@ namespace SecUtility
 		}
 
 	private:
-		// use std::runtime_error as const ref-counted string. see https://www.youtube.com/watch?v=zGWj7Qo_POY
-		std::runtime_error m_Message{""};
+		RefCountedString m_Message;
 		const char* m_CMessage = "Generic exception";
 	};
 
