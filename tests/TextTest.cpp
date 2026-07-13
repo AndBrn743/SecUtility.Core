@@ -342,6 +342,18 @@ TEST_CASE("String split")
 		{
 			CHECK_THROWS_AS(Split("1,,3", ',', Parser<Int32>{}), InvalidArgumentException);
 		}
+
+		SECTION("Out-of-range integer throws InvalidArgumentException")
+		{
+			CHECK_THROWS_AS(Split("128", ',', Parser<Int8>{}), InvalidArgumentException);
+			CHECK_THROWS_AS(Split("-1", ',', Parser<UInt8>{}), InvalidArgumentException);
+		}
+
+		SECTION("Leading whitespace and plus sign are rejected")
+		{
+			CHECK_THROWS_AS(Split(" 1", ',', Parser<Int32>{}), InvalidArgumentException);
+			CHECK_THROWS_AS(Split("+1", ',', Parser<Int32>{}), InvalidArgumentException);
+		}
 	}
 
 	SECTION("Split with floating-point parser")
@@ -358,6 +370,11 @@ TEST_CASE("String split")
 		SECTION("Invalid double throws InvalidArgumentException")
 		{
 			CHECK_THROWS_AS(Split("1.0,not_a_number", ',', Parser<double>{}), InvalidArgumentException);
+		}
+
+		SECTION("Out-of-range double throws InvalidArgumentException")
+		{
+			CHECK_THROWS_AS(Split("1e10000", ',', Parser<double>{}), InvalidArgumentException);
 		}
 	}
 
