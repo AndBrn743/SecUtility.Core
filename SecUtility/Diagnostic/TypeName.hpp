@@ -13,7 +13,7 @@
 
 namespace SecUtility
 {
-	namespace Detail
+	namespace Detail::TypeName
 	{
 		template <typename T /* do not remove or rename `T`*/>
 #if defined(__cpp_consteval) && __cpp_consteval >= 201811L
@@ -26,15 +26,15 @@ namespace SecUtility
 			// clang-format off
 #if defined(__clang__)
 			std::string_view name = __PRETTY_FUNCTION__;
-			constexpr auto prefixSize = std::string_view{"std::string_view SecUtility::Detail::TypeName() [T = "}.size();
+			constexpr auto prefixSize = std::string_view{"std::string_view SecUtility::Detail::TypeName::TypeName() [T = "}.size();
 			constexpr auto suffixSize = std::string_view{"]"}.size();
 #elif defined(__GNUC__)
 			std::string_view name = __PRETTY_FUNCTION__;
-			constexpr auto prefixSize = std::string_view{"constexpr std::string_view SecUtility::Detail::TypeName() [with T = "}.size();
+			constexpr auto prefixSize = std::string_view{"constexpr std::string_view SecUtility::Detail::TypeName::TypeName() [with T = "}.size();
 			constexpr auto suffixSize = std::string_view{"; std::string_view = std::basic_string_view<char>]"}.size();
 #elif defined(_MSC_VER)
 			std::string_view name = __FUNCSIG__;
-			constexpr auto prefixSize = std::string_view{"class std::basic_string_view<char,struct std::char_traits<char> > __cdecl SecUtility::Detail::TypeName<"}.size();
+			constexpr auto prefixSize = std::string_view{"class std::basic_string_view<char,struct std::char_traits<char> > __cdecl SecUtility::Detail::TypeName::TypeName<"}.size();
 			constexpr auto suffixSize = std::string_view{">(void)"}.size();
 #endif
 			// clang-format on
@@ -48,13 +48,13 @@ namespace SecUtility
 
 
 	template <typename T>
-	inline constexpr std::string_view TypeName = Detail::TypeName<T>();
+	inline constexpr std::string_view TypeName = Detail::TypeName::TypeName<T>();
 
 
 	template <class T>
 	constexpr std::string_view TypeNameOf(T&&)
 	{
-		return Detail::TypeName<T>();
+		return Detail::TypeName::TypeName<T>();
 	}
 
 
