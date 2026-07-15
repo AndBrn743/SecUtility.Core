@@ -482,7 +482,7 @@ TEST_CASE("String split")
 	SECTION("Split throws on unterminated quote")
 	{
 		{
-			REQUIRE_THROWS_AS(Split<SplitOptions::EnableQuotes>(R"(a,"b,c)", ','), std::runtime_error);
+			REQUIRE_THROWS_AS(Split<SplitOptions::EnableQuotes>(R"(a,"b,c)", ','), FormatException);
 		}
 		{
 			REQUIRE_NOTHROW(Split(R"(a,"b,c)", ','));

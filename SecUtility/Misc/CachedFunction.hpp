@@ -5,13 +5,13 @@
 
 #include <functional>
 #include <map>
+#include <mutex>
 #include <optional>
-#include <stdexcept>
+#include <shared_mutex>
 #include <tuple>
 #include <utility>
-#include <mutex>
-#include <shared_mutex>
 
+#include <SecUtility/Diagnostic/Exception.hpp>
 #include <SecUtility/Meta/TypeTrait.hpp>
 #include <SecUtility/Misc/NullMutex.hpp>
 
@@ -159,7 +159,8 @@ namespace SecUtility
 			{
 				if (!m_Cache.has_value())
 				{
-					throw std::out_of_range("CachedFunction: Result not in cache. Call non-const operator() first.");
+					throw NoSuchElementException(
+					        "CachedFunction: Result not in cache. Call non-const operator() first.");
 				}
 
 				return m_Cache.value();
@@ -170,7 +171,8 @@ namespace SecUtility
 
 				if (iterator == m_Cache.end())
 				{
-					throw std::out_of_range("CachedFunction: Result not in cache. Call non-const operator(...) first.");
+					throw NoSuchElementException(
+					        "CachedFunction: Result not in cache. Call non-const operator(...) first.");
 				}
 
 				return iterator->second;
@@ -292,7 +294,8 @@ namespace SecUtility
 	class ConcurrentCachedFunction;
 
 	template <typename Result, typename... Args>
-	class ConcurrentCachedFunction<Result(Args...)> : public BasicCachedFunction<std::shared_mutex, std::function<Result(Args...)>>
+	class ConcurrentCachedFunction<Result(Args...)>
+	    : public BasicCachedFunction<std::shared_mutex, std::function<Result(Args...)>>
 	{
 		using Base = BasicCachedFunction<std::shared_mutex, std::function<Result(Args...)>>;
 

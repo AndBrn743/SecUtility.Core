@@ -5,6 +5,7 @@
 
 #include <SecUtility/Misc/Bitflag.hpp>
 #include <SecUtility/Text/Conversion.hpp>
+#include <SecUtility/Diagnostic/Exception.hpp>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -110,7 +111,7 @@ namespace SecUtility
 		{
 			if (isInQuotes)
 			{
-				throw std::runtime_error("Split: unterminated quote in input");
+				throw FormatException("Split: unterminated quote in input");
 			}
 		}
 

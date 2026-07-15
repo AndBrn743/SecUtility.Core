@@ -230,7 +230,7 @@ TEST_CASE("CachedFunction - Const operator() for cache lookups")
 	{
 		// Cache is empty, const call should throw
 		const auto& constCached = cached;
-		CHECK_THROWS_AS(constCached(5), std::out_of_range);
+		CHECK_THROWS_AS(constCached(5), NoSuchElementException);
 	}
 
 	SECTION("Const operator works on cache hit")
@@ -393,7 +393,7 @@ TEST_CASE("CachedFunction - No arguments function - const operator and clear")
 	SECTION("Const operator throws on cache miss")
 	{
 		const auto& constCached = cached;
-		CHECK_THROWS_AS(constCached(), std::out_of_range);
+		CHECK_THROWS_AS(constCached(), NoSuchElementException);
 	}
 
 	SECTION("Const operator works on cache hit")

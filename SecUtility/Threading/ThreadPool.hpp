@@ -10,9 +10,10 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <stdexcept>
 #include <thread>
 #include <vector>
+
+#include <SecUtility/Diagnostic/Exception.hpp>
 
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
@@ -69,7 +70,7 @@ namespace SecUtility::Threading
 				std::lock_guard lock(m_Mutex);
 				if (m_Stop)
 				{
-					throw std::runtime_error("Cannot submit task to stopped ThreadPool");
+					throw InvalidOperationException("Cannot submit task to stopped ThreadPool");
 				}
 				m_Tasks.emplace([task = std::move(packagedTask)] { (*task)(); });
 			}
