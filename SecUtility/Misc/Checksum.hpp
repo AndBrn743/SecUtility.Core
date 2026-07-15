@@ -142,12 +142,12 @@ namespace SecUtility::Checksum
 namespace SecUtility::Checksum
 {
 	// 0xEDB88320 for IEEE CRC-32, 0x82F63B78 for CRC-32C (Castagnoli)
-	template <std::uint32_t Crc32Polynomial>
+	template <UInt32 Crc32Polynomial>
 	inline constexpr auto Crc32Table = []
 	{
-		const auto GenerateCrcEntry = [](const std::uint32_t i)
+		const auto GenerateCrcEntry = [](const UInt32 i)
 		{
-			std::uint32_t crc = i;
+			UInt32 crc = i;
 			for (int j = 0; j < 8; ++j)
 			{
 				crc = (crc >> 1) ^ ((crc & 1) ? Crc32Polynomial : 0);
@@ -155,8 +155,8 @@ namespace SecUtility::Checksum
 			return crc;
 		};
 
-		std::array<std::uint32_t, 256> table = {};
-		for (std::uint32_t i = 0; i < 256; ++i)
+		std::array<UInt32, 256> table = {};
+		for (UInt32 i = 0; i < 256; ++i)
 		{
 			table[i] = GenerateCrcEntry(i);
 		}
@@ -165,18 +165,18 @@ namespace SecUtility::Checksum
 
 
 	// 0xEDB88320 for IEEE CRC-32, 0x82F63B78 for CRC-32C (Castagnoli)
-	template <std::uint32_t Crc32Polynomial, std::size_t SliceCount>
+	template <UInt32 Crc32Polynomial, std::size_t SliceCount>
 	inline constexpr auto SlicedCrc32Tables = []
 	{
-		std::array<std::array<std::uint32_t, 256>, SliceCount> tables = {};
+		std::array<std::array<UInt32, 256>, SliceCount> tables = {};
 
 		tables[0] = Crc32Table<Crc32Polynomial>;
 
 		for (std::size_t t = 1; t < SliceCount; ++t)
 		{
-			for (std::uint32_t i = 0; i < 256; ++i)
+			for (UInt32 i = 0; i < 256; ++i)
 			{
-				const std::uint32_t prev = tables[t - 1][i];
+				const UInt32 prev = tables[t - 1][i];
 				tables[t][i] = (prev >> 8) ^ tables[0][prev & 0xFF];
 			}
 		}
@@ -186,7 +186,7 @@ namespace SecUtility::Checksum
 
 
 	// 0xEDB88320 for IEEE CRC-32, 0x82F63B78 for CRC-32C (Castagnoli)
-	template <std::uint32_t Crc32Polynomial, std::size_t SliceIndex>
+	template <UInt32 Crc32Polynomial, std::size_t SliceIndex>
 	inline constexpr auto SlicedCrc32TableSlice = []
 	{
 		if constexpr (SliceIndex == 0)
@@ -195,11 +195,11 @@ namespace SecUtility::Checksum
 		}
 		else
 		{
-			std::array<std::uint32_t, 256> table = {};
+			std::array<UInt32, 256> table = {};
 
-			for (std::uint32_t i = 0; i < 256; ++i)
+			for (UInt32 i = 0; i < 256; ++i)
 			{
-				const std::uint32_t prev = SlicedCrc32TableSlice<Crc32Polynomial, SliceIndex - 1>[i];
+				const UInt32 prev = SlicedCrc32TableSlice<Crc32Polynomial, SliceIndex - 1>[i];
 				table[i] = (prev >> 8) ^ Crc32Table<Crc32Polynomial>[prev & 0xFF];
 			}
 
@@ -208,8 +208,8 @@ namespace SecUtility::Checksum
 	}();
 
 	// 0xEDB88320 for IEEE CRC-32, 0x82F63B78 for CRC-32C (Castagnoli)
-	template <std::uint32_t Crc32Polynomial = 0xEDB88320>
-	constexpr Checksum32 SoftwareCrc32(const std::uint8_t* data,
+	template <UInt32 Crc32Polynomial = 0xEDB88320>
+	constexpr Checksum32 SoftwareCrc32(const UInt8* data,
 	                                   const std::size_t byteCount,
 	                                   Checksum32 crc = Checksum32{0xFFFFFFFF}) noexcept
 	{
@@ -221,7 +221,7 @@ namespace SecUtility::Checksum
 		return Checksum32{crc ^ 0xFFFFFFFF};
 	}
 
-	constexpr Checksum32 SoftwareCrc32C(const std::uint8_t* data,
+	constexpr Checksum32 SoftwareCrc32C(const UInt8* data,
 	                                    const std::size_t byteCount,
 	                                    const Checksum32 crc = Checksum32{0xFFFFFFFF}) noexcept
 	{
@@ -230,13 +230,13 @@ namespace SecUtility::Checksum
 
 	// The slicing logic of this impl is adopted from https://create.stephan-brumme.com/crc32/ and
 	// https://github.com/stbrumme/crc32 (Zlib license)
-	template <std::uint32_t Crc32Polynomial = 0xEDB88320, std::size_t DegreeOfUnroll = 1>
+	template <UInt32 Crc32Polynomial = 0xEDB88320, std::size_t DegreeOfUnroll = 1>
 	constexpr Checksum32 SlicedSoftwareCrc32(std::integral_constant<std::size_t, 8>,
-	                                         const std::uint8_t* data,
+	                                         const UInt8* data,
 	                                         std::size_t byteCount,
 	                                         const Checksum32 crc = Checksum32{0xFFFFFFFF})
 	{
-		auto _crc = static_cast<std::uint32_t>(crc);
+		auto _crc = static_cast<UInt32>(crc);
 
 		while (byteCount >= 8 * DegreeOfUnroll)
 		{
@@ -251,11 +251,10 @@ namespace SecUtility::Checksum
 
 			for (std::size_t i = 0; i < DegreeOfUnroll; ++i)
 			{
-				const std::uint32_t block =
-				        static_cast<std::uint32_t>(data[0]) | (static_cast<std::uint32_t>(data[1]) << 8)
-				        | (static_cast<std::uint32_t>(data[2]) << 16) | (static_cast<std::uint32_t>(data[3]) << 24);
+				const UInt32 block = static_cast<UInt32>(data[0]) | (static_cast<UInt32>(data[1]) << 8)
+				                     | (static_cast<UInt32>(data[2]) << 16) | (static_cast<UInt32>(data[3]) << 24);
 
-				const std::uint32_t one = block ^ _crc;
+				const UInt32 one = block ^ _crc;
 
 				_crc = SlicedCrc32Tables<Crc32Polynomial, 8>[0][data[7]]
 				       ^ SlicedCrc32Tables<Crc32Polynomial, 8>[1][data[6]]
@@ -285,13 +284,13 @@ namespace SecUtility::Checksum
 
 	// The slicing logic of this impl is adopted from https://create.stephan-brumme.com/crc32/ and
 	// https://github.com/stbrumme/crc32 (Zlib license)
-	template <std::uint32_t Crc32Polynomial = 0xEDB88320, std::size_t DegreeOfUnroll = 1>
+	template <UInt32 Crc32Polynomial = 0xEDB88320, std::size_t DegreeOfUnroll = 1>
 	constexpr Checksum32 SlicedSoftwareCrc32(std::integral_constant<std::size_t, 16>,
-	                                         const std::uint8_t* data,
+	                                         const UInt8* data,
 	                                         std::size_t byteCount,
 	                                         const Checksum32 crc = Checksum32{0xFFFFFFFF})
 	{
-		auto _crc = static_cast<std::uint32_t>(crc);
+		auto _crc = static_cast<UInt32>(crc);
 
 		while (byteCount >= 16 * DegreeOfUnroll)
 		{
@@ -306,11 +305,10 @@ namespace SecUtility::Checksum
 
 			for (std::size_t i = 0; i < DegreeOfUnroll; ++i)
 			{
-				const std::uint32_t block =
-				        static_cast<std::uint32_t>(data[0]) | (static_cast<std::uint32_t>(data[1]) << 8)
-				        | (static_cast<std::uint32_t>(data[2]) << 16) | (static_cast<std::uint32_t>(data[3]) << 24);
+				const UInt32 block = static_cast<UInt32>(data[0]) | (static_cast<UInt32>(data[1]) << 8)
+				                     | (static_cast<UInt32>(data[2]) << 16) | (static_cast<UInt32>(data[3]) << 24);
 
-				const std::uint32_t one = block ^ _crc;
+				const UInt32 one = block ^ _crc;
 
 				_crc = SlicedCrc32Tables<Crc32Polynomial, 16>[0][data[15]]
 				       ^ SlicedCrc32Tables<Crc32Polynomial, 16>[1][data[14]]
@@ -345,7 +343,7 @@ namespace SecUtility::Checksum
 	}
 
 
-	template <std::size_t SliceCount, std::uint32_t Crc32Polynomial = 0xEDB88320>
+	template <std::size_t SliceCount, UInt32 Crc32Polynomial = 0xEDB88320>
 	constexpr Checksum32 SlicedSoftwareCrc32(const uint8_t* data,
 	                                         size_t byteCount,
 	                                         const Checksum32 crc = Checksum32{0xFFFFFFFF})
@@ -365,30 +363,30 @@ namespace SecUtility::Checksum
 
 #if defined(SECUTILITY_HAS_HARDWARE_CRC32C) && SECUTILITY_HAS_HARDWARE_CRC32C
 	SECUTILITY_CRC32C_X86_TARGET
-	inline Checksum32 HardwareCrc32C(const std::uint8_t* const data,
+	inline Checksum32 HardwareCrc32C(const UInt8* const data,
 	                                 std::size_t byteCount,
 	                                 const Checksum32 crc = Checksum32{0xFFFFFFFF}) noexcept
 	{
 		auto p = data;
-		auto _crc = static_cast<std::uint64_t>(crc);
+		auto _crc = static_cast<UInt64>(crc);
 
-		while (byteCount >= sizeof(std::uint64_t))
+		while (byteCount >= sizeof(UInt64))
 		{
 #if defined(SECUTILITY_HAS_X86_CRC32C) && SECUTILITY_HAS_X86_CRC32C
-			_crc = _mm_crc32_u64(_crc, *reinterpret_cast<const std::uint64_t*>(p));
+			_crc = _mm_crc32_u64(_crc, *reinterpret_cast<const UInt64*>(p));
 #elif defined(SECUTILITY_HAS_ARM_CRC32C) && SECUTILITY_HAS_ARM_CRC32C
-			_crc = __crc32cd(_crc, *reinterpret_cast<const std::uint64_t*>(p));
+			_crc = __crc32cd(_crc, *reinterpret_cast<const UInt64*>(p));
 #endif
-			p += sizeof(std::uint64_t);
-			byteCount -= sizeof(std::uint64_t);
+			p += sizeof(UInt64);
+			byteCount -= sizeof(UInt64);
 		}
 
 		while (byteCount--)
 		{
 #if defined(SECUTILITY_HAS_X86_CRC32C) && SECUTILITY_HAS_X86_CRC32C
-			_crc = _mm_crc32_u8(static_cast<std::uint32_t>(_crc), *p++);
+			_crc = _mm_crc32_u8(static_cast<UInt32>(_crc), *p++);
 #elif defined(SECUTILITY_HAS_ARM_CRC32C) && SECUTILITY_HAS_ARM_CRC32C
-			_crc = __crc32cb(static_cast<std::uint32_t>(_crc), *p++);
+			_crc = __crc32cb(static_cast<UInt32>(_crc), *p++);
 #endif
 		}
 
@@ -396,14 +394,14 @@ namespace SecUtility::Checksum
 	}
 #endif
 
-	inline Checksum32 Crc32(const std::uint8_t* data,
+	inline Checksum32 Crc32(const UInt8* data,
 	                        const std::size_t byteCount,
 	                        const Checksum32 crc = Checksum32{0xFFFFFFFF})
 	{
 		return SoftwareCrc32(data, byteCount, crc);
 	}
 
-	inline Checksum32 Crc32C(const std::uint8_t* data,
+	inline Checksum32 Crc32C(const UInt8* data,
 	                         const std::size_t byteCount,
 	                         const Checksum32 crc = Checksum32{0xFFFFFFFF})
 	{

@@ -6,6 +6,7 @@
 #include <SecUtility/Macro/ConstevalIf.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Math/Core.hpp>
+#include <SecUtility/Raw/Int.hpp>
 #include <cassert>
 #include <numeric>
 
@@ -122,13 +123,13 @@ namespace SecUtility::Math
 			k = n - k;
 		}
 
-		std::uint64_t result = 1;
-		for (std::uint64_t i = 1; i <= static_cast<std::uint64_t>(k); i++)
+		UInt64 result = 1;
+		for (UInt64 i = 1; i <= static_cast<UInt64>(k); i++)
 		{
 			result *= n - i + 1;
 			result /= i;
 		}
-		assert(result <= static_cast<std::uint64_t>(std::numeric_limits<Integer>::max()));
+		assert(result <= static_cast<UInt64>(std::numeric_limits<Integer>::max()));
 		return static_cast<Integer>(result);
 	}
 }

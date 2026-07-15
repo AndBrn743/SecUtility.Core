@@ -18,7 +18,7 @@ TEST_CASE("Checksum32 - Enum class properties")
 
 	SECTION("Underlying type is uint32_t")
 	{
-		STATIC_CHECK(std::is_same_v<std::underlying_type_t<Checksum32>, std::uint32_t>);
+		STATIC_CHECK(std::is_same_v<std::underlying_type_t<Checksum32>, UInt32>);
 	}
 
 	SECTION("Can be constructed from uint32_t")
@@ -44,7 +44,7 @@ TEST_CASE("Checksum64 - Enum class properties")
 
 	SECTION("Underlying type is uint64_t")
 	{
-		STATIC_CHECK(std::is_same_v<std::underlying_type_t<Checksum64>, std::uint64_t>);
+		STATIC_CHECK(std::is_same_v<std::underlying_type_t<Checksum64>, UInt64>);
 	}
 
 	SECTION("Can be constructed from uint64_t")
@@ -66,7 +66,7 @@ TEST_CASE("Checksum32 - Bitwise XOR operator")
 	SECTION("Checksum32 ^ integral type")
 	{
 		constexpr Checksum32 c{0xF0F0F0F0};
-		constexpr std::uint32_t result = c ^ 0xAAAAAAAA;
+		constexpr UInt32 result = c ^ 0xAAAAAAAA;
 
 		STATIC_CHECK(result == 0x5A5A5A5A);
 	}
@@ -74,7 +74,7 @@ TEST_CASE("Checksum32 - Bitwise XOR operator")
 	SECTION("Integral type ^ Checksum32")
 	{
 		constexpr Checksum32 c{0xF0F0F0F0};
-		constexpr std::uint32_t result = 0xAAAAAAAA ^ c;
+		constexpr UInt32 result = 0xAAAAAAAA ^ c;
 
 		STATIC_CHECK(result == 0x5A5A5A5A);
 	}
@@ -111,7 +111,7 @@ TEST_CASE("Checksum64 - Bitwise XOR operator")
 	SECTION("Checksum64 ^ integral type")
 	{
 		constexpr Checksum64 c{0xF0F0F0F0F0F0F0F0ULL};
-		constexpr std::uint64_t result = c ^ 0x0F0F0F0F0F0F0F0FULL;
+		constexpr UInt64 result = c ^ 0x0F0F0F0F0F0F0F0FULL;
 
 		STATIC_CHECK(result == 0xFFFFFFFFFFFFFFFFULL);
 	}
@@ -119,7 +119,7 @@ TEST_CASE("Checksum64 - Bitwise XOR operator")
 	SECTION("Integral type ^ Checksum64")
 	{
 		constexpr Checksum64 c{0xAAAAAAAAAAAAAAAAULL};
-		constexpr std::uint64_t result = 0x5555555555555555ULL ^ c;
+		constexpr UInt64 result = 0x5555555555555555ULL ^ c;
 
 		STATIC_CHECK(result == 0xFFFFFFFFFFFFFFFFULL);
 	}
@@ -422,10 +422,10 @@ TEST_CASE("Checksum32 - Type safety")
 		constexpr Checksum32 c{0x12345678};
 
 		// This should NOT compile:
-		// std::uint32_t value = c;
+		// UInt32 value = c;
 
 		// But this should:
-		constexpr std::uint32_t value = std::to_underlying(c);
+		constexpr UInt32 value = std::to_underlying(c);
 		CHECK(value == 0x12345678);
 	}
 
@@ -475,35 +475,35 @@ TEST_CASE("SoftwareCrc32 - Known test vectors")
 
 	SECTION("Single byte 0x00")
 	{
-		constexpr std::uint8_t data[] = {0x00};
+		constexpr UInt8 data[] = {0x00};
 		constexpr Checksum32 crc = SoftwareCrc32(data, 1);
 		STATIC_CHECK(std::to_underlying(crc) == 0xD202EF8D);
 	}
 
 	SECTION("Single byte 0xFF")
 	{
-		constexpr std::uint8_t data[] = {0xFF};
+		constexpr UInt8 data[] = {0xFF};
 		constexpr Checksum32 crc = SoftwareCrc32(data, 1);
 		STATIC_CHECK(std::to_underlying(crc) == 0xFF000000);
 	}
 
 	SECTION("Two bytes 0x00 0x00")
 	{
-		constexpr std::uint8_t data[] = {0x00, 0x00};
+		constexpr UInt8 data[] = {0x00, 0x00};
 		constexpr Checksum32 crc = SoftwareCrc32(data, 2);
 		STATIC_CHECK(std::to_underlying(crc) == 0x41D912FF);
 	}
 
 	SECTION("Two bytes 0xFF 0xFF")
 	{
-		constexpr std::uint8_t data[] = {0xFF, 0xFF};
+		constexpr UInt8 data[] = {0xFF, 0xFF};
 		constexpr Checksum32 crc = SoftwareCrc32(data, 2);
 		STATIC_CHECK(std::to_underlying(crc) == 0xFFFF0000);
 	}
 
 	SECTION("String '123456789'")
 	{
-		constexpr std::uint8_t data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+		constexpr UInt8 data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
 		constexpr Checksum32 crc = SoftwareCrc32(data, 9);
 		STATIC_CHECK(std::to_underlying(crc) == 0xCBF43926);
@@ -511,42 +511,42 @@ TEST_CASE("SoftwareCrc32 - Known test vectors")
 
 	SECTION("String 'hello world'")
 	{
-		constexpr std::uint8_t data[] = "hello world";
+		constexpr UInt8 data[] = "hello world";
 		constexpr Checksum32 crc = SoftwareCrc32(data, 11);
 		STATIC_CHECK(std::to_underlying(crc) == 0x0D4A1185);
 	}
 
 	SECTION("String 'The quick brown fox jumps over the lazy dog'")
 	{
-		constexpr std::uint8_t data[] = "The quick brown fox jumps over the lazy dog";
+		constexpr UInt8 data[] = "The quick brown fox jumps over the lazy dog";
 		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(crc) == 0x414FA339);
 	}
 
 	SECTION("String 'The quick brown fox jumps over the lazy dog.'")
 	{
-		constexpr std::uint8_t data[] = "The quick brown fox jumps over the lazy dog.";
+		constexpr UInt8 data[] = "The quick brown fox jumps over the lazy dog.";
 		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(crc) == 0x519025E9);
 	}
 
 	SECTION("String 'abcdefghijklmnopqrstuvwxyz'")
 	{
-		constexpr std::uint8_t data[] = "abcdefghijklmnopqrstuvwxyz";
+		constexpr UInt8 data[] = "abcdefghijklmnopqrstuvwxyz";
 		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(crc) == 0x4C2750BD);
 	}
 
 	SECTION("String 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'")
 	{
-		constexpr std::uint8_t data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		constexpr UInt8 data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(crc) == 0x1FC2E6D2);
 	}
 
 	SECTION("String 'various CRC algorithms input data'")
 	{
-		constexpr std::uint8_t data[] = "various CRC algorithms input data";
+		constexpr UInt8 data[] = "various CRC algorithms input data";
 		constexpr Checksum32 crc = SoftwareCrc32(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(crc) == 0x9BD366AE);
 	}
@@ -557,7 +557,7 @@ TEST_CASE("SoftwareCrc32 - Incremental computation")
 {
 	SECTION("Split computation matches whole")
 	{
-		constexpr std::uint8_t data[] = "123456789";
+		constexpr UInt8 data[] = "123456789";
 
 		// Compute all at once
 		constexpr Checksum32 crc1 = SoftwareCrc32(data, 9);
@@ -572,7 +572,7 @@ TEST_CASE("SoftwareCrc32 - Incremental computation")
 
 	SECTION("Incremental with empty data")
 	{
-		constexpr std::uint8_t data[] = "hello";
+		constexpr UInt8 data[] = "hello";
 
 		constexpr Checksum32 crc = SoftwareCrc32(data, 5);
 		constexpr Checksum32 crc2 = SoftwareCrc32(data, 0, Checksum32{crc ^ 0xFFFFFFFF});  // Add empty data
@@ -591,7 +591,7 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 
 	SECTION("String '123456789'")
 	{
-		constexpr std::uint8_t data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+		constexpr UInt8 data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, 9);
 		STATIC_CHECK(std::to_underlying(s) == 0xe3069283);
@@ -599,7 +599,7 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 
 	SECTION("String 'The quick brown fox jumps over the lazy dog'")
 	{
-		constexpr std::uint8_t data[] = "The quick brown fox jumps over the lazy dog";
+		constexpr UInt8 data[] = "The quick brown fox jumps over the lazy dog";
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(s) == 0x22620404);
@@ -607,7 +607,7 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 
 	SECTION("String 'message digest'")
 	{
-		constexpr std::uint8_t data[] = "message digest";
+		constexpr UInt8 data[] = "message digest";
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(s) == 0x02bd79d0);
@@ -615,7 +615,7 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 
 	SECTION("String 'abcdefghijklmnopqrstuvwxyz'")
 	{
-		constexpr std::uint8_t data[] = "abcdefghijklmnopqrstuvwxyz";
+		constexpr UInt8 data[] = "abcdefghijklmnopqrstuvwxyz";
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(s) == 0x9ee6ef25);
@@ -623,7 +623,7 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 
 	SECTION("String 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'")
 	{
-		constexpr std::uint8_t data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		constexpr UInt8 data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 		constexpr Checksum32 s = SoftwareCrc32C(data, sizeof(data) - 1);
 		STATIC_CHECK(std::to_underlying(s) == 0xa245d57d);
@@ -631,8 +631,8 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 
 	SECTION("0x00 .. 0x1F")
 	{
-		std::uint8_t data[32] = {};
-		std::iota(std::begin(data), std::end(data), std::uint8_t{0});
+		UInt8 data[32] = {};
+		std::iota(std::begin(data), std::end(data), UInt8{0});
 
 		const Checksum32 s = SoftwareCrc32C(data, 32);
 		CHECK(std::to_underlying(s) == 0x46dd794e);
@@ -640,8 +640,8 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 
 	SECTION("0x1F .. 0x00")
 	{
-		std::uint8_t data[32] = {};
-		std::iota(std::rbegin(data), std::rend(data), std::uint8_t{0});
+		UInt8 data[32] = {};
+		std::iota(std::rbegin(data), std::rend(data), UInt8{0});
 
 		const Checksum32 s = SoftwareCrc32C(data, 32);
 		CHECK(std::to_underlying(s) == 0x113fdb5c);
@@ -659,7 +659,7 @@ TEST_CASE("HardwareCrc32C - Known test vectors")
 
 	SECTION("String '123456789'")
 	{
-		constexpr std::uint8_t data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+		constexpr UInt8 data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
 		const Checksum32 h = HardwareCrc32C(data, 9);
 		CHECK(std::to_underlying(h) == 0xe3069283);
@@ -667,7 +667,7 @@ TEST_CASE("HardwareCrc32C - Known test vectors")
 
 	SECTION("String 'The quick brown fox jumps over the lazy dog'")
 	{
-		constexpr std::uint8_t data[] = "The quick brown fox jumps over the lazy dog";
+		constexpr UInt8 data[] = "The quick brown fox jumps over the lazy dog";
 
 		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
 		CHECK(std::to_underlying(h) == 0x22620404);
@@ -675,7 +675,7 @@ TEST_CASE("HardwareCrc32C - Known test vectors")
 
 	SECTION("String 'message digest'")
 	{
-		constexpr std::uint8_t data[] = "message digest";
+		constexpr UInt8 data[] = "message digest";
 
 		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
 		CHECK(std::to_underlying(h) == 0x02bd79d0);
@@ -683,7 +683,7 @@ TEST_CASE("HardwareCrc32C - Known test vectors")
 
 	SECTION("String 'abcdefghijklmnopqrstuvwxyz'")
 	{
-		constexpr std::uint8_t data[] = "abcdefghijklmnopqrstuvwxyz";
+		constexpr UInt8 data[] = "abcdefghijklmnopqrstuvwxyz";
 
 		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
 		CHECK(std::to_underlying(h) == 0x9ee6ef25);
@@ -691,7 +691,7 @@ TEST_CASE("HardwareCrc32C - Known test vectors")
 
 	SECTION("String 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'")
 	{
-		constexpr std::uint8_t data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		constexpr UInt8 data[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 		const Checksum32 h = HardwareCrc32C(data, sizeof(data) - 1);
 		CHECK(std::to_underlying(h) == 0xa245d57d);
@@ -699,8 +699,8 @@ TEST_CASE("HardwareCrc32C - Known test vectors")
 
 	SECTION("0x00 .. 0x1F")
 	{
-		std::uint8_t data[32] = {};
-		std::iota(std::begin(data), std::end(data), std::uint8_t{0});
+		UInt8 data[32] = {};
+		std::iota(std::begin(data), std::end(data), UInt8{0});
 
 		const Checksum32 h = HardwareCrc32C(data, 32);
 		CHECK(std::to_underlying(h) == 0x46dd794e);
@@ -708,8 +708,8 @@ TEST_CASE("HardwareCrc32C - Known test vectors")
 
 	SECTION("0x1F .. 0x00")
 	{
-		std::uint8_t data[32] = {};
-		std::iota(std::rbegin(data), std::rend(data), std::uint8_t{0});
+		UInt8 data[32] = {};
+		std::iota(std::rbegin(data), std::rend(data), UInt8{0});
 
 		const Checksum32 h = HardwareCrc32C(data, 32);
 		CHECK(std::to_underlying(h) == 0x113fdb5c);
@@ -724,7 +724,7 @@ TEST_CASE("SoftwareCrc32CC - Incremental computation")
 {
 	SECTION("Split computation matches whole")
 	{
-		constexpr std::uint8_t data[] = "123456789";
+		constexpr UInt8 data[] = "123456789";
 
 		// Compute all at once
 		constexpr Checksum32 crc1 = SoftwareCrc32C(data, 9);
@@ -739,7 +739,7 @@ TEST_CASE("SoftwareCrc32CC - Incremental computation")
 
 	SECTION("Incremental with empty data")
 	{
-		constexpr std::uint8_t data[] = "hello";
+		constexpr UInt8 data[] = "hello";
 
 		constexpr Checksum32 crc = SoftwareCrc32C(data, 5);
 		constexpr Checksum32 crc2 = SoftwareCrc32C(data, 0, Checksum32{crc ^ 0xFFFFFFFF});  // Add empty data
@@ -751,28 +751,28 @@ TEST_CASE("SoftwareCrc32CC - Incremental computation")
 
 TEST_CASE("Slicing-by-8 Crc32")
 {
-	std::vector<std::int32_t> data(257);
+	std::vector<Int32> data(257);
 	for (auto& d : data)
 	{
 		d = SecUtility::Random::NextInt32();
 	}
 
 	{
-		const auto s = SoftwareCrc32(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
-		                             data.size() * sizeof(std::int32_t) - 1);
-		const auto s8 = SlicedSoftwareCrc32<8>(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
-		                                       data.size() * sizeof(std::int32_t) - 1);
+		const auto s = SoftwareCrc32(reinterpret_cast<const UInt8*>(data.data()) + 1,
+		                             data.size() * sizeof(Int32) - 1);
+		const auto s8 = SlicedSoftwareCrc32<8>(reinterpret_cast<const UInt8*>(data.data()) + 1,
+		                                       data.size() * sizeof(Int32) - 1);
 		CHECK(s == s8);
 	}
 	{
-		const auto s = SoftwareCrc32C(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
-		                              data.size() * sizeof(std::int32_t) - 1);
-		const auto s8 = SlicedSoftwareCrc32C<8>(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
-		                                        data.size() * sizeof(std::int32_t) - 1);
+		const auto s = SoftwareCrc32C(reinterpret_cast<const UInt8*>(data.data()) + 1,
+		                              data.size() * sizeof(Int32) - 1);
+		const auto s8 = SlicedSoftwareCrc32C<8>(reinterpret_cast<const UInt8*>(data.data()) + 1,
+		                                        data.size() * sizeof(Int32) - 1);
 		CHECK(s == s8);
 	}
 
-	constexpr std::uint8_t verse[] =
+	constexpr UInt8 verse[] =
 	        "Love is patient, love is kind. It does not envy, it does not boast, it is not proud. It is not rude, it "
 	        "is not self-seeking, it is not easily angered, it keeps no record of wrongs.";
 
@@ -791,28 +791,28 @@ TEST_CASE("Slicing-by-8 Crc32")
 
 TEST_CASE("Slicing-by-16 Crc32")
 {
-	std::vector<std::int32_t> data(257);
+	std::vector<Int32> data(257);
 	for (auto& d : data)
 	{
 		d = SecUtility::Random::NextInt32();
 	}
 
 	{
-		const auto s = SoftwareCrc32(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
-		                             data.size() * sizeof(std::int32_t) - 1);
-		const auto s8 = SlicedSoftwareCrc32<16>(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
-		                                        data.size() * sizeof(std::int32_t) - 1);
+		const auto s = SoftwareCrc32(reinterpret_cast<const UInt8*>(data.data()) + 1,
+		                             data.size() * sizeof(Int32) - 1);
+		const auto s8 = SlicedSoftwareCrc32<16>(reinterpret_cast<const UInt8*>(data.data()) + 1,
+		                                        data.size() * sizeof(Int32) - 1);
 		CHECK(s == s8);
 	}
 	{
-		const auto s = SoftwareCrc32C(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
-		                              data.size() * sizeof(std::int32_t) - 1);
-		const auto s8 = SlicedSoftwareCrc32C<16>(reinterpret_cast<const std::uint8_t*>(data.data()) + 1,
-		                                         data.size() * sizeof(std::int32_t) - 1);
+		const auto s = SoftwareCrc32C(reinterpret_cast<const UInt8*>(data.data()) + 1,
+		                              data.size() * sizeof(Int32) - 1);
+		const auto s8 = SlicedSoftwareCrc32C<16>(reinterpret_cast<const UInt8*>(data.data()) + 1,
+		                                         data.size() * sizeof(Int32) - 1);
 		CHECK(s == s8);
 	}
 
-	constexpr std::uint8_t verse[] =
+	constexpr UInt8 verse[] =
 		"Love is patient, love is kind. It does not envy, it does not boast, it is not proud. It is not rude, it "
 		"is not self-seeking, it is not easily angered, it keeps no record of wrongs.";
 
