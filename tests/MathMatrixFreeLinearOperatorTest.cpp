@@ -2,7 +2,7 @@
 // Created by Andy on 4/16/2026.
 //
 
-#include "SecUtility/Diagnostic/TypeName.hpp"
+#include <SecUtility/Diagnostic/TypeName.hpp>
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/MatrixFreeLinearOperator.hpp>
 #include <catch2/catch_template_test_macros.hpp>

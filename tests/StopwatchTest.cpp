@@ -2,8 +2,8 @@
 // Created by Claude on 2/10/2026.
 //
 
-#include "SecUtility/Text/Symbol.hpp"
-#include "catch2/catch_approx.hpp"
+#include <SecUtility/Text/Symbol.hpp>
+#include <catch2/catch_approx.hpp>
 #include <SecUtility/Diagnostic/Stopwatch.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_all.hpp>
