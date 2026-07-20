@@ -264,7 +264,8 @@ namespace SecUtility
 #endif
 		}
 
-		template <typename... Messages>
+		template <typename... Messages,
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
 		explicit UnreachableException(Messages&&... messages) noexcept
 		    : Base(MessageHeaderSuppressor{}, __func__, std::forward<Messages>(messages)...)
 		{
