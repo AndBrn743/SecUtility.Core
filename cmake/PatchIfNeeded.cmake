@@ -1,10 +1,18 @@
 # PatchIfNeeded.cmake
 #
 # Idempotently applies a patch file via `patch`. Runs a --dry-run first; if the
-# dry-run succeeds (patch needs to be applied), applies it for real. If the
-# dry-run fails (patch already applied, reversed, or unnecessary), exits cleanly
-# and reports the dry-run stderr so the cause is visible in the configure log.
-# Real apply failures abort with FATAL_ERROR so they aren't silently masked.
+# dry-run succeeds (patch needs to be applied), applies it for real. Real apply
+# failures abort with FATAL_ERROR.
+#
+# A non-zero dry-run exit is ambiguous and must be disambiguated by inspecting
+# the output:
+#   * "already applied" / "Reversed" / "hunks ignored"  -> silently skip
+#   * "FAILED" / "malformed" / "patch: " / etc.         -> FATAL_ERROR
+#
+# The second branch exists because a stale source tree plus a broken patch can
+# produce a non-zero dry-run that *looks* like "already applied" if you only
+# check the exit code. Silently masking that leaves the source unpatched and
+# breaks the build downstream with a confusing error far from the cause.
 #
 # Required arguments (all of):
 #   -DPATCH_EXE=<path>     Path to the patch executable.
@@ -42,8 +50,21 @@ if(_dry_run_result EQUAL 0)
             "  stderr: ${_apply_err}")
     endif()
 else()
-    message(STATUS "Patch already applied or unnecessary: ${PATCH_FILE}")
-    if(_dry_run_err)
-        message(STATUS "  dry-run stderr: ${_dry_run_err}")
+    # Non-zero dry-run exit. Scan the combined output for patch's well-known
+    # failure markers; if any are present this is a genuine patch failure (not
+    # "already applied") and must abort loudly. Otherwise the patch was already
+    # applied and we skip silently.
+    set(_dry_run_log "${_dry_run_out}${_dry_run_err}")
+    string(REGEX MATCH
+        "FAILED|malformed|unexpectedly|patch: |No file to patch"
+        _failure_match "${_dry_run_log}")
+    if(_failure_match)
+        message(FATAL_ERROR
+            "Patch does not apply cleanly: ${PATCH_FILE}\n"
+            "  source dir:    ${SOURCE_DIR}\n"
+            "  exit code:     ${_dry_run_result}\n"
+            "  dry-run stdout: ${_dry_run_out}\n"
+            "  dry-run stderr: ${_dry_run_err}")
     endif()
+    message(STATUS "Patch already applied or unnecessary: ${PATCH_FILE}")
 endif()
