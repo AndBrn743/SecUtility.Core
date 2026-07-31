@@ -181,6 +181,140 @@ TEMPLATE_TEST_CASE("RandomAntiHermitianMatrix", "[template]", double, (std::comp
 }
 
 
+TEMPLATE_TEST_CASE("FirstNColumnsOfHouseholderUnitaryWithGivenFirstColumn", "[template]", double, (std::complex<double>))
+{
+	SECTION("Basic properties")
+	{
+		const int dim = 5;
+		Eigen::VectorX<TestType> vector = Eigen::VectorX<TestType>::Random(dim).normalized();
+
+		const auto m = FirstNColumnsOfHouseholderUnitaryWithGivenFirstColumn(vector, 3);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == 3);
+
+		// First column matches the normalized input.
+		REQUIRE(std::abs((m.col(0) - vector).norm()) < 1e-12);
+		CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(3, 3)).norm()) < 1e-12);
+	}
+
+	SECTION("Hermitian for real scalars only")
+	{
+		// For complex Scalar the construction multiplies by a phase alpha = v[0]/|v[0]|, so the
+		// result is unitary but not Hermitian in general.
+		if constexpr (std::is_same_v<TestType, typename Eigen::NumTraits<TestType>::Real>)
+		{
+			for (int dim : {2, 3, 5})
+			{
+				Eigen::VectorX<TestType> vector = Eigen::VectorX<TestType>::Random(dim);
+				const auto m = FirstNColumnsOfHouseholderUnitaryWithGivenFirstColumn(vector, dim);
+				CHECK(IsHermitian(m));
+			}
+		}
+	}
+
+	SECTION("Special case: input is e_1")
+	{
+		const int dim = 5;
+		Eigen::VectorX<TestType> vector = Eigen::VectorX<TestType>::Unit(dim, 0);
+
+		const auto m = FirstNColumnsOfHouseholderUnitaryWithGivenFirstColumn(vector, 3);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == 3);
+
+		// Householder collapses to identity when input is already e_1.
+		CHECK((m - Eigen::MatrixX<TestType>::Identity(dim, 3)).norm() < 1e-14);
+	}
+
+	SECTION("Various dimensions and column counts")
+	{
+		for (int dim : {1, 2, 3, 10})
+		{
+			for (int cols : {1, 2, 3})
+			{
+				if (cols > dim) continue;
+
+				Eigen::VectorX<TestType> vector = Eigen::VectorX<TestType>::Random(dim);
+				const auto m = FirstNColumnsOfHouseholderUnitaryWithGivenFirstColumn(vector, cols);
+				REQUIRE(m.rows() == dim);
+				REQUIRE(m.cols() == cols);
+				CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(cols, cols)).norm()) < 1e-12);
+			}
+		}
+	}
+}
+
+
+TEMPLATE_TEST_CASE("RandomHouseholderUnitary", "[template]", double, (std::complex<double>))
+{
+	SECTION("Basic properties")
+	{
+		const int dim = 5;
+		const auto m = RandomHouseholderUnitary<TestType>(dim);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == dim);
+		CHECK(IsUnitary(m));
+	}
+
+	SECTION("Hermitian for real scalars only")
+	{
+		if constexpr (std::is_same_v<TestType, typename Eigen::NumTraits<TestType>::Real>)
+		{
+			for (int dim : {2, 3, 5})
+			{
+				const auto m = RandomHouseholderUnitary<TestType>(dim);
+				CHECK(IsHermitian(m));
+			}
+		}
+	}
+
+	SECTION("Different dimensions")
+	{
+		for (int dim : {1, 2, 3, 10})
+		{
+			const auto m = RandomHouseholderUnitary<TestType>(dim);
+			CHECK(IsUnitary(m, 1e-10));
+		}
+	}
+
+	SECTION("Randomness: two draws differ")
+	{
+		const auto m1 = RandomHouseholderUnitary<TestType>(5);
+		const auto m2 = RandomHouseholderUnitary<TestType>(5);
+		CHECK((m1 - m2).norm() > 1e-10);
+	}
+}
+
+
+TEMPLATE_TEST_CASE("RandomUnitaryHermitianMatrix", "[template]", double, (std::complex<double>))
+{
+	SECTION("Basic properties")
+	{
+		const int dim = 5;
+		const auto m = RandomUnitaryHermitianMatrix<TestType>(dim);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == dim);
+		CHECK(IsUnitary(m));
+
+		CHECK(IsHermitian(m));
+	}
+
+	SECTION("Different dimensions")
+	{
+		for (int dim : {1, 2, 3, 10})
+		{
+			const auto m = RandomUnitaryHermitianMatrix<TestType>(dim);
+			CHECK(IsUnitary(m, 1e-10));
+
+			CHECK(IsHermitian(m, 1e-10));
+		}
+	}
+}
+
+
 TEMPLATE_TEST_CASE("RandomUnitaryMatrix", "[template]", double, (std::complex<double>))
 {
 	SECTION("Basic properties")
@@ -200,6 +334,13 @@ TEMPLATE_TEST_CASE("RandomUnitaryMatrix", "[template]", double, (std::complex<do
 			const auto m = RandomUnitaryMatrix<TestType>(dim);
 			CHECK(IsUnitary(m, 1e-10));
 		}
+	}
+
+	SECTION("Randomness: two draws differ")
+	{
+		const auto m1 = RandomUnitaryMatrix<TestType>(5);
+		const auto m2 = RandomUnitaryMatrix<TestType>(5);
+		CHECK((m1 - m2).norm() > 1e-10);
 	}
 }
 
@@ -242,6 +383,55 @@ TEMPLATE_TEST_CASE("RandomPositiveDefiniteHermitianMatrix", "[template]", double
 }
 
 
+TEMPLATE_TEST_CASE("RandomUnitaryHermitianWithGivenFirstColumn", "[template]", double, (std::complex<double>))
+{
+	SECTION("Basic properties")
+	{
+		const int dim = 5;
+		Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Random(dim);
+		firstCol[0] = SecUtility::Math::Re(firstCol[0]);
+		firstCol.normalize();
+		const auto m = RandomUnitaryHermitianWithGivenFirstColumn(firstCol);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == dim);
+		CHECK(IsUnitary(m));
+
+		CHECK(IsHermitian(m));
+
+		CHECK(std::abs((m.col(0) - firstCol).norm()) < 1e-12);
+	}
+
+	SECTION("Special case: first column is [1, 0, 0, ...]")
+	{
+		const int dim = 5;
+		Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Unit(dim, 0);
+
+		const auto m = RandomUnitaryHermitianWithGivenFirstColumn(firstCol);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == dim);
+		CHECK(IsUnitary(m));
+
+		// Hermitian Householder construction collapses to identity when input is e_1.
+		CHECK((m - Eigen::MatrixX<TestType>::Identity(dim, dim)).norm() < 1e-14);
+	}
+
+	SECTION("Different dimensions")
+	{
+		for (int dim : {1, 2, 3, 10})
+		{
+			Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Random(dim);
+			firstCol[0] = SecUtility::Math::Re(firstCol[0]);
+			const auto m = RandomUnitaryHermitianWithGivenFirstColumn(firstCol);
+			CHECK(IsUnitary(m));
+
+			CHECK(IsHermitian(m));
+		}
+	}
+}
+
+
 TEMPLATE_TEST_CASE("RandomUnitaryWithGivenFirstColumn", "[template]", double, (std::complex<double>))
 {
 	SECTION("Basic properties")
@@ -258,23 +448,6 @@ TEMPLATE_TEST_CASE("RandomUnitaryWithGivenFirstColumn", "[template]", double, (s
 		CHECK(std::abs((m.col(0) - firstCol).norm()) < 1e-12);
 	}
 
-	SECTION("Special case: first column is [1, 0, 0, ...]")
-	{
-		const int dim = 5;
-		Eigen::VectorX<TestType> firstCol(dim);
-		firstCol.setZero();
-		firstCol[0] = 1.0;
-
-		const auto m = RandomUnitaryWithGivenFirstColumn(firstCol);
-
-		REQUIRE(m.rows() == dim);
-		REQUIRE(m.cols() == dim);
-		CHECK(IsUnitary(m));
-
-		// When first column is already [1, 0, 0, ...], should get identity
-		CHECK((m - Eigen::MatrixX<TestType>::Identity(dim, dim)).norm() < 1e-14);
-	}
-
 	SECTION("Different dimensions")
 	{
 		for (int dim : {1, 2, 3, 10})
@@ -284,7 +457,58 @@ TEMPLATE_TEST_CASE("RandomUnitaryWithGivenFirstColumn", "[template]", double, (s
 			CHECK(IsUnitary(m));
 		}
 	}
+
+	SECTION("First column e_1 is preserved but result is not generally identity")
+	{
+		// Not Haar-random: the de-Hermitianizer randomizes the lower-right block even when
+		// the Householder factor collapses to identity. Only the first column is pinned.
+		const int dim = 5;
+		Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Unit(dim, 0);
+
+		const auto m = RandomUnitaryWithGivenFirstColumn(firstCol);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == dim);
+		CHECK(IsUnitary(m));
+		CHECK(std::abs((m.col(0) - firstCol).norm()) < 1e-12);
+	}
 }
+
+TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryHermitianWithGivenFirstColumn",
+                   "[template]",
+                   double,
+                   (std::complex<double>))
+{
+	SECTION("Basic properties")
+	{
+		const int dim = 5;
+		Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Random(dim);
+		firstCol[0] = SecUtility::Math::Re(firstCol[0]);
+		firstCol.normalize();
+		const auto m = FirstNColumnsOfRandomUnitaryHermitianWithGivenFirstColumn(firstCol, 3);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == 3);
+
+		REQUIRE(std::abs((m.col(0) - firstCol).norm()) < 1e-12);
+		CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(3, 3)).norm()) < 1e-12);
+	}
+
+	SECTION("Special case: first column is [1, 0, 0, ...]")
+	{
+		const int dim = 5;
+		Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Unit(dim, 0);
+		firstCol[0] = SecUtility::Math::Re(firstCol[0]);
+		const auto m = FirstNColumnsOfRandomUnitaryHermitianWithGivenFirstColumn(firstCol, 3);
+
+		REQUIRE(m.rows() == dim);
+		REQUIRE(m.cols() == 3);
+
+		// Hermitian Householder construction collapses to identity when input is e_1.
+		CHECK((m - Eigen::MatrixX<TestType>::Identity(dim, 3)).norm() < 1e-14);
+	}
+}
+
 
 TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryWithGivenFirstColumn", "[template]", double, (std::complex<double>))
 {
@@ -302,22 +526,37 @@ TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryWithGivenFirstColumn", "[templat
 		CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(3, 3)).norm()) < 1e-12);
 	}
 
-	SECTION("Special case: first column is [1, 0, 0, ...]")
+	SECTION("Various column counts")
 	{
 		const int dim = 5;
-		Eigen::VectorX<TestType> firstCol(dim);
-		firstCol.setZero();
-		firstCol[0] = 1.0;
+		Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Random(dim).normalized();
 
-		const auto m = FirstNColumnsOfRandomUnitaryWithGivenFirstColumn(firstCol, 3);
-
-		REQUIRE(m.rows() == dim);
-		REQUIRE(m.cols() == 3);
-
-		// When first column is already [1, 0, 0, ...], should get identity
-		CHECK((m - Eigen::MatrixX<TestType>::Identity(dim, 3)).norm() < 1e-14);
+		for (int cols : {1, 2, 3, 5})
+		{
+			const auto m = FirstNColumnsOfRandomUnitaryWithGivenFirstColumn(firstCol, cols);
+			REQUIRE(m.rows() == dim);
+			REQUIRE(m.cols() == cols);
+			CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(cols, cols)).norm()) < 1e-12);
+		}
 	}
 }
+
+TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryHermitianMatrix", "[template]", double, (std::complex<double>))
+{
+	SECTION("Basic properties")
+	{
+		// No wrapper exists for the Hermitian form; call the underlying constructor directly.
+		Eigen::VectorX<TestType> firstCol = Eigen::VectorX<TestType>::Random(5);
+		firstCol[0] = SecUtility::Math::Re(firstCol[0]);
+		const auto m = FirstNColumnsOfRandomUnitaryHermitianWithGivenFirstColumn<TestType>(firstCol, 3);
+
+		REQUIRE(m.rows() == 5);
+		REQUIRE(m.cols() == 3);
+
+		CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(3, 3)).norm()) < 1e-12);
+	}
+}
+
 
 TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryMatrix", "[template]", double, (std::complex<double>))
 {
@@ -329,6 +568,25 @@ TEMPLATE_TEST_CASE("FirstNColumnsOfRandomUnitaryMatrix", "[template]", double, (
 		REQUIRE(m.cols() == 3);
 
 		CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(3, 3)).norm()) < 1e-12);
+	}
+
+	SECTION("Various shapes")
+	{
+		for (int rows : {1, 2, 5, 10})
+		{
+			for (int cols : {1, 2, 3})
+			{
+				if (cols > rows)
+				{
+					continue;
+				}
+
+				const auto m = FirstNColumnsOfRandomUnitaryMatrix<TestType>(rows, cols);
+				REQUIRE(m.rows() == rows);
+				REQUIRE(m.cols() == cols);
+				CHECK(std::abs((m.adjoint() * m - Eigen::MatrixX<TestType>::Identity(cols, cols)).norm()) < 1e-12);
+			}
+		}
 	}
 }
 
