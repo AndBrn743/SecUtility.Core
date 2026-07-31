@@ -41,7 +41,7 @@ if (NOT MSVC)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
     endif ()
 else ()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus /DNOMINMAX")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus /DNOMINMAX /bigobj")
 endif ()
 
 # a temporary workaround for Clang 22.x. hopefully we can get rid of this, at least narrow the range, soon
