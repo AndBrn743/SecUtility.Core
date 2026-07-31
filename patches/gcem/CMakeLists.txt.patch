@@ -9,3 +9,31 @@
  project(gcem)
 
  set(GCEM_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
+@@ -40,17 +40,17 @@
+
+ #
+
+-if(NOT MSVC)
+-    include(CheckCXXCompilerFlag)
+-    CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
+-
+-    if(COMPILER_SUPPORTS_CXX11)
+-        message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has C++11 support.")
+-    else()
+-        message(FATAL_ERROR "Unsupported compiler ${CMAKE_CXX_COMPILER} "
+-            "GCEM requires a C++11-compatible compiler.")
+-    endif()
+-endif()
++# if(NOT MSVC)
++#     include(CheckCXXCompilerFlag)
++#     CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
++# 
++#     if(COMPILER_SUPPORTS_CXX11)
++#         message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has C++11 support.")
++#     else()
++#         message(FATAL_ERROR "Unsupported compiler ${CMAKE_CXX_COMPILER} "
++#             "GCEM requires a C++11-compatible compiler.")
++#     endif()
++# endif()
+
+ # options. enable using cmake3 -DGCEM_BUILD_TESTS=ON
