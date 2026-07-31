@@ -8,6 +8,8 @@ on:
       - 'CMakeLists.txt'
       - 'SecUtility/**'
       - 'tests/**'
+      - 'cmake/**'
+      - 'patches/**'
   pull_request:
     branches: [ master ]
     paths:
@@ -15,6 +17,8 @@ on:
       - 'CMakeLists.txt'
       - 'SecUtility/**'
       - 'tests/**'
+      - 'cmake/**'
+      - 'patches/**'
   workflow_dispatch:
 
 jobs:
