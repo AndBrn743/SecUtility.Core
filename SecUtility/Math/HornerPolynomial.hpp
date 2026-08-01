@@ -49,6 +49,7 @@ namespace SecUtility::Math
 		constexpr Scalar HornerTaylorPolynomial_Loop(const CoefficientAccessor& coefficientAccessor,
 		                                             const Scalar delta) noexcept
 		{
+			static_assert(!std::is_integral_v<Scalar>);
 			static_assert(N > 0);
 			Scalar result = 0;
 
@@ -68,6 +69,7 @@ namespace SecUtility::Math
 		                                                              const Scalar delta,
 		                                                              std::index_sequence<ReversedIndices...>) noexcept
 		{
+			static_assert(!std::is_integral_v<Scalar>);
 			static_assert(N > 0);
 			static_assert(sizeof...(ReversedIndices) == N);
 			static_assert(((ReversedIndices < N) && ...));
