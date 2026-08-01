@@ -56,7 +56,7 @@ namespace SecUtility::Math
 			for (std::size_t reversedIndices = N; reversedIndices-- > 1;)
 			{
 				result += coefficientAccessor(reversedIndices);
-				result *= delta / reversedIndices;
+				result *= delta * (Scalar{1} / reversedIndices);
 			}
 
 			result += coefficientAccessor(0);
@@ -74,8 +74,12 @@ namespace SecUtility::Math
 			static_assert(sizeof...(ReversedIndices) == N);
 			static_assert(((ReversedIndices < N) && ...));
 			Scalar result = 0;
+			// `1/ReversedIndices` is a compile-time constant (template param), so this
+			// emits a multiply op per step rather than a runtime IEEE-754 division for
+			// non-power-of-2 indices (e.g., 3, 5, 6, 7 in the 8-term Boys Taylor).
 			((result = (result + coefficientAccessor(ReversedIndices))
-			           * (ReversedIndices == 0 ? 1 : delta / ReversedIndices)),
+			           * (ReversedIndices == 0 ? Scalar{1}
+			                                   : delta * (Scalar{1} / static_cast<Scalar>(ReversedIndices)))),
 			 ...);
 			return result;
 		}
