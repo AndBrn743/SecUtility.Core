@@ -78,11 +78,11 @@ namespace SecUtility::Math
 			// emits a multiply op per step rather than a runtime IEEE-754 division for
 			// non-power-of-2 indices (e.g., 3, 5, 6, 7 in the 8-term Boys Taylor).
 #if defined(_MSC_VER) && !defined(__clang__)
-			// This is a workaround for a MSVC bug which cause it to issue C2124.
+			// This is a workaround for the MSVC bug which cause it to issue C2124.
 			// The issuing of C2124 is a direct violation of C17 working draft, N2347, section 6.5.15/4;
 			// C23 working draft, N3220, section 6.5.16/5; and C++17, C++20, C++23, C++26 working draft,
 			// N4659, N4860, N4950, and N5032, under [expr.cond]/1.
-			((result += coefficientAccessor(ReversedIndices) *
+			((result = (result + coefficientAccessor(ReversedIndices)) *
 			            [delta]() constexpr
 			            {
 				            if constexpr (ReversedIndices == 0)
@@ -91,7 +91,7 @@ namespace SecUtility::Math
 				            }
 				            else
 				            {
-					            return delta / static_cast<Scalar>(ReversedIndices);
+					            return delta * (Scalar{1} / static_cast<Scalar>(ReversedIndices));
 				            }
 			            }()),
 			 ...);
