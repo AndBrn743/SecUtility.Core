@@ -272,12 +272,15 @@ namespace SecUtility::Math
 			return Scalar{1} / (2 * n + 1) - a / (2 * n + 3);
 		}
 
+		// 8-term Horner can be faster than a call to erf
+		/*
 		if (n == 0)
 		{
 			constexpr Scalar HalfOfSqrtOfPi = Constant::SqrtOfPi<Scalar> / 2;
 			const Scalar sqrtOfA = Sqrt(a);
 			return HalfOfSqrtOfPi * Erf(sqrtOfA) / sqrtOfA;
 		}
+		*/
 
 		if (a < Detail::Boys::MaxTabulatedBoyArg)
 		{
