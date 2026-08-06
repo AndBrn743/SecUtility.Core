@@ -6,6 +6,9 @@
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Meta/IntegerSequence.hpp>
 
+#include <array>
+#include <cstddef>
+
 
 namespace SecUtility::Math
 {
@@ -41,7 +44,10 @@ namespace SecUtility::Math
 			static_assert(sizeof...(ReversedIndices) == N);
 			static_assert(((ReversedIndices < N) && ...));
 			Scalar result = 0;
-			((result = (result + coefficientAccessor(ReversedIndices)) * (ReversedIndices == 0 ? 1 : delta)), ...);
+			// FMA-friendly: each step is c[k] + delta*result, which contracts to
+			// fma(delta, result, c[k]) under -ffp-contract=on.  No per-step ternary
+			// needed: the recurrence r_k = c[k] + delta*r_{k+1} is valid for all k.
+			((result = coefficientAccessor(ReversedIndices) + delta * result), ...);
 			return result;
 		}
 
@@ -73,35 +79,30 @@ namespace SecUtility::Math
 			static_assert(N > 0);
 			static_assert(sizeof...(ReversedIndices) == N);
 			static_assert(((ReversedIndices < N) && ...));
-			Scalar result = 0;
-			// `1/ReversedIndices` is a compile-time constant (template param), so this
-			// emits a multiply op per step rather than a runtime IEEE-754 division for
-			// non-power-of-2 indices (e.g., 3, 5, 6, 7 in the 8-term Boys Taylor).
-#if defined(_MSC_VER) && !defined(__clang__)
-			// This is a workaround for the MSVC bug which cause it to issue C2124.
-			// The issuing of C2124 is a direct violation of C17 working draft, N2347, section 6.5.15/4;
-			// C23 working draft, N3220, section 6.5.16/5; and C++17, C++20, C++23, C++26 working draft,
-			// N4659, N4860, N4950, and N5032, under [expr.cond]/1.
-			((result = (result + coefficientAccessor(ReversedIndices)) *
-			            [delta]() constexpr
-			            {
-				            if constexpr (ReversedIndices == 0)
-				            {
-					            return Scalar{1};
-				            }
-				            else
-				            {
-					            return delta * (Scalar{1} / static_cast<Scalar>(ReversedIndices));
-				            }
-			            }()),
-			 ...);
-#else
-			((result = (result + coefficientAccessor(ReversedIndices))
-			           * (ReversedIndices == 0 ? Scalar{1}
-			                                   : delta * (Scalar{1} / static_cast<Scalar>(ReversedIndices)))),
-			 ...);
-#endif
 
+			// Compile-time table of 1/0!, 1/1!, ..., 1/(N-1)!.
+			// Each entry folds to an immediate in the unrolled fold since
+			// ReversedIndices is a template parameter.
+			constexpr auto InversedFactorial = []() constexpr
+			{
+				std::array<Scalar, N> arr{};
+				arr[0] = Scalar{1};
+				for (std::size_t i = 1; i < N; ++i)
+				{
+					arr[i] = arr[i - 1] / static_cast<Scalar>(i);
+				}
+				return arr;
+			}();
+
+			Scalar result = 0;
+			// FMA-friendly: r_k = c[k] * (1/k!) + delta * r_{k+1}, which contracts to
+			// fma(delta, result, c[k] * (1/k!)) under -ffp-contract=on.  The
+			// c[k]*(1/k!) multiply is independent of the dep chain and overlaps the
+			// FMA, mirroring the raw-loop pattern `tabulated[n+k]*invfact[k] + delta*value`.
+			// Also drops the former MSVC C2124 ternary workaround: there is no
+			// ternary left to confuse its parser.
+			((result = coefficientAccessor(ReversedIndices) * InversedFactorial[ReversedIndices] + delta * result),
+			 ...);
 			return result;
 		}
 	}
