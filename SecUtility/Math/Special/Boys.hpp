@@ -204,6 +204,38 @@ namespace SecUtility::Math
 			}
 		}
 
+		/// <summary>
+		/// Use the upward recursion to calculate Boys functions
+		/// </summary>
+		template <typename ForwardIterator, typename Scalar, typename BoysFn>
+		SEC_MATH_CONDITIONAL_CONSTEXPR void PopulateContainerWithBoysFunctionValuesFromLowestForVeryLargeArg(
+		        const ForwardIterator begin, const ForwardIterator end, const Scalar x, BoysFn boys)
+		{
+			Scalar lastBoys = std::numeric_limits<Scalar>::signaling_NaN();
+
+			auto iterator = begin;
+
+			{
+				*iterator = boys(0, x);
+
+				lastBoys = *iterator;
+				iterator++;
+			}
+
+			if (iterator == end)
+			{
+				return;
+			}
+
+			const Scalar oneOverTwoX = Scalar{0.5} / x;
+
+			for (int n = 1; iterator != end; n++, iterator++)  // NOTE: `n` starts from 1
+			{
+				*iterator = oneOverTwoX * ((2 * n - 1) * lastBoys);
+				lastBoys = *iterator;
+			}
+		}
+
 		static constexpr int MaxTabulatedBoyOrder =
 #if defined(SEC_MATH_MAX_TABULATED_BOYS_ORDER)
 		        SEC_MATH_MAX_TABULATED_BOYS_ORDER;
