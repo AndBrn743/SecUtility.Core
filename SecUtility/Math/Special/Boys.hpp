@@ -359,10 +359,30 @@ namespace SecUtility::Math
 			{
 				*iterator = Scalar{1} / (2 * n + 1);
 			}
+			return;
 		}
-		else if (x < Detail::Boys::MaxTabulatedBoyArg
-		         && static_cast<std::size_t>(std::distance(begin, end)) + HornerTermCount - 1
-		                    <= Detail::Boys::MaxTabulatedBoyOrder)
+
+		if (x > 40)
+		{
+			Detail::Boys::PopulateContainerWithBoysFunctionValuesFromLowestForVeryLargeArg(
+			        begin,
+			        end,
+			        x,
+			        [](const int n [[maybe_unused]], const Scalar a)
+			        {
+				        assert(n == 0);
+				        return Scalar{0.5} * SecUtility::Math::Constant::SqrtOfPi<Scalar> / std::sqrt(a);
+			        });
+			return;
+		}
+
+#if defined(__GNUC__) || defined(__clang__)
+#define SEC_LIKELY(EXPR) __builtin_expect((EXPR), true)
+#endif
+
+		if (SEC_LIKELY(x < Detail::Boys::MaxTabulatedBoyArg
+		               && static_cast<std::size_t>(std::distance(begin, end)) + HornerTermCount - 1
+		                          <= Detail::Boys::MaxTabulatedBoyOrder))
 		{
 			// Parallel Taylor: one gridIndex/delta, N independent Horner chains
 			// reading tabulated[n..n+HornerTermCount-1].  Avoids the recursion's
@@ -372,34 +392,20 @@ namespace SecUtility::Math
 			const Scalar delta =
 			        (static_cast<Scalar>(gridIndex) + Scalar{0.5}) / static_cast<Scalar>(Detail::Boys::BoyTableDensity)
 			        - x;
-			const auto& tabulated = Detail::Boys::BoysTable[gridIndex];
-			constexpr auto inverseFactorial = []
-			{
-				std::array<Scalar, HornerTermCount + 1> inv{};
 
-				for (int i = 0; i < HornerTermCount; i++)
-				{
-					inv[i] = Scalar{1} / Factorial(i);
-				}
-
-				return inv;
-			}();
-			// constexpr std::array<Scalar, HornerTermCount + 1> inverseFactorial{Scalar{1},
-			//                                                                    Scalar{1},
-			//                                                                    Scalar{1} / Scalar{2},
-			//                                                                    /* ... */};
 			int n = 0;
 			for (auto it = begin; it != end; ++it, ++n)
 			{
-				Scalar value = tabulated[n + HornerTermCount] * inverseFactorial[HornerTermCount];
-				for (int k = HornerTermCount - 1; k >= 0; --k)
-				{
-					value = tabulated[n + k] * inverseFactorial[k] + delta * value;
-				}
-				*it = value;
+				*it = UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
+				        MakeIndexAccessor(Detail::Boys::BoysTable[gridIndex].cbegin() + n), delta);
 			}
+			return;
 		}
-		else if (x > 10)
+#if defined(__GNUC__) || defined(__clang__)
+#undef SEC_LIKELY
+#endif
+
+		if (x > 10)
 		{
 			Detail::Boys::PopulateContainerWithBoysFunctionValuesFromLowest(begin, end, x, Boys);
 		}
