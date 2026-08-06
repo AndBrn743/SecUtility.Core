@@ -106,31 +106,28 @@ namespace SecUtility::Math
 		SEC_MATH_CONDITIONAL_CONSTEXPR void PopulateContainerWithBoysFunctionValuesFromHighest(
 		        const BidirectionalIterator begin, const BidirectionalIterator end, const Scalar x, BoysFn boys)
 		{
-			Scalar lastBoys = std::numeric_limits<Scalar>::signaling_NaN();
-
 			auto iterator = end;
 
 			int n = static_cast<int>(std::distance(begin, end)) - 1;
 
+			if (n < 0)
 			{
-				iterator--;
+				return;
+			}
 
-				// always use `HighPrecisionBoys` to populate the table
+			{
+				--iterator;
 				*iterator = boys(n, x);
-
-				n--;
-				lastBoys = *iterator;
 			}
 
 			const Scalar expMinusX = Exp(-x);
 
-			while (n != -1)
+			while (n != 0)
 			{
-				iterator--;
+				const Scalar lastBoys = *iterator;
+				--n;
+				--iterator;
 				*iterator = (2 * x * lastBoys + expMinusX) / (2 * n + 1);
-
-				n--;
-				lastBoys = *iterator;
 			}
 		}
 
@@ -347,12 +344,53 @@ namespace SecUtility::Math
 	SEC_MATH_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE void PopulateContainerWithBoysFunctionValues(
 	        const ForwardIterator begin, const ForwardIterator end, const Scalar x)
 	{
+		constexpr auto HornerTermCount = 8;
+
 		if (Abs(x) < 1e-8)
 		{
 			auto iterator = begin;
 			for (int n = 0; iterator != end; n++, iterator++)
 			{
 				*iterator = Scalar{1} / (2 * n + 1);
+			}
+		}
+		else if (x < Detail::Boys::MaxTabulatedBoyArg
+		         && static_cast<std::size_t>(std::distance(begin, end)) + HornerTermCount - 1
+		                    <= Detail::Boys::MaxTabulatedBoyOrder)
+		{
+			// Parallel Taylor: one gridIndex/delta, N independent Horner chains
+			// reading tabulated[n..n+HornerTermCount-1].  Avoids the recursion's
+			// exp(-x) call and serial dependency, and lets the compiler overlap
+			// the chains via ILP.
+			const auto gridIndex = static_cast<std::size_t>(x * Detail::Boys::BoyTableDensity);
+			const Scalar delta =
+			        (static_cast<Scalar>(gridIndex) + Scalar{0.5}) / static_cast<Scalar>(Detail::Boys::BoyTableDensity)
+			        - x;
+			const auto& tabulated = Detail::Boys::BoysTable[gridIndex];
+			constexpr auto inverseFactorial = []
+			{
+				std::array<Scalar, HornerTermCount + 1> inv{};
+
+				for (int i = 0; i < HornerTermCount; i++)
+				{
+					inv[i] = Scalar{1} / Factorial(i);
+				}
+
+				return inv;
+			}();
+			// constexpr std::array<Scalar, HornerTermCount + 1> inverseFactorial{Scalar{1},
+			//                                                                    Scalar{1},
+			//                                                                    Scalar{1} / Scalar{2},
+			//                                                                    /* ... */};
+			int n = 0;
+			for (auto it = begin; it != end; ++it, ++n)
+			{
+				Scalar value = tabulated[n + HornerTermCount] * inverseFactorial[HornerTermCount];
+				for (int k = HornerTermCount - 1; k >= 0; --k)
+				{
+					value = tabulated[n + k] * inverseFactorial[k] + delta * value;
+				}
+				*it = value;
 			}
 		}
 		else if (x > 10)
