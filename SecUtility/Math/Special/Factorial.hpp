@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include <SecUtility/Raw/Int.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
-#include <type_traits>
+#include <SecUtility/Raw/Int.hpp>
 #include <array>
 #include <cassert>
+#include <type_traits>
 
 
 namespace SecUtility::Math
@@ -38,6 +38,21 @@ namespace SecUtility::Math
 	constexpr std::enable_if_t<std::is_same_v<X, void>, Int> CalculateFactorial(const Int n) noexcept
 	{
 		return CalculateFactorial<Int>(n);
+	}
+
+	/// <summary>
+	/// Computes 1/n! for non-negative integers.
+	/// </summary>
+	/// <remarks>
+	/// Scalar defaults to double. Requires n &gt;= 0 (asserted via CalculateFactorial) and Int to be an integral type
+	/// (static_asserted). For integer Scalar, integer division truncates the result to 0 for all n &gt;= 2; use a
+	/// floating-point Scalar.
+	/// </remarks>
+	template <typename Scalar = double, typename..., typename Int>
+	constexpr std::enable_if_t<!std::is_same_v<Scalar, void>, Scalar> CalculateReciprocalFactorial(const Int n) noexcept
+	{
+		static_assert(std::is_integral_v<Int>);
+		return Scalar{1} / CalculateFactorial<Scalar>(n);
 	}
 
 	/// <summary>
@@ -88,6 +103,20 @@ namespace SecUtility::Math
 			return data;
 		}();
 
+		// Sized to match Factorial's [0, 20] range so the two stay in lockstep.
+		// TODO: reconsider whether ReciprocalFactorials should extend past [0, 20], cheap to do, but breaks symmetry
+		// with Factorials.
+		template <typename Scalar>
+		inline constexpr auto ReciprocalFactorials = []() constexpr
+		{
+			std::array<Scalar, 21> data{};
+			for (std::size_t i = 0; i < data.size(); ++i)
+			{
+				data[i] = Scalar{1} / static_cast<Scalar>(Factorials[i]);
+			}
+			return data;
+		}();
+
 		// 33!! = 6,332,659,870,762,850,625 is the largest double factorial that fits in Int64; 34!! would overflow.
 		// OneOffsettedDoubleFactorials is sized 34+1 to additionally hold (-1)!! at index 0.
 		inline constexpr auto DoubleFactorials = []() constexpr
@@ -126,6 +155,21 @@ namespace SecUtility::Math
 	{
 		assert(i >= 0 && i <= 20);
 		return Detail::Factorial::Factorials[i];
+	}
+
+	/// <summary>
+	/// Returns 1/n! for n in [0, 20] from a compile-time table.
+	/// </summary>
+	/// <remarks>
+	/// Scalar defaults to double. 20! is the largest factorial that fits in Int64, so the table does not extend past n
+	/// = 20. For integer Scalar, integer division truncates the result to 0 for all n &gt;= 2; use a floating-point
+	/// Scalar.
+	/// </remarks>
+	template <typename Scalar = double>
+	constexpr SEC_FORCE_INLINE Scalar ReciprocalFactorial(const Int64 i) noexcept
+	{
+		assert(i >= 0 && i <= 20);
+		return Detail::Factorial::ReciprocalFactorials<Scalar>[i];
 	}
 
 	/// <summary>

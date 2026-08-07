@@ -1715,6 +1715,65 @@ TEST_CASE("CalculateFactorial")
 }
 
 
+TEST_CASE("CalculateReciprocalFactorial")
+{
+	SECTION("Base cases")
+	{
+		CHECK(CalculateReciprocalFactorial<double>(0) == 1.0);
+		CHECK(CalculateReciprocalFactorial<double>(1) == 1.0);
+	}
+
+	SECTION("Known values")
+	{
+		CHECK(CalculateReciprocalFactorial<double>(2) == 0.5);
+		CHECK(CalculateReciprocalFactorial<double>(3) == Approx(1.0 / 6.0));
+		CHECK(CalculateReciprocalFactorial<double>(5) == Approx(1.0 / 120.0));
+		CHECK(CalculateReciprocalFactorial<double>(10) == Approx(1.0 / 3628800.0));
+		CHECK(CalculateReciprocalFactorial<double>(15) == Approx(1.0 / 1307674368000.0));
+		CHECK(CalculateReciprocalFactorial<double>(20) == Approx(1.0 / 2432902008176640000.0));
+	}
+
+	SECTION("Default Scalar is double")
+	{
+		CHECK(CalculateReciprocalFactorial(5) == Approx(1.0 / 120.0));
+		CHECK(CalculateReciprocalFactorial(20) == Approx(1.0 / 2432902008176640000.0));
+	}
+
+	SECTION("Beyond the table range uses runtime factorial")
+	{
+		// n > 20 is not tabulated, but CalculateFactorial<double>(n) handles it without overflow.
+		CHECK(CalculateReciprocalFactorial<double>(25) == Approx(1.0 / 15511210043330985984000000.0));
+		CHECK(CalculateReciprocalFactorial<double>(30) == Approx(1.0 / 265252859812191058636308480000000.0));
+	}
+
+	SECTION("Different floating-point types")
+	{
+		CHECK(CalculateReciprocalFactorial<float>(5) == Approx(1.0f / 120.0f));
+		CHECK(CalculateReciprocalFactorial<double>(5) == Approx(1.0 / 120.0));
+		CHECK(CalculateReciprocalFactorial<long double>(5)
+		      == Approx(static_cast<long double>(1.0) / static_cast<long double>(120.0)));
+	}
+
+	SECTION("Integer Scalar truncates to zero for n >= 2 (documented behavior)")
+	{
+		CHECK(CalculateReciprocalFactorial<Int64>(0) == 1);
+		CHECK(CalculateReciprocalFactorial<Int64>(1) == 1);
+		CHECK(CalculateReciprocalFactorial<Int64>(2) == 0);
+		CHECK(CalculateReciprocalFactorial<Int64>(5) == 0);
+		CHECK(CalculateReciprocalFactorial<Int64>(20) == 0);
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		STATIC_CHECK(CalculateReciprocalFactorial<double>(0) == 1.0);
+		STATIC_CHECK(CalculateReciprocalFactorial<double>(1) == 1.0);
+		STATIC_CHECK(CalculateReciprocalFactorial<double>(2) == 0.5);
+		STATIC_CHECK(CalculateReciprocalFactorial<double>(5) == 1.0 / 120.0);
+		STATIC_CHECK(CalculateReciprocalFactorial<double>(20) == 1.0 / 2432902008176640000.0);
+	}
+}
+
+
 TEST_CASE("CalculateDoubleFactorial")
 {
 	SECTION("Base cases")
@@ -1827,6 +1886,64 @@ TEST_CASE("Factorial (table lookup)")
 		STATIC_CHECK(Factorial(5) == 120);
 		STATIC_CHECK(Factorial(10) == 3628800);
 		STATIC_CHECK(Factorial(20) == 2432902008176640000LL);
+	}
+}
+
+
+TEST_CASE("ReciprocalFactorial (table lookup)")
+{
+	SECTION("Boundary values")
+	{
+		CHECK(ReciprocalFactorial(0) == 1.0);
+		CHECK(ReciprocalFactorial(1) == 1.0);
+		CHECK(ReciprocalFactorial(20) == Approx(1.0 / 2432902008176640000.0));
+	}
+
+	SECTION("Known values")
+	{
+		CHECK(ReciprocalFactorial(2) == 0.5);
+		CHECK(ReciprocalFactorial(3) == Approx(1.0 / 6.0));
+		CHECK(ReciprocalFactorial(5) == Approx(1.0 / 120.0));
+		CHECK(ReciprocalFactorial(10) == Approx(1.0 / 3628800.0));
+		CHECK(ReciprocalFactorial(15) == Approx(1.0 / 1307674368000.0));
+	}
+
+	SECTION("Default Scalar is double")
+	{
+		CHECK(ReciprocalFactorial(5) == Approx(1.0 / 120.0));
+		CHECK(ReciprocalFactorial(20) == Approx(1.0 / 2432902008176640000.0));
+	}
+
+	SECTION("Matches CalculateReciprocalFactorial across the full table range")
+	{
+		for (Int64 i = 0; i <= 20; ++i)
+		{
+			CHECK(ReciprocalFactorial(i) == Approx(CalculateReciprocalFactorial<double>(i)));
+		}
+	}
+
+	SECTION("Explicit floating-point Scalar")
+	{
+		CHECK(ReciprocalFactorial<float>(5) == Approx(1.0f / 120.0f));
+		CHECK(ReciprocalFactorial<long double>(5)
+		      == Approx(static_cast<long double>(1.0) / static_cast<long double>(120.0)));
+	}
+
+	SECTION("Integer Scalar truncates to zero for n >= 2 (documented behavior)")
+	{
+		CHECK(ReciprocalFactorial<Int64>(0) == 1);
+		CHECK(ReciprocalFactorial<Int64>(1) == 1);
+		CHECK(ReciprocalFactorial<Int64>(2) == 0);
+		CHECK(ReciprocalFactorial<Int64>(20) == 0);
+	}
+
+	SECTION("constexpr evaluation")
+	{
+		STATIC_CHECK(ReciprocalFactorial(0) == 1.0);
+		STATIC_CHECK(ReciprocalFactorial(1) == 1.0);
+		STATIC_CHECK(ReciprocalFactorial(2) == 0.5);
+		STATIC_CHECK(ReciprocalFactorial(5) == 1.0 / 120.0);
+		STATIC_CHECK(ReciprocalFactorial(20) == 1.0 / 2432902008176640000.0);
 	}
 }
 
