@@ -263,6 +263,7 @@ namespace SecUtility::Math
 	/// <remarks>
 	/// This is made a functor to support compile-time dependency injection downstream.
 	/// </remarks>
+	// ReSharper disable once CppUseFamiliarTemplateSyntaxForGenericLambdas
 	constexpr auto Boys = [](const int n, const auto a) SEC_MATH_CONDITIONAL_CONSTEXPR noexcept
 	{
 		using Scalar = std::decay_t<decltype(a)>;
@@ -276,9 +277,9 @@ namespace SecUtility::Math
 		/*
 		if (n == 0)
 		{
-			constexpr Scalar HalfOfSqrtOfPi = Constant::SqrtOfPi<Scalar> / 2;
-			const Scalar sqrtOfA = Sqrt(a);
-			return HalfOfSqrtOfPi * Erf(sqrtOfA) / sqrtOfA;
+		    constexpr Scalar HalfOfSqrtOfPi = Constant::SqrtOfPi<Scalar> / 2;
+		    const Scalar sqrtOfA = Sqrt(a);
+		    return HalfOfSqrtOfPi * Erf(sqrtOfA) / sqrtOfA;
 		}
 		*/
 
