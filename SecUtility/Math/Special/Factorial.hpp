@@ -180,7 +180,7 @@ namespace SecUtility::Math
 	{
 		constexpr Int64 N = 64;
 		assert(i >= 0 && i <= N);
-		return Detail::Factorial::ReciprocalFactorials<Scalar, N>[i];
+		return static_cast<Scalar>(Detail::Factorial::ReciprocalFactorials<double, N>[i]);
 	}
 
 	/// <summary>
