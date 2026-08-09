@@ -44,7 +44,7 @@ namespace
 
 		for (std::size_t i = 0; i < N; ++i)
 		{
-			result += coeff(i) * std::pow(x, i) / Factorial(static_cast<int>(i));
+			result += coeff(i) * std::pow(x, i) * ReciprocalFactorial(static_cast<int>(i));
 		}
 
 		return result;
