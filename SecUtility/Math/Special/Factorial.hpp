@@ -106,14 +106,24 @@ namespace SecUtility::Math
 		// Sized to match Factorial's [0, 20] range so the two stay in lockstep.
 		// TODO: reconsider whether ReciprocalFactorials should extend past [0, 20], cheap to do, but breaks symmetry
 		// with Factorials.
-		template <typename Scalar>
+		template <typename Scalar, std::size_t N = 20>
 		inline constexpr auto ReciprocalFactorials = []() constexpr
 		{
-			std::array<Scalar, 21> data{};
-			for (std::size_t i = 0; i < data.size(); ++i)
+			std::array<Scalar, N + 1> data{};
+
+			for (std::size_t i = 0; i < N + 1 && i < 2; i++)
 			{
-				data[i] = Scalar{1} / static_cast<Scalar>(Factorials[i]);
+				data[i] = 1;
 			}
+
+			if constexpr (!std::is_integral_v<Scalar>)
+			{
+				for (std::size_t i = 2; i < N + 1; ++i)
+				{
+					data[i] = static_cast<Scalar>(1) / CalculateFactorial<Scalar>(i);
+				}
+			}
+
 			return data;
 		}();
 
@@ -168,8 +178,9 @@ namespace SecUtility::Math
 	template <typename Scalar = double>
 	constexpr SEC_FORCE_INLINE Scalar ReciprocalFactorial(const Int64 i) noexcept
 	{
-		assert(i >= 0 && i <= 20);
-		return Detail::Factorial::ReciprocalFactorials<Scalar>[i];
+		constexpr Int64 N = 64;
+		assert(i >= 0 && i <= N);
+		return Detail::Factorial::ReciprocalFactorials<Scalar, N>[i];
 	}
 
 	/// <summary>
