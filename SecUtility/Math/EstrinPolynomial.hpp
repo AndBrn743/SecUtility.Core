@@ -4,6 +4,7 @@
 #pragma once
 
 #include <SecUtility/Macro/ForceInline.hpp>
+#include <SecUtility/Math/Special/Factorial.hpp>
 
 #include <array>
 #include <cstddef>
@@ -105,24 +106,12 @@ namespace SecUtility::Math
 			static_assert(!std::is_integral_v<Scalar>);
 			static_assert(N > 0);
 
-			// Compile-time table of 1/0!, 1/1!, ..., 1/(N-1)!.
-			constexpr auto InversedFactorial = []() constexpr
-			{
-				std::array<Scalar, N> arr{};
-				arr[0] = Scalar{1};
-				for (std::size_t i = 1; i < N; ++i)
-				{
-					arr[i] = arr[i - 1] / static_cast<Scalar>(i);
-				}
-				return arr;
-			}();
-
 			std::array<Scalar, N> buf{};
 			for (std::size_t i = 0; i < N; ++i)
 			{
 				// c[k]*(1/k!) is independent of the Estrin dependency tree
 				// and overlaps it, mirroring the Horner Taylor pattern.
-				buf[i] = coefficientAccessor(i) * InversedFactorial[i];
+				buf[i] = coefficientAccessor(i) * ReciprocalFactorial(i);
 			}
 
 			Scalar xs = delta;
@@ -157,24 +146,12 @@ namespace SecUtility::Math
 			static_assert(!std::is_integral_v<Scalar>);
 			static_assert(N > 0);
 
-			// Compile-time table of 1/0!, 1/1!, ..., 1/(N-1)!.
-			constexpr auto InversedFactorial = []() constexpr
-			{
-				std::array<Scalar, N> arr{};
-				arr[0] = Scalar{1};
-				for (std::size_t i = 1; i < N; ++i)
-				{
-					arr[i] = arr[i - 1] / static_cast<Scalar>(i);
-				}
-				return arr;
-			}();
-
 			// Scale each c[k] by 1/k! on the fly and reuse the power Estrin
 			// tree.  InversedFactorial[k] folds to an immediate once the
 			// recursive template unrolls, since each leaf call site has a
 			// constant k after inlining.
-			auto scaledAccessor = [&coefficientAccessor, &InversedFactorial](std::size_t k) -> Scalar
-			{ return coefficientAccessor(k) * InversedFactorial[k]; };
+			auto scaledAccessor = [&coefficientAccessor](std::size_t k) -> Scalar
+			{ return coefficientAccessor(k) * ReciprocalFactorial(k); };
 
 			return EstrinPowerPolynomial_Recursive<Scalar, N>(scaledAccessor, delta);
 		}

@@ -5,6 +5,7 @@
 
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Meta/IntegerSequence.hpp>
+#include <SecUtility/Math/Special/Factorial.hpp>
 
 #include <array>
 #include <cstddef>
@@ -80,20 +81,6 @@ namespace SecUtility::Math
 			static_assert(sizeof...(ReversedIndices) == N);
 			static_assert(((ReversedIndices < N) && ...));
 
-			// Compile-time table of 1/0!, 1/1!, ..., 1/(N-1)!.
-			// Each entry folds to an immediate in the unrolled fold since
-			// ReversedIndices is a template parameter.
-			constexpr auto InversedFactorial = []() constexpr
-			{
-				std::array<Scalar, N> arr{};
-				arr[0] = Scalar{1};
-				for (std::size_t i = 1; i < N; ++i)
-				{
-					arr[i] = arr[i - 1] / static_cast<Scalar>(i);
-				}
-				return arr;
-			}();
-
 			Scalar result = 0;
 			// FMA-friendly: r_k = c[k] * (1/k!) + delta * r_{k+1}, which contracts to
 			// fma(delta, result, c[k] * (1/k!)) under -ffp-contract=on.  The
@@ -101,7 +88,7 @@ namespace SecUtility::Math
 			// FMA, mirroring the raw-loop pattern `tabulated[n+k]*invfact[k] + delta*value`.
 			// Also drops the former MSVC C2124 ternary workaround: there is no
 			// ternary left to confuse its parser.
-			((result = coefficientAccessor(ReversedIndices) * InversedFactorial[ReversedIndices] + delta * result),
+			((result = coefficientAccessor(ReversedIndices) * ReciprocalFactorial(ReversedIndices) + delta * result),
 			 ...);
 			return result;
 		}
