@@ -1235,7 +1235,7 @@ TEST_CASE("EstrinTaylorPolynomial - N=3")
 // Estrin Mathematical Identities - Power Polynomial (Geometric series)
 //----------------------------------------------------------------------------------------------------------------------
 
-TEST_CASE("EstrinPowerPolynomial - Geometric series: 1 + x + x² + ... = 1/(1-x)")
+TEST_CASE("EstrinPowerPolynomial - Geometric series: 1 + x + x^2 + ... = 1/(1-x)")
 {
 	constexpr auto coeff = [](std::size_t) constexpr noexcept { return 1.0; };
 
