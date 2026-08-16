@@ -393,7 +393,7 @@ namespace SecUtility::Math
 			        (static_cast<Scalar>(gridIndex) + Scalar{0.5}) / static_cast<Scalar>(Detail::Boys::BoyTableDensity)
 			        - x;
 
-			int n = 0;
+			std::size_t n = 0;
 			for (auto it = begin; it != end; ++it, ++n)
 			{
 				*it = UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
