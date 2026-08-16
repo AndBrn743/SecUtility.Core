@@ -6,6 +6,7 @@
 #include <SecUtility/Collection/IndexAccessor.hpp>
 #include <SecUtility/Math/HornerPolynomial.hpp>
 #include <SecUtility/Math/Special/Gamma.hpp>
+#include <SecUtility/Macro/Likelihood.hpp>
 #include <array>
 #include <cassert>
 #include <vector>
@@ -345,6 +346,11 @@ namespace SecUtility::Math
 	        const ForwardIterator begin, const ForwardIterator end, const Scalar x)
 	{
 		constexpr auto HornerTermCount = 8;
+
+		if (SEC_UNLIKELY(begin == end))
+		{
+			return;
+		}
 
 		if (Abs(x) < 1e-8)
 		{
