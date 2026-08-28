@@ -446,17 +446,15 @@ namespace SecUtility::Math
 		}
 	}
 
-	template <typename... Args>
-	constexpr SEC_FORCE_INLINE decltype(auto) Max(Args&&... args) noexcept
+	constexpr auto Max = [](auto&&... args) noexcept -> decltype(auto)
 	{
-		return Extrema<std::greater_equal<>>(std::forward<Args>(args)...);
-	}
+		return Extrema<std::greater_equal<>>(std::forward<decltype(args)>(args)...);
+	};
 
-	template <typename... Args>
-	constexpr SEC_FORCE_INLINE decltype(auto) Min(Args&&... args) noexcept
+	constexpr auto Min = [](auto&&... args) noexcept -> decltype(auto)
 	{
-		return Extrema<std::less_equal<>>(std::forward<Args>(args)...);
-	}
+		return Extrema<std::less_equal<>>(std::forward<decltype(args)>(args)...);
+	};
 
 	template <typename Scalar>
 	constexpr SEC_FORCE_INLINE auto Cbrt(Scalar&& arg) noexcept(noexcept(std::cbrt(std::forward<Scalar>(arg))))
