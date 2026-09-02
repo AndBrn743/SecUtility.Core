@@ -62,6 +62,23 @@ function(add_secutility_test test_name source_file)
     catch_discover_tests(${test_name})
 endfunction()
 
+# Hoppy Phase 0 Eigen-integration spike. Keep macro-incompatible modes in
+# separate translation units/targets.
+add_secutility_test(HoppyEigenIntegrationTest HoppyEigenIntegrationTest.cpp)
+target_compile_options(HoppyEigenIntegrationTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_secutility_test(HoppyEigenNoDebugTest HoppyEigenIntegrationTest.cpp)
+target_compile_definitions(HoppyEigenNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
+# This opt-in target must fail with ForwardDeclarations.hpp's actionable Eigen
+# version diagnostic. EXCLUDE_FROM_ALL keeps normal builds green.
+add_executable(HoppyUnsupportedEigenVersion EXCLUDE_FROM_ALL HoppyUnsupportedEigenVersion.cpp)
+target_link_libraries(HoppyUnsupportedEigenVersion PRIVATE SecUtility::Core)
+target_include_directories(HoppyUnsupportedEigenVersion BEFORE PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/UnsupportedEigen)
+
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)

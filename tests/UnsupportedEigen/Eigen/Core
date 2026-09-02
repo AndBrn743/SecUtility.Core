@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
+// Deliberately incomplete fake public Eigen header used only by the opt-in
+// expected-failure target. It proves that ForwardDeclarations.hpp owns the
+// version diagnostic and does not depend on a private Eigen header.
+#define EIGEN_WORLD_VERSION 3
+#define EIGEN_MAJOR_VERSION 4
+#define EIGEN_MINOR_VERSION 0
