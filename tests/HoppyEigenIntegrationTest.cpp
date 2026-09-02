@@ -88,14 +88,14 @@ namespace Hoppy::Test::Spike
 		static constexpr int MaxSizeAtCompileTime = Eigen::Dynamic;
 		static constexpr int Flags = Eigen::NestByRefBit;
 
-		explicit Expression(Eigen::MatrixXd values) : values_(std::move(values)) {}
+		explicit Expression(Eigen::MatrixXd values) : m_Values(std::move(values)) {}
 
-		Eigen::Index rows() const { return values_.rows(); }
-		Eigen::Index cols() const { return values_.cols(); }
-		double coeff(Eigen::Index row, Eigen::Index column) const { return values_.coeff(row, column); }
+		Eigen::Index rows() const { return m_Values.rows(); }
+		Eigen::Index cols() const { return m_Values.cols(); }
+		double coeff(Eigen::Index row, Eigen::Index column) const { return m_Values.coeff(row, column); }
 
 	private:
-		Eigen::MatrixXd values_;
+		Eigen::MatrixXd m_Values;
 	};
 
 	using BlockExpression = Expression<BlockStorage>;
@@ -166,11 +166,11 @@ namespace Eigen::internal
 		static constexpr int Flags = 0;
 		static constexpr int Alignment = 0;
 
-		explicit evaluator(const ExpressionType& expression) : expression_(expression) {}
-		double coeff(Eigen::Index row, Eigen::Index column) const { return expression_.coeff(row, column); }
+		explicit evaluator(const ExpressionType& expression) : m_Expression(expression) {}
+		double coeff(Eigen::Index row, Eigen::Index column) const { return m_Expression.coeff(row, column); }
 
 	private:
-		const ExpressionType& expression_;
+		const ExpressionType& m_Expression;
 	};
 }  // namespace Eigen::internal
 
@@ -228,11 +228,11 @@ namespace Eigen
 namespace Hoppy::Test::Spike
 {
 	template <typename T, typename = void>
-	struct HasReturnType : std::false_type
+	struct has_return_type : std::false_type
 	{};
 
 	template <typename T>
-	struct HasReturnType<T, std::void_t<typename T::ReturnType>> : std::true_type
+	struct has_return_type<T, std::void_t<typename T::ReturnType>> : std::true_type
 	{};
 
 	using SumOp = Eigen::internal::scalar_sum_op<double, double>;
@@ -256,7 +256,7 @@ namespace Hoppy::Test::Spike
 	                             const BlockExpression&>);
 	static_assert(std::is_same_v<typename Eigen::internal::evaluator_traits<BlockExpression>::Shape, BlockShape>);
 	static_assert(std::is_same_v<typename Eigen::ScalarBinaryOpTraits<double, double, SumOp>::ReturnType, double>);
-	static_assert(!HasReturnType<Eigen::ScalarBinaryOpTraits<int, std::complex<double>, SumOp>>::value);
+	static_assert(!has_return_type<Eigen::ScalarBinaryOpTraits<int, std::complex<double>, SumOp>>::value);
 	static_assert(std::is_same_v<Eigen::MatrixX<double>, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>>);
 	static_assert(std::is_same_v<Eigen::VectorX<double>, Eigen::Vector<double, Eigen::Dynamic>>);
 	static_assert(std::is_constructible_v<Eigen::DiagonalWrapper<const Eigen::VectorXd>, const Eigen::VectorXd&>);

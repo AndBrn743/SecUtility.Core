@@ -10,8 +10,10 @@
 
 namespace Hoppy
 {
-	struct Column;
-	struct Row;
+	struct Column
+	{};
+	struct Row
+	{};
 
 	struct DenseBlockPolicy;
 
@@ -29,4 +31,12 @@ namespace Hoppy
 
 	template <typename Derived>
 	class BlockVectorExpr;
+
+	namespace Detail
+	{
+		struct BlockDiagonalStorage;
+		struct BlockVectorStorage;
+		struct BlockDiagonalShape;
+		struct BlockVectorShape;
+	}  // namespace Detail
 }  // namespace Hoppy
