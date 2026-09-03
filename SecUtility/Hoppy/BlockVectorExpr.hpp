@@ -62,6 +62,8 @@ namespace Hoppy
 		template <typename OtherDerived> auto operator-(const BlockVectorExpr<OtherDerived>& other) const&& = delete;
 		template <typename TOtherScalar> auto operator*(const TOtherScalar& scalar) const&& = delete;
 		template <typename TOtherScalar> auto operator/(const TOtherScalar& scalar) const&& = delete;
+		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
+		auto asDiagonal() const&;
 		auto operator+() const&& = delete;
 		auto operator-() const&& = delete;
 		auto transpose() const&& = delete;

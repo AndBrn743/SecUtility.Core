@@ -34,6 +34,8 @@ namespace Hoppy
 
 	namespace Detail
 	{
+		template <typename Source, bool Writable>
+		class DiagonalReturnType;
 		struct BlockDiagonalStorage;
 		struct BlockVectorStorage;
 		struct BlockDiagonalShape;

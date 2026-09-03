@@ -10,3 +10,4 @@
 #include <SecUtility/Hoppy/BlockDiagonalMatrix.hpp>
 #include <SecUtility/Hoppy/BlockVector.hpp>
 #include <SecUtility/Hoppy/Detail/BlockExpressions.hpp>
+#include <SecUtility/Hoppy/Detail/DiagonalViews.hpp>

@@ -97,6 +97,11 @@ namespace Hoppy
 			return ConstBlock(data() + storageOffset(index), dimension, dimension);
 		}
 
+		auto diagonal() &;
+		auto diagonal() const&;
+		auto diagonal() && = delete;
+		auto diagonal() const&& = delete;
+
 		template <typename Derived> BlockDiagonalMatrix& operator+=(const BlockDiagonalMatrixExpr<Derived>& other)
 		{
 			eigen_assert(this->hasSameBlockingAs(other));
@@ -411,3 +416,19 @@ namespace Hoppy
 }  // namespace Hoppy
 
 #include <SecUtility/Hoppy/Detail/BlockExpressions.hpp>
+#include <SecUtility/Hoppy/Detail/DiagonalViews.hpp>
+
+namespace Hoppy
+{
+	template <typename TScalar, typename TBlockPolicy>
+	auto BlockDiagonalMatrix<TScalar, TBlockPolicy>::diagonal() &
+	{
+		return Detail::DiagonalReturnType<BlockDiagonalMatrix, true>(*this);
+	}
+
+	template <typename TScalar, typename TBlockPolicy>
+	auto BlockDiagonalMatrix<TScalar, TBlockPolicy>::diagonal() const&
+	{
+		return Detail::DiagonalReturnType<const BlockDiagonalMatrix, false>(*this);
+	}
+}  // namespace Hoppy

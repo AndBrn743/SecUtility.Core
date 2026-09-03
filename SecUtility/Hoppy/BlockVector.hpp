@@ -106,6 +106,13 @@ namespace Hoppy
 		Block asDense() { return Block(data(), totalDimension()); }
 		ConstBlock asDense() const { return ConstBlock(data(), totalDimension()); }
 
+		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
+		auto asDiagonal() const&;
+		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
+		auto asDiagonal() && = delete;
+		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
+		auto asDiagonal() const&& = delete;
+
 		template <typename Derived,
 		          typename = std::enable_if_t<std::is_same_v<Orientation,
 		                                                     typename Eigen::internal::traits<Derived>::Orientation>>>
@@ -251,3 +258,14 @@ namespace Hoppy
 }  // namespace Hoppy
 
 #include <SecUtility/Hoppy/Detail/BlockExpressions.hpp>
+#include <SecUtility/Hoppy/Detail/DiagonalViews.hpp>
+
+namespace Hoppy
+{
+	template <typename TScalar, typename TOrientation>
+	template <typename T, typename>
+	auto BlockVector<TScalar, TOrientation>::asDiagonal() const&
+	{
+		return Eigen::DiagonalWrapper<const BlockVectorExpr<BlockVector>>(*this);
+	}
+}  // namespace Hoppy
