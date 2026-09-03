@@ -97,6 +97,35 @@ namespace Hoppy
 			return ConstBlock(data() + storageOffset(index), dimension, dimension);
 		}
 
+		template <typename Derived> BlockDiagonalMatrix& operator+=(const BlockDiagonalMatrixExpr<Derived>& other)
+		{
+			eigen_assert(this->hasSameBlockingAs(other));
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] += other.derived()[index];
+			return *this;
+		}
+		template <typename Derived> BlockDiagonalMatrix& operator-=(const BlockDiagonalMatrixExpr<Derived>& other)
+		{
+			eigen_assert(this->hasSameBlockingAs(other));
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] -= other.derived()[index];
+			return *this;
+		}
+		template <typename TOtherScalar>
+		BlockDiagonalMatrix& operator*=(const TOtherScalar& scalar)
+		{
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] *= scalar;
+			return *this;
+		}
+		template <typename TOtherScalar>
+		BlockDiagonalMatrix& operator/=(const TOtherScalar& scalar)
+		{
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] /= scalar;
+			return *this;
+		}
+
 		void resize(const std::vector<Eigen::Index>& dimensions) { resize(dimensions.begin(), dimensions.end()); }
 		void resize(const std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
 

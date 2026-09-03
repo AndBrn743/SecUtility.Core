@@ -111,6 +111,14 @@ target_compile_options(HoppyUnaryReductionTest PRIVATE
 add_secutility_test(HoppyUnaryReductionNoDebugTest HoppyUnaryReductionTest.cpp)
 target_compile_definitions(HoppyUnaryReductionNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 
+add_secutility_test(HoppyCwiseTest HoppyCwiseTest.cpp)
+target_compile_options(HoppyCwiseTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_secutility_test(HoppyCwiseNoDebugTest HoppyCwiseTest.cpp)
+target_compile_definitions(HoppyCwiseNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)

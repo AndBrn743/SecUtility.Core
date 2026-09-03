@@ -106,6 +106,39 @@ namespace Hoppy
 		Block asDense() { return Block(data(), totalDimension()); }
 		ConstBlock asDense() const { return ConstBlock(data(), totalDimension()); }
 
+		template <typename Derived,
+		          typename = std::enable_if_t<std::is_same_v<Orientation,
+		                                                     typename Eigen::internal::traits<Derived>::Orientation>>>
+		BlockVector& operator+=(const BlockVectorExpr<Derived>& other)
+		{
+			eigen_assert(this->hasSameBlockingAs(other));
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] += other.derived()[index];
+			return *this;
+		}
+		template <typename Derived,
+		          typename = std::enable_if_t<std::is_same_v<Orientation,
+		                                                     typename Eigen::internal::traits<Derived>::Orientation>>>
+		BlockVector& operator-=(const BlockVectorExpr<Derived>& other)
+		{
+			eigen_assert(this->hasSameBlockingAs(other));
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] -= other.derived()[index];
+			return *this;
+		}
+		template <typename TOtherScalar>
+		BlockVector& operator*=(const TOtherScalar& scalar)
+		{
+			asDense() *= scalar;
+			return *this;
+		}
+		template <typename TOtherScalar>
+		BlockVector& operator/=(const TOtherScalar& scalar)
+		{
+			asDense() /= scalar;
+			return *this;
+		}
+
 		void resize(const std::vector<Eigen::Index>& dimensions) { resize(dimensions.begin(), dimensions.end()); }
 		void resize(const std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator,

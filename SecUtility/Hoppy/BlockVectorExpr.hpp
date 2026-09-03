@@ -32,6 +32,36 @@ namespace Hoppy
 		auto imag() const&;
 		template <typename NewScalar> auto cast() const&;
 		template <typename NewScalar> auto cast() const&& = delete;
+		template <typename OtherDerived,
+		          typename = std::enable_if_t<std::is_same_v<Orientation,
+		                                                     typename Eigen::internal::traits<OtherDerived>::Orientation>>,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar,
+		                  Eigen::internal::scalar_sum_op<Scalar,
+		                                                 typename Eigen::internal::traits<OtherDerived>::Scalar>>::ReturnType>
+		auto operator+(const BlockVectorExpr<OtherDerived>& other) const&;
+		template <typename OtherDerived,
+		          typename = std::enable_if_t<std::is_same_v<Orientation,
+		                                                     typename Eigen::internal::traits<OtherDerived>::Orientation>>,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar,
+		                  Eigen::internal::scalar_difference_op<
+		                          Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar>>::ReturnType>
+		auto operator-(const BlockVectorExpr<OtherDerived>& other) const&;
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_product_op<Scalar, TOtherScalar>>::ReturnType>
+		auto operator*(const TOtherScalar& scalar) const&;
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_quotient_op<Scalar, TOtherScalar>>::ReturnType>
+		auto operator/(const TOtherScalar& scalar) const&;
+		template <typename OtherDerived> auto operator+(const BlockVectorExpr<OtherDerived>& other) const&& = delete;
+		template <typename OtherDerived> auto operator-(const BlockVectorExpr<OtherDerived>& other) const&& = delete;
+		template <typename TOtherScalar> auto operator*(const TOtherScalar& scalar) const&& = delete;
+		template <typename TOtherScalar> auto operator/(const TOtherScalar& scalar) const&& = delete;
 		auto operator+() const&& = delete;
 		auto operator-() const&& = delete;
 		auto transpose() const&& = delete;
