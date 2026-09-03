@@ -3,6 +3,7 @@
 #pragma once
 
 #include <SecUtility/Hoppy/BlockPolicy.hpp>
+#include <SecUtility/Hoppy/BlockDiagonalMatrixExpr.hpp>
 #include <SecUtility/Hoppy/Detail/CheckedDimensions.hpp>
 #include <SecUtility/Hoppy/Detail/Storage.hpp>
 #include <SecUtility/Hoppy/Detail/Traits.hpp>
@@ -17,7 +18,7 @@
 namespace Hoppy
 {
 	template <typename TScalar, typename TBlockPolicy>
-	class BlockDiagonalMatrix
+	class BlockDiagonalMatrix : public BlockDiagonalMatrixExpr<BlockDiagonalMatrix<TScalar, TBlockPolicy>>
 	{
 		static_assert(IsBlockPolicy<TBlockPolicy>, "BlockDiagonalMatrix requires a Hoppy-provided block policy");
 
@@ -48,6 +49,26 @@ namespace Hoppy
 		BlockDiagonalMatrix(Iterator first, Iterator last)
 			: m_Storage(Detail::BuildCheckedDimensions(first, last))
 		{}
+
+		template <typename Derived>
+		BlockDiagonalMatrix(const BlockDiagonalMatrixExpr<Derived>& expression)
+			: BlockDiagonalMatrix(expression.blockingInfo())
+		{
+			assignSameBlocking(expression.derived());
+		}
+
+		template <typename Derived>
+		BlockDiagonalMatrix& operator=(const BlockDiagonalMatrixExpr<Derived>& expression)
+		{
+			if (this->hasSameBlockingAs(expression))
+				assignSameBlocking(expression.derived());
+			else
+			{
+				BlockDiagonalMatrix replacement(expression);
+				swap(replacement);
+			}
+			return *this;
+		}
 
 		void swap(BlockDiagonalMatrix& other) noexcept { m_Storage.swap(other.m_Storage); }
 
@@ -333,6 +354,13 @@ namespace Hoppy
 		}
 
 	private:
+		template <typename Derived>
+		void assignSameBlocking(const Derived& expression)
+		{
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] = expression[index];
+		}
+
 		template <typename Iterator, typename Fill>
 		BlockDiagonalMatrix& reblockAndFill(Iterator first, Iterator last, Fill fill)
 		{

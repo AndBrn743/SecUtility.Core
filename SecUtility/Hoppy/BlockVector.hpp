@@ -3,6 +3,7 @@
 #pragma once
 
 #include <SecUtility/Hoppy/Detail/CheckedDimensions.hpp>
+#include <SecUtility/Hoppy/BlockVectorExpr.hpp>
 #include <SecUtility/Hoppy/Detail/Storage.hpp>
 #include <SecUtility/Hoppy/Detail/Traits.hpp>
 #include <SecUtility/Hoppy/ForwardDeclarations.hpp>
@@ -18,7 +19,7 @@
 namespace Hoppy
 {
 	template <typename TScalar, typename TOrientation>
-	class BlockVector
+	class BlockVector : public BlockVectorExpr<BlockVector<TScalar, TOrientation>>
 	{
 		static_assert(std::is_same_v<TOrientation, Column> || std::is_same_v<TOrientation, Row>,
 		              "BlockVector orientation must be Hoppy::Column or Hoppy::Row");
@@ -54,6 +55,26 @@ namespace Hoppy
 		BlockVector(Iterator first, Iterator last)
 			: m_Storage(Detail::BuildCheckedVectorDimensions(first, last))
 		{}
+
+		template <typename Derived>
+		BlockVector(const BlockVectorExpr<Derived>& expression)
+			: BlockVector(expression.blockingInfo())
+		{
+			assignSameBlocking(expression.derived());
+		}
+
+		template <typename Derived>
+		BlockVector& operator=(const BlockVectorExpr<Derived>& expression)
+		{
+			if (this->hasSameBlockingAs(expression))
+				assignSameBlocking(expression.derived());
+			else
+			{
+				BlockVector replacement(expression);
+				swap(replacement);
+			}
+			return *this;
+		}
 
 		void swap(BlockVector& other) noexcept { m_Storage.swap(other.m_Storage); }
 
@@ -99,6 +120,13 @@ namespace Hoppy
 		BlockVector& setRandom() { asDense().setRandom(); return *this; }
 
 	private:
+		template <typename Derived>
+		void assignSameBlocking(const Derived& expression)
+		{
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] = expression[index];
+		}
+
 		template <typename Iterator, typename Fill>
 		BlockVector& reblockAndFill(Iterator first, Iterator last, Fill fill)
 		{

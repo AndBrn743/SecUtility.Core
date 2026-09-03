@@ -95,6 +95,14 @@ target_compile_options(HoppyStorageTest PRIVATE
 add_secutility_test(HoppyStorageNoDebugTest HoppyStorageTest.cpp)
 target_compile_definitions(HoppyStorageNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 
+add_secutility_test(HoppyEvaluationTest HoppyEvaluationTest.cpp)
+target_compile_options(HoppyEvaluationTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_secutility_test(HoppyEvaluationNoDebugTest HoppyEvaluationTest.cpp)
+target_compile_definitions(HoppyEvaluationNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)

@@ -38,6 +38,7 @@ namespace Eigen::internal
 	struct traits<Hoppy::BlockDiagonalMatrix<TScalar, TBlockPolicy>>
 	{
 		using Scalar = TScalar;
+		using BlockPolicy = TBlockPolicy;
 		using StorageKind = Hoppy::Detail::BlockDiagonalStorage;
 		using XprKind = MatrixXpr;
 		using StorageIndex = Eigen::Index;
@@ -52,6 +53,7 @@ namespace Eigen::internal
 	struct traits<Hoppy::BlockVector<TScalar, TOrientation>>
 	{
 		using Scalar = TScalar;
+		using Orientation = TOrientation;
 		using StorageKind = Hoppy::Detail::BlockVectorStorage;
 		using XprKind = MatrixXpr;
 		using StorageIndex = Eigen::Index;
