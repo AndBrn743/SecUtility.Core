@@ -28,12 +28,6 @@ namespace
 		destination = source;
 	}
 
-	template <typename T>
-	void moveAssign(T& destination, T& source)
-	{
-		destination = std::move(source);
-	}
-
 	template <typename T, typename = void>
 	struct can_bind_block_lvalue : std::false_type
 	{};
@@ -158,7 +152,7 @@ TEST_CASE("BlockVector block and dense maps provide read-write aliasing in both 
 	REQUIRE(constRow[1](0) == 8.0);
 }
 
-TEST_CASE("copy, move, self-assignment, and ADL swap preserve container semantics")
+TEST_CASE("copy, move, copy self-assignment, and ADL swap preserve container semantics")
 {
 	Matrix original{1, 2};
 	original[0](0, 0) = 3.0;
@@ -173,16 +167,14 @@ TEST_CASE("copy, move, self-assignment, and ADL swap preserve container semantic
 
 	Matrix moved = std::move(copy);
 	REQUIRE(moved.blockingInfo() == std::vector<Eigen::Index>{1, 2});
-	REQUIRE(copy.blockCount() == 0);
-	REQUIRE(copy.totalDimension() == 0);
-	REQUIRE(copy.storedSize() == 0);
+	copy = Matrix{1};
+	REQUIRE(copy.blockingInfo() == std::vector<Eigen::Index>{1});
 
 	Matrix assigned{3};
 	assigned = std::move(moved);
 	REQUIRE(assigned.blockingInfo() == std::vector<Eigen::Index>{1, 2});
-	REQUIRE(moved.blockCount() == 0);
-	moveAssign(assigned, assigned);
-	REQUIRE(assigned.blockingInfo() == std::vector<Eigen::Index>{1, 2});
+	moved = Matrix{2};
+	REQUIRE(moved.blockingInfo() == std::vector<Eigen::Index>{2});
 
 	using std::swap;
 	swap(original, assigned);
@@ -193,8 +185,8 @@ TEST_CASE("copy, move, self-assignment, and ADL swap preserve container semantic
 	vector.asDense() << 1.0, 2.0, 3.0;
 	ColumnVector movedVector = std::move(vector);
 	REQUIRE(movedVector.asDense()(2) == 3.0);
-	REQUIRE(vector.blockCount() == 0);
-	REQUIRE(vector.totalDimension() == 0);
+	vector = ColumnVector{1};
+	REQUIRE(vector.blockingInfo() == std::vector<Eigen::Index>{1});
 }
 
 #ifndef EIGEN_NO_DEBUG

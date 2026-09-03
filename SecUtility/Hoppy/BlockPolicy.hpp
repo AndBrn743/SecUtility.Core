@@ -13,10 +13,9 @@ namespace Hoppy
 {
 	struct DenseBlockPolicy
 	{
-		static Eigen::Index BlockElementCount(Eigen::Index dimension)
+		static Eigen::Index BlockElementCount(const Eigen::Index dimension)
 		{
-			const auto maximum = std::numeric_limits<Eigen::Index>::max();
-			if (dimension <= 0 || dimension > maximum / dimension)
+			if (dimension <= 0 || dimension > std::numeric_limits<Eigen::Index>::max() / dimension)
 			{
 				eigen_assert(false && "dense block dimension must be positive and square without overflow");
 				return 0;

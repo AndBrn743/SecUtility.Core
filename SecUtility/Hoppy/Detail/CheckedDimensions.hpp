@@ -34,7 +34,7 @@ namespace Hoppy::Detail
 
 		struct VectorStorageRule
 		{
-			static bool tryElementCount(Eigen::Index dimension, Eigen::Index& result)
+			static bool tryElementCount(const Eigen::Index dimension, Eigen::Index& result)
 			{
 				result = dimension;
 				return true;
@@ -88,25 +88,23 @@ namespace Hoppy::Detail
 			return true;
 		}
 
-		inline bool checkedAdd(Eigen::Index lhs, Eigen::Index rhs, Eigen::Index& result)
+		inline bool checkedAdd(const Eigen::Index lhs, const Eigen::Index rhs, Eigen::Index& result)
 		{
-			const auto maximum = std::numeric_limits<Eigen::Index>::max();
-			if (rhs > maximum - lhs)
+			if (rhs > std::numeric_limits<Eigen::Index>::max() - lhs)
 				return false;
 			result = lhs + rhs;
 			return true;
 		}
 
-		inline bool checkedSquare(Eigen::Index value, Eigen::Index& result)
+		inline bool checkedSquare(const Eigen::Index value, Eigen::Index& result)
 		{
-			const auto maximum = std::numeric_limits<Eigen::Index>::max();
-			if (value > maximum / value)
+			if (value > std::numeric_limits<Eigen::Index>::max() / value)
 				return false;
 			result = value * value;
 			return true;
 		}
 
-		inline bool DenseStorageRule::tryElementCount(Eigen::Index dimension, Eigen::Index& result)
+		inline bool DenseStorageRule::tryElementCount(const Eigen::Index dimension, Eigen::Index& result)
 		{
 			return checkedSquare(dimension, result);
 		}
@@ -119,7 +117,7 @@ namespace Hoppy::Detail
 	}  // namespace CheckedDimensionsDetail
 
 	template <typename StorageRule, typename Iterator,
-	          std::enable_if_t<CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
+	          typename = std::enable_if_t<CheckedDimensionsDetail::is_supported_iterator<Iterator>::value>>
 	CheckedDimensions BuildCheckedDimensionsWith(Iterator first, Iterator last)
 	{
 		CheckedDimensions result;
@@ -147,22 +145,22 @@ namespace Hoppy::Detail
 			result.StoredSize = nextStorageOffset;
 		}
 
-		Eigen::Index representedSize = 0;
-		if (StorageRule::CheckRepresentedSquare && result.TotalDimension != 0
+		if (Eigen::Index representedSize = 0;
+		    StorageRule::CheckRepresentedSquare && result.TotalDimension != 0
 		    && !CheckedDimensionsDetail::checkedSquare(result.TotalDimension, representedSize))
 			return CheckedDimensionsDetail::rejectInvalidDimensions();
 		return result;
 	}
 
 	template <typename Iterator,
-	          std::enable_if_t<CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
+	          typename = std::enable_if_t<CheckedDimensionsDetail::is_supported_iterator<Iterator>::value>>
 	CheckedDimensions BuildCheckedDimensions(Iterator first, Iterator last)
 	{
 		return BuildCheckedDimensionsWith<CheckedDimensionsDetail::DenseStorageRule>(first, last);
 	}
 
 	template <typename Iterator,
-	          std::enable_if_t<CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
+	          typename = std::enable_if_t<CheckedDimensionsDetail::is_supported_iterator<Iterator>::value>>
 	CheckedDimensions BuildCheckedVectorDimensions(Iterator first, Iterator last)
 	{
 		return BuildCheckedDimensionsWith<CheckedDimensionsDetail::VectorStorageRule>(first, last);

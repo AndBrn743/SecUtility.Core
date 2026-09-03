@@ -26,35 +26,6 @@ namespace Hoppy::Detail
 			  m_StoredSize(dimensions.StoredSize)
 		{}
 
-		PackedStorage(const PackedStorage&) = default;
-		PackedStorage& operator=(const PackedStorage&) = default;
-
-		PackedStorage(PackedStorage&& other) noexcept
-			: m_Data(std::move(other.m_Data)),
-			  m_Dimensions(std::move(other.m_Dimensions)),
-			  m_BlockOffsets(std::move(other.m_BlockOffsets)),
-			  m_StorageOffsets(std::move(other.m_StorageOffsets)),
-			  m_TotalDimension(other.m_TotalDimension),
-			  m_StoredSize(other.m_StoredSize)
-		{
-			other.clear();
-		}
-
-		PackedStorage& operator=(PackedStorage&& other) noexcept
-		{
-			if (this != &other)
-			{
-				m_Data = std::move(other.m_Data);
-				m_Dimensions = std::move(other.m_Dimensions);
-				m_BlockOffsets = std::move(other.m_BlockOffsets);
-				m_StorageOffsets = std::move(other.m_StorageOffsets);
-				m_TotalDimension = other.m_TotalDimension;
-				m_StoredSize = other.m_StoredSize;
-				other.clear();
-			}
-			return *this;
-		}
-
 		void swap(PackedStorage& other) noexcept
 		{
 			using std::swap;
@@ -74,38 +45,28 @@ namespace Hoppy::Detail
 
 		std::vector<Eigen::Index> blockingInfo() const { return m_Dimensions; }
 
-		Eigen::Index dimensionOfBlock(Eigen::Index index) const
+		Eigen::Index dimensionOfBlock(const Eigen::Index index) const
 		{
 			assertBlockIndex(index);
 			return m_Dimensions[static_cast<std::size_t>(index)];
 		}
 
-		Eigen::Index blockOffset(Eigen::Index index) const
+		Eigen::Index blockOffset(const Eigen::Index index) const
 		{
 			assertBlockIndex(index);
 			return m_BlockOffsets[static_cast<std::size_t>(index)];
 		}
 
-		Eigen::Index storageOffset(Eigen::Index index) const
+		Eigen::Index storageOffset(const Eigen::Index index) const
 		{
 			assertBlockIndex(index);
 			return m_StorageOffsets[static_cast<std::size_t>(index)];
 		}
 
 	private:
-		void assertBlockIndex(Eigen::Index index [[maybe_unused]]) const
+		void assertBlockIndex(const Eigen::Index index [[maybe_unused]]) const
 		{
 			eigen_assert(index >= 0 && index < blockCount());
-		}
-
-		void clear() noexcept
-		{
-			m_Data.clear();
-			m_Dimensions.clear();
-			m_BlockOffsets.clear();
-			m_StorageOffsets.clear();
-			m_TotalDimension = 0;
-			m_StoredSize = 0;
 		}
 
 		std::vector<TScalar> m_Data;

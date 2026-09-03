@@ -50,16 +50,10 @@ namespace Hoppy
 		{}
 
 		template <typename Iterator,
-		          std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
+		          typename = std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value>>
 		BlockVector(Iterator first, Iterator last)
 			: m_Storage(Detail::BuildCheckedVectorDimensions(first, last))
 		{}
-
-		BlockVector(const BlockVector&) = default;
-		BlockVector(BlockVector&&) noexcept = default;
-		BlockVector& operator=(const BlockVector&) = default;
-		BlockVector& operator=(BlockVector&&) noexcept = default;
-		~BlockVector() = default;
 
 		void swap(BlockVector& other) noexcept { m_Storage.swap(other.m_Storage); }
 
@@ -76,13 +70,13 @@ namespace Hoppy
 		Eigen::Index blockOffset(Eigen::Index index) const { return m_Storage.blockOffset(index); }
 		Eigen::Index storageOffset(Eigen::Index index) const { return m_Storage.storageOffset(index); }
 
-		Block operator[](Eigen::Index index)
+		Block operator[](const Eigen::Index index)
 		{
 			const auto dimension = dimensionOfBlock(index);
 			return Block(data() + storageOffset(index), dimension);
 		}
 
-		ConstBlock operator[](Eigen::Index index) const
+		ConstBlock operator[](const Eigen::Index index) const
 		{
 			const auto dimension = dimensionOfBlock(index);
 			return ConstBlock(data() + storageOffset(index), dimension);
@@ -92,9 +86,9 @@ namespace Hoppy
 		ConstBlock asDense() const { return ConstBlock(data(), totalDimension()); }
 
 		void resize(const std::vector<Eigen::Index>& dimensions) { resize(dimensions.begin(), dimensions.end()); }
-		void resize(std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
+		void resize(const std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator,
-		          std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
+		          typename = std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value>>
 		void resize(Iterator first, Iterator last) { BlockVector replacement(first, last); swap(replacement); }
 		template <typename TOther>
 		void resizeLike(const TOther& other) { resize(other.blockingInfo()); }
@@ -113,16 +107,16 @@ namespace Hoppy
 	public:
 
 		BlockVector& setZero(const std::vector<Eigen::Index>& dimensions) { return setZero(dimensions.begin(), dimensions.end()); }
-		BlockVector& setZero(std::initializer_list<Eigen::Index> dimensions) { return setZero(dimensions.begin(), dimensions.end()); }
+		BlockVector& setZero(const std::initializer_list<Eigen::Index> dimensions) { return setZero(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator> BlockVector& setZero(Iterator first, Iterator last) { return reblockAndFill(first, last, [](auto& value) { value.setZero(); }); }
 		BlockVector& setOnes(const std::vector<Eigen::Index>& dimensions) { return setOnes(dimensions.begin(), dimensions.end()); }
-		BlockVector& setOnes(std::initializer_list<Eigen::Index> dimensions) { return setOnes(dimensions.begin(), dimensions.end()); }
+		BlockVector& setOnes(const std::initializer_list<Eigen::Index> dimensions) { return setOnes(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator> BlockVector& setOnes(Iterator first, Iterator last) { return reblockAndFill(first, last, [](auto& value) { value.setOnes(); }); }
 		BlockVector& setRandom(const std::vector<Eigen::Index>& dimensions) { return setRandom(dimensions.begin(), dimensions.end()); }
-		BlockVector& setRandom(std::initializer_list<Eigen::Index> dimensions) { return setRandom(dimensions.begin(), dimensions.end()); }
+		BlockVector& setRandom(const std::initializer_list<Eigen::Index> dimensions) { return setRandom(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator> BlockVector& setRandom(Iterator first, Iterator last) { return reblockAndFill(first, last, [](auto& value) { value.setRandom(); }); }
 		BlockVector& setConstant(const std::vector<Eigen::Index>& dimensions, const Scalar& value) { return setConstant(dimensions.begin(), dimensions.end(), value); }
-		BlockVector& setConstant(std::initializer_list<Eigen::Index> dimensions, const Scalar& value) { return setConstant(dimensions.begin(), dimensions.end(), value); }
+		BlockVector& setConstant(const std::initializer_list<Eigen::Index> dimensions, const Scalar& value) { return setConstant(dimensions.begin(), dimensions.end(), value); }
 		template <typename Iterator> BlockVector& setConstant(Iterator first, Iterator last, const Scalar& value) { return reblockAndFill(first, last, [&](auto& result) { result.setConstant(value); }); }
 
 		static BlockVector WithBlocking(const std::vector<Eigen::Index>& dimensions) { return BlockVector(dimensions); }
@@ -135,16 +129,16 @@ namespace Hoppy
 		static BlockVector makeFilled(Iterator first, Iterator last, Fill fill) { BlockVector result(first, last); fill(result); return result; }
 	public:
 		static BlockVector Zero(const std::vector<Eigen::Index>& d) { return Zero(d.begin(), d.end()); }
-		static BlockVector Zero(std::initializer_list<Eigen::Index> d) { return Zero(d.begin(), d.end()); }
+		static BlockVector Zero(const std::initializer_list<Eigen::Index> d) { return Zero(d.begin(), d.end()); }
 		template <typename Iterator> static BlockVector Zero(Iterator f, Iterator l) { return makeFilled(f, l, [](auto& v) { v.setZero(); }); }
 		static BlockVector Ones(const std::vector<Eigen::Index>& d) { return Ones(d.begin(), d.end()); }
-		static BlockVector Ones(std::initializer_list<Eigen::Index> d) { return Ones(d.begin(), d.end()); }
+		static BlockVector Ones(const std::initializer_list<Eigen::Index> d) { return Ones(d.begin(), d.end()); }
 		template <typename Iterator> static BlockVector Ones(Iterator f, Iterator l) { return makeFilled(f, l, [](auto& v) { v.setOnes(); }); }
 		static BlockVector Random(const std::vector<Eigen::Index>& d) { return Random(d.begin(), d.end()); }
-		static BlockVector Random(std::initializer_list<Eigen::Index> d) { return Random(d.begin(), d.end()); }
+		static BlockVector Random(const std::initializer_list<Eigen::Index> d) { return Random(d.begin(), d.end()); }
 		template <typename Iterator> static BlockVector Random(Iterator f, Iterator l) { return makeFilled(f, l, [](auto& v) { v.setRandom(); }); }
 		static BlockVector Constant(const std::vector<Eigen::Index>& d, const Scalar& value) { return Constant(d.begin(), d.end(), value); }
-		static BlockVector Constant(std::initializer_list<Eigen::Index> d, const Scalar& value) { return Constant(d.begin(), d.end(), value); }
+		static BlockVector Constant(const std::initializer_list<Eigen::Index> d, const Scalar& value) { return Constant(d.begin(), d.end(), value); }
 		template <typename Iterator> static BlockVector Constant(Iterator f, Iterator l, const Scalar& value) { return makeFilled(f, l, [&](auto& v) { v.setConstant(value); }); }
 
 		template <typename DenseDerived>

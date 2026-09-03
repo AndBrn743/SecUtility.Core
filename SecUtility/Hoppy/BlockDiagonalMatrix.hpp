@@ -44,16 +44,10 @@ namespace Hoppy
 		{}
 
 		template <typename Iterator,
-		          std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
+		          typename = std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value>>
 		BlockDiagonalMatrix(Iterator first, Iterator last)
 			: m_Storage(Detail::BuildCheckedDimensions(first, last))
 		{}
-
-		BlockDiagonalMatrix(const BlockDiagonalMatrix&) = default;
-		BlockDiagonalMatrix(BlockDiagonalMatrix&&) noexcept = default;
-		BlockDiagonalMatrix& operator=(const BlockDiagonalMatrix&) = default;
-		BlockDiagonalMatrix& operator=(BlockDiagonalMatrix&&) noexcept = default;
-		~BlockDiagonalMatrix() = default;
 
 		void swap(BlockDiagonalMatrix& other) noexcept { m_Storage.swap(other.m_Storage); }
 
@@ -70,23 +64,23 @@ namespace Hoppy
 		Eigen::Index blockOffset(Eigen::Index index) const { return m_Storage.blockOffset(index); }
 		Eigen::Index storageOffset(Eigen::Index index) const { return m_Storage.storageOffset(index); }
 
-		Block operator[](Eigen::Index index)
+		Block operator[](const Eigen::Index index)
 		{
 			const auto dimension = dimensionOfBlock(index);
 			return Block(data() + storageOffset(index), dimension, dimension);
 		}
 
-		ConstBlock operator[](Eigen::Index index) const
+		ConstBlock operator[](const Eigen::Index index) const
 		{
 			const auto dimension = dimensionOfBlock(index);
 			return ConstBlock(data() + storageOffset(index), dimension, dimension);
 		}
 
 		void resize(const std::vector<Eigen::Index>& dimensions) { resize(dimensions.begin(), dimensions.end()); }
-		void resize(std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
+		void resize(const std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
 
 		template <typename Iterator,
-		          std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
+		          typename = std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value>>
 		void resize(Iterator first, Iterator last)
 		{
 			BlockDiagonalMatrix replacement(first, last);
@@ -127,7 +121,7 @@ namespace Hoppy
 		{
 			return setZero(dimensions.begin(), dimensions.end());
 		}
-		BlockDiagonalMatrix& setZero(std::initializer_list<Eigen::Index> dimensions)
+		BlockDiagonalMatrix& setZero(const std::initializer_list<Eigen::Index> dimensions)
 		{
 			return setZero(dimensions.begin(), dimensions.end());
 		}
@@ -141,7 +135,7 @@ namespace Hoppy
 		{
 			return setOnes(dimensions.begin(), dimensions.end());
 		}
-		BlockDiagonalMatrix& setOnes(std::initializer_list<Eigen::Index> dimensions)
+		BlockDiagonalMatrix& setOnes(const std::initializer_list<Eigen::Index> dimensions)
 		{
 			return setOnes(dimensions.begin(), dimensions.end());
 		}
@@ -155,7 +149,7 @@ namespace Hoppy
 		{
 			return setRandom(dimensions.begin(), dimensions.end());
 		}
-		BlockDiagonalMatrix& setRandom(std::initializer_list<Eigen::Index> dimensions)
+		BlockDiagonalMatrix& setRandom(const std::initializer_list<Eigen::Index> dimensions)
 		{
 			return setRandom(dimensions.begin(), dimensions.end());
 		}
@@ -169,7 +163,7 @@ namespace Hoppy
 		{
 			return setIdentity(dimensions.begin(), dimensions.end());
 		}
-		BlockDiagonalMatrix& setIdentity(std::initializer_list<Eigen::Index> dimensions)
+		BlockDiagonalMatrix& setIdentity(const std::initializer_list<Eigen::Index> dimensions)
 		{
 			return setIdentity(dimensions.begin(), dimensions.end());
 		}
@@ -184,7 +178,7 @@ namespace Hoppy
 			return setConstant(dimensions.begin(), dimensions.end(), value);
 		}
 
-		BlockDiagonalMatrix& setConstant(std::initializer_list<Eigen::Index> dimensions, const Scalar& value)
+		BlockDiagonalMatrix& setConstant(const std::initializer_list<Eigen::Index> dimensions, const Scalar& value)
 		{
 			return setConstant(dimensions.begin(), dimensions.end(), value);
 		}
@@ -219,22 +213,22 @@ namespace Hoppy
 		}
 
 		static BlockDiagonalMatrix Zero(const std::vector<Eigen::Index>& dimensions) { return Zero(dimensions.begin(), dimensions.end()); }
-		static BlockDiagonalMatrix Zero(std::initializer_list<Eigen::Index> dimensions) { return Zero(dimensions.begin(), dimensions.end()); }
+		static BlockDiagonalMatrix Zero(const std::initializer_list<Eigen::Index> dimensions) { return Zero(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator>
 		static BlockDiagonalMatrix Zero(Iterator first, Iterator last) { BlockDiagonalMatrix result(first, last); result.setZero(); return result; }
 
 		static BlockDiagonalMatrix Ones(const std::vector<Eigen::Index>& dimensions) { return Ones(dimensions.begin(), dimensions.end()); }
-		static BlockDiagonalMatrix Ones(std::initializer_list<Eigen::Index> dimensions) { return Ones(dimensions.begin(), dimensions.end()); }
+		static BlockDiagonalMatrix Ones(const std::initializer_list<Eigen::Index> dimensions) { return Ones(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator>
 		static BlockDiagonalMatrix Ones(Iterator first, Iterator last) { BlockDiagonalMatrix result(first, last); result.setOnes(); return result; }
 
 		static BlockDiagonalMatrix Random(const std::vector<Eigen::Index>& dimensions) { return Random(dimensions.begin(), dimensions.end()); }
-		static BlockDiagonalMatrix Random(std::initializer_list<Eigen::Index> dimensions) { return Random(dimensions.begin(), dimensions.end()); }
+		static BlockDiagonalMatrix Random(const std::initializer_list<Eigen::Index> dimensions) { return Random(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator>
 		static BlockDiagonalMatrix Random(Iterator first, Iterator last) { BlockDiagonalMatrix result(first, last); result.setRandom(); return result; }
 
 		static BlockDiagonalMatrix Identity(const std::vector<Eigen::Index>& dimensions) { return Identity(dimensions.begin(), dimensions.end()); }
-		static BlockDiagonalMatrix Identity(std::initializer_list<Eigen::Index> dimensions) { return Identity(dimensions.begin(), dimensions.end()); }
+		static BlockDiagonalMatrix Identity(const std::initializer_list<Eigen::Index> dimensions) { return Identity(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator>
 		static BlockDiagonalMatrix Identity(Iterator first, Iterator last) { BlockDiagonalMatrix result(first, last); result.setIdentity(); return result; }
 
@@ -242,7 +236,7 @@ namespace Hoppy
 		{
 			return Constant(dimensions.begin(), dimensions.end(), value);
 		}
-		static BlockDiagonalMatrix Constant(std::initializer_list<Eigen::Index> dimensions, const Scalar& value)
+		static BlockDiagonalMatrix Constant(const std::initializer_list<Eigen::Index> dimensions, const Scalar& value)
 		{
 			return Constant(dimensions.begin(), dimensions.end(), value);
 		}
