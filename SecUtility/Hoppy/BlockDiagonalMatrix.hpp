@@ -116,18 +116,32 @@ namespace Hoppy
 				(*this)[index] -= other.derived()[index];
 			return *this;
 		}
-		template <typename TOtherScalar>
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_product_op<Scalar, TOtherScalar>>::ReturnType>
 		BlockDiagonalMatrix& operator*=(const TOtherScalar& scalar)
 		{
 			for (Eigen::Index index = 0; index < blockCount(); ++index)
 				(*this)[index] *= scalar;
 			return *this;
 		}
-		template <typename TOtherScalar>
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_quotient_op<Scalar, TOtherScalar>>::ReturnType>
 		BlockDiagonalMatrix& operator/=(const TOtherScalar& scalar)
 		{
 			for (Eigen::Index index = 0; index < blockCount(); ++index)
 				(*this)[index] /= scalar;
+			return *this;
+		}
+		template <typename Derived>
+		BlockDiagonalMatrix& operator*=(const BlockDiagonalMatrixExpr<Derived>& other)
+		{
+			eigen_assert(this->hasSameBlockingAs(other));
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index] *= other.derived()[index];
 			return *this;
 		}
 

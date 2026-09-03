@@ -135,6 +135,14 @@ target_compile_options(HoppyDiagonalViewTest PRIVATE
 add_secutility_test(HoppyDiagonalViewNoDebugTest HoppyDiagonalViewTest.cpp)
 target_compile_definitions(HoppyDiagonalViewNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 
+add_secutility_test(HoppyBlockProductTest HoppyBlockProductTest.cpp)
+target_compile_options(HoppyBlockProductTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_secutility_test(HoppyBlockProductNoDebugTest HoppyBlockProductTest.cpp)
+target_compile_definitions(HoppyBlockProductNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)

@@ -30,6 +30,9 @@ namespace Hoppy::Detail
 	class BinaryBlockExpression;
 	struct AddOp { template <typename L, typename R> auto operator()(const L& lhs, const R& rhs) const { return lhs + rhs; } };
 	struct SubtractOp { template <typename L, typename R> auto operator()(const L& lhs, const R& rhs) const { return lhs - rhs; } };
+	struct MultiplyOp { template <typename L, typename R> auto operator()(const L& lhs, const R& rhs) const { return lhs * rhs; } };
+	template <typename Lhs, typename Rhs>
+	using BlockwiseProduct = BinaryBlockExpression<Lhs, Rhs, MultiplyOp, Column>;
 	template <typename Scalar> struct RightMultiplyOp { Scalar Value; template <typename T> auto operator()(const T& value) const { return value * Value; } };
 	template <typename Scalar> struct LeftMultiplyOp { Scalar Value; template <typename T> auto operator()(const T& value) const { return Value * value; } };
 	template <typename Scalar> struct DivideOp { Scalar Value; template <typename T> auto operator()(const T& value) const { return value / Value; } };
@@ -60,6 +63,12 @@ namespace Hoppy
 	auto BlockDiagonalMatrixExpr<Derived>::operator/(const TOtherScalar& scalar) const&
 	{
 		return Detail::UnaryBlockExpression<Derived, Detail::DivideOp<TOtherScalar>, Column>(derived(), {scalar});
+	}
+	template <typename Derived>
+	template <typename OtherDerived, typename>
+	auto BlockDiagonalMatrixExpr<Derived>::operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&
+	{
+		return Detail::BlockwiseProduct<Derived, OtherDerived>(derived(), other.derived());
 	}
 
 	template <typename Derived>
@@ -234,17 +243,33 @@ namespace Hoppy::Detail
 			return BinaryBlockExpression<UnaryBlockExpression, OtherDerived, SubtractOp, TOrientation>(*this,
 			                                                                                        other.derived());
 		}
-		template <typename TOtherScalar>
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_product_op<Scalar, TOtherScalar>>::ReturnType>
 		auto operator*(const TOtherScalar& scalar) const
 		{
 			return UnaryBlockExpression<UnaryBlockExpression, RightMultiplyOp<TOtherScalar>, TOrientation>(
 			        *this, {scalar});
 		}
-		template <typename TOtherScalar>
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_quotient_op<Scalar, TOtherScalar>>::ReturnType>
 		auto operator/(const TOtherScalar& scalar) const
 		{
 			return UnaryBlockExpression<UnaryBlockExpression, DivideOp<TOtherScalar>, TOrientation>(*this,
 			                                                                                       {scalar});
+		}
+		template <typename OtherDerived, typename Kind = typename Eigen::internal::traits<Source>::StorageKind,
+		          typename = std::enable_if_t<std::is_same_v<Kind, BlockDiagonalStorage>>,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar,
+		                  Eigen::internal::scalar_product_op<
+		                          Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar>>::ReturnType>
+		auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const
+		{
+			return BlockwiseProduct<UnaryBlockExpression, OtherDerived>(*this, other.derived());
 		}
 		auto transpose() const
 		{
@@ -324,17 +349,33 @@ namespace Hoppy::Detail
 			return BinaryBlockExpression<BinaryBlockExpression, OtherDerived, SubtractOp, TOrientation>(*this,
 			                                                                                         other.derived());
 		}
-		template <typename TOtherScalar>
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_product_op<Scalar, TOtherScalar>>::ReturnType>
 		auto operator*(const TOtherScalar& scalar) const
 		{
 			return UnaryBlockExpression<BinaryBlockExpression, RightMultiplyOp<TOtherScalar>, TOrientation>(
 			        *this, {scalar});
 		}
-		template <typename TOtherScalar>
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_quotient_op<Scalar, TOtherScalar>>::ReturnType>
 		auto operator/(const TOtherScalar& scalar) const
 		{
 			return UnaryBlockExpression<BinaryBlockExpression, DivideOp<TOtherScalar>, TOrientation>(*this,
 			                                                                                        {scalar});
+		}
+		template <typename OtherDerived, typename Kind = typename Eigen::internal::traits<Lhs>::StorageKind,
+		          typename = std::enable_if_t<std::is_same_v<Kind, BlockDiagonalStorage>>,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar,
+		                  Eigen::internal::scalar_product_op<
+		                          Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar>>::ReturnType>
+		auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const
+		{
+			return BlockwiseProduct<BinaryBlockExpression, OtherDerived>(*this, other.derived());
 		}
 		auto operator+() const { return UnaryBlockExpression<BinaryBlockExpression, PositiveOp, TOrientation>(*this); }
 		auto operator-() const { return UnaryBlockExpression<BinaryBlockExpression, NegativeOp, TOrientation>(*this); }

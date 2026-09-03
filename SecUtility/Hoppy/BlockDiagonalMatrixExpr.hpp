@@ -49,10 +49,17 @@ namespace Hoppy
 		                  Scalar, TOtherScalar,
 		                  Eigen::internal::scalar_quotient_op<Scalar, TOtherScalar>>::ReturnType>
 		auto operator/(const TOtherScalar& scalar) const&;
+		template <typename OtherDerived,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar,
+		                  Eigen::internal::scalar_product_op<
+		                          Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar>>::ReturnType>
+		auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&;
 		template <typename OtherDerived> auto operator+(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
 		template <typename OtherDerived> auto operator-(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
 		template <typename TOtherScalar> auto operator*(const TOtherScalar& scalar) const&& = delete;
 		template <typename TOtherScalar> auto operator/(const TOtherScalar& scalar) const&& = delete;
+		template <typename OtherDerived> auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
 		auto diagonal() const&;
 		auto operator+() const&& = delete;
 		auto operator-() const&& = delete;
