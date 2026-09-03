@@ -336,6 +336,29 @@ namespace Hoppy::Detail
 			return UnaryBlockExpression<BinaryBlockExpression, DivideOp<TOtherScalar>, TOrientation>(*this,
 			                                                                                        {scalar});
 		}
+		auto operator+() const { return UnaryBlockExpression<BinaryBlockExpression, PositiveOp, TOrientation>(*this); }
+		auto operator-() const { return UnaryBlockExpression<BinaryBlockExpression, NegativeOp, TOrientation>(*this); }
+		auto conjugate() const { return UnaryBlockExpression<BinaryBlockExpression, ConjugateOp, TOrientation>(*this); }
+		auto real() const { return UnaryBlockExpression<BinaryBlockExpression, RealOp, TOrientation>(*this); }
+		auto imag() const { return UnaryBlockExpression<BinaryBlockExpression, ImagOp, TOrientation>(*this); }
+		template <typename NewScalar>
+		auto cast() const { return UnaryBlockExpression<BinaryBlockExpression, CastOp<NewScalar>, TOrientation>(*this); }
+		auto transpose() const
+		{
+			using Kind = typename Eigen::internal::traits<Lhs>::StorageKind;
+			using ResultOrientation = std::conditional_t<
+			        std::is_same_v<Kind, BlockVectorStorage>,
+			        std::conditional_t<std::is_same_v<TOrientation, Column>, Row, Column>, TOrientation>;
+			return UnaryBlockExpression<BinaryBlockExpression, TransposeOp, ResultOrientation>(*this);
+		}
+		auto adjoint() const
+		{
+			using Kind = typename Eigen::internal::traits<Lhs>::StorageKind;
+			using ResultOrientation = std::conditional_t<
+			        std::is_same_v<Kind, BlockVectorStorage>,
+			        std::conditional_t<std::is_same_v<TOrientation, Column>, Row, Column>, TOrientation>;
+			return UnaryBlockExpression<BinaryBlockExpression, AdjointOp, ResultOrientation>(*this);
+		}
 
 	private:
 		typename Eigen::internal::ref_selector<Lhs>::type m_Lhs;
