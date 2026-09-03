@@ -43,7 +43,8 @@ namespace Hoppy
 			: BlockDiagonalMatrix(dimensions.begin(), dimensions.end())
 		{}
 
-		template <typename Iterator>
+		template <typename Iterator,
+		          std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
 		BlockDiagonalMatrix(Iterator first, Iterator last)
 			: m_Storage(Detail::BuildCheckedDimensions(first, last))
 		{}
@@ -81,7 +82,272 @@ namespace Hoppy
 			return ConstBlock(data() + storageOffset(index), dimension, dimension);
 		}
 
+		void resize(const std::vector<Eigen::Index>& dimensions) { resize(dimensions.begin(), dimensions.end()); }
+		void resize(std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
+
+		template <typename Iterator,
+		          std::enable_if_t<Detail::CheckedDimensionsDetail::is_supported_iterator<Iterator>::value, int> = 0>
+		void resize(Iterator first, Iterator last)
+		{
+			BlockDiagonalMatrix replacement(first, last);
+			swap(replacement);
+		}
+
+		template <typename TOther>
+		void resizeLike(const TOther& other)
+		{
+			resize(other.blockingInfo());
+		}
+
+		BlockDiagonalMatrix& setZero() { return setConstant(Scalar{}); }
+		BlockDiagonalMatrix& setOnes() { return setConstant(Scalar{1}); }
+
+		BlockDiagonalMatrix& setConstant(const Scalar& value)
+		{
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index].setConstant(value);
+			return *this;
+		}
+
+		BlockDiagonalMatrix& setRandom()
+		{
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index].setRandom();
+			return *this;
+		}
+
+		BlockDiagonalMatrix& setIdentity()
+		{
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				(*this)[index].setIdentity();
+			return *this;
+		}
+
+		BlockDiagonalMatrix& setZero(const std::vector<Eigen::Index>& dimensions)
+		{
+			return setZero(dimensions.begin(), dimensions.end());
+		}
+		BlockDiagonalMatrix& setZero(std::initializer_list<Eigen::Index> dimensions)
+		{
+			return setZero(dimensions.begin(), dimensions.end());
+		}
+		template <typename Iterator>
+		BlockDiagonalMatrix& setZero(Iterator first, Iterator last)
+		{
+			return reblockAndFill(first, last, [](BlockDiagonalMatrix& value) { value.setZero(); });
+		}
+
+		BlockDiagonalMatrix& setOnes(const std::vector<Eigen::Index>& dimensions)
+		{
+			return setOnes(dimensions.begin(), dimensions.end());
+		}
+		BlockDiagonalMatrix& setOnes(std::initializer_list<Eigen::Index> dimensions)
+		{
+			return setOnes(dimensions.begin(), dimensions.end());
+		}
+		template <typename Iterator>
+		BlockDiagonalMatrix& setOnes(Iterator first, Iterator last)
+		{
+			return reblockAndFill(first, last, [](BlockDiagonalMatrix& value) { value.setOnes(); });
+		}
+
+		BlockDiagonalMatrix& setRandom(const std::vector<Eigen::Index>& dimensions)
+		{
+			return setRandom(dimensions.begin(), dimensions.end());
+		}
+		BlockDiagonalMatrix& setRandom(std::initializer_list<Eigen::Index> dimensions)
+		{
+			return setRandom(dimensions.begin(), dimensions.end());
+		}
+		template <typename Iterator>
+		BlockDiagonalMatrix& setRandom(Iterator first, Iterator last)
+		{
+			return reblockAndFill(first, last, [](BlockDiagonalMatrix& value) { value.setRandom(); });
+		}
+
+		BlockDiagonalMatrix& setIdentity(const std::vector<Eigen::Index>& dimensions)
+		{
+			return setIdentity(dimensions.begin(), dimensions.end());
+		}
+		BlockDiagonalMatrix& setIdentity(std::initializer_list<Eigen::Index> dimensions)
+		{
+			return setIdentity(dimensions.begin(), dimensions.end());
+		}
+		template <typename Iterator>
+		BlockDiagonalMatrix& setIdentity(Iterator first, Iterator last)
+		{
+			return reblockAndFill(first, last, [](BlockDiagonalMatrix& value) { value.setIdentity(); });
+		}
+
+		BlockDiagonalMatrix& setConstant(const std::vector<Eigen::Index>& dimensions, const Scalar& value)
+		{
+			return setConstant(dimensions.begin(), dimensions.end(), value);
+		}
+
+		BlockDiagonalMatrix& setConstant(std::initializer_list<Eigen::Index> dimensions, const Scalar& value)
+		{
+			return setConstant(dimensions.begin(), dimensions.end(), value);
+		}
+
+		template <typename Iterator>
+		BlockDiagonalMatrix& setConstant(Iterator first, Iterator last, const Scalar& value)
+		{
+			BlockDiagonalMatrix replacement(first, last);
+			replacement.setConstant(value);
+			swap(replacement);
+			return *this;
+		}
+
+		static BlockDiagonalMatrix WithBlocking(const std::vector<Eigen::Index>& dimensions)
+		{
+			return BlockDiagonalMatrix(dimensions);
+		}
+		static BlockDiagonalMatrix WithBlocking(std::initializer_list<Eigen::Index> dimensions)
+		{
+			return BlockDiagonalMatrix(dimensions);
+		}
+		template <typename Iterator>
+		static BlockDiagonalMatrix WithBlocking(Iterator first, Iterator last)
+		{
+			return BlockDiagonalMatrix(first, last);
+		}
+
+		template <typename TOther>
+		static BlockDiagonalMatrix WithBlockingOf(const TOther& other)
+		{
+			return WithBlocking(other.blockingInfo());
+		}
+
+		static BlockDiagonalMatrix Zero(const std::vector<Eigen::Index>& dimensions) { return Zero(dimensions.begin(), dimensions.end()); }
+		static BlockDiagonalMatrix Zero(std::initializer_list<Eigen::Index> dimensions) { return Zero(dimensions.begin(), dimensions.end()); }
+		template <typename Iterator>
+		static BlockDiagonalMatrix Zero(Iterator first, Iterator last) { BlockDiagonalMatrix result(first, last); result.setZero(); return result; }
+
+		static BlockDiagonalMatrix Ones(const std::vector<Eigen::Index>& dimensions) { return Ones(dimensions.begin(), dimensions.end()); }
+		static BlockDiagonalMatrix Ones(std::initializer_list<Eigen::Index> dimensions) { return Ones(dimensions.begin(), dimensions.end()); }
+		template <typename Iterator>
+		static BlockDiagonalMatrix Ones(Iterator first, Iterator last) { BlockDiagonalMatrix result(first, last); result.setOnes(); return result; }
+
+		static BlockDiagonalMatrix Random(const std::vector<Eigen::Index>& dimensions) { return Random(dimensions.begin(), dimensions.end()); }
+		static BlockDiagonalMatrix Random(std::initializer_list<Eigen::Index> dimensions) { return Random(dimensions.begin(), dimensions.end()); }
+		template <typename Iterator>
+		static BlockDiagonalMatrix Random(Iterator first, Iterator last) { BlockDiagonalMatrix result(first, last); result.setRandom(); return result; }
+
+		static BlockDiagonalMatrix Identity(const std::vector<Eigen::Index>& dimensions) { return Identity(dimensions.begin(), dimensions.end()); }
+		static BlockDiagonalMatrix Identity(std::initializer_list<Eigen::Index> dimensions) { return Identity(dimensions.begin(), dimensions.end()); }
+		template <typename Iterator>
+		static BlockDiagonalMatrix Identity(Iterator first, Iterator last) { BlockDiagonalMatrix result(first, last); result.setIdentity(); return result; }
+
+		static BlockDiagonalMatrix Constant(const std::vector<Eigen::Index>& dimensions, const Scalar& value)
+		{
+			return Constant(dimensions.begin(), dimensions.end(), value);
+		}
+		static BlockDiagonalMatrix Constant(std::initializer_list<Eigen::Index> dimensions, const Scalar& value)
+		{
+			return Constant(dimensions.begin(), dimensions.end(), value);
+		}
+		template <typename Iterator>
+		static BlockDiagonalMatrix Constant(Iterator first, Iterator last, const Scalar& value)
+		{
+			BlockDiagonalMatrix result(first, last);
+			result.setConstant(value);
+			return result;
+		}
+
+		template <typename DenseDerived>
+		static BlockDiagonalMatrix FromDense(
+		        const Eigen::MatrixBase<DenseDerived>& dense, const std::vector<Eigen::Index>& dimensions)
+		{
+			return FromDense(dense, dimensions.begin(), dimensions.end());
+		}
+		template <typename DenseDerived>
+		static BlockDiagonalMatrix FromDense(
+		        const Eigen::MatrixBase<DenseDerived>& dense, std::initializer_list<Eigen::Index> dimensions)
+		{
+			return FromDense(dense, dimensions.begin(), dimensions.end());
+		}
+		template <typename DenseDerived, typename Iterator>
+		static BlockDiagonalMatrix FromDense(
+		        const Eigen::MatrixBase<DenseDerived>& dense, Iterator first, Iterator last)
+		{
+			BlockDiagonalMatrix result(first, last);
+			if (dense.rows() != dense.cols() || dense.rows() != result.totalDimension())
+			{
+				eigen_assert(false && "FromDense requires a square matrix matching the blocking");
+				return result;
+			}
+			for (Eigen::Index index = 0; index < result.blockCount(); ++index)
+			{
+				const auto offset = result.blockOffset(index);
+				const auto dimension = result.dimensionOfBlock(index);
+				result[index] = dense.derived().block(offset, offset, dimension, dimension).template cast<Scalar>();
+			}
+			return result;
+		}
+
+		template <typename DenseDerived, typename TOther>
+		static BlockDiagonalMatrix FromDenseLike(
+		        const Eigen::MatrixBase<DenseDerived>& dense, const TOther& other)
+		{
+			return FromDense(dense, other.blockingInfo());
+		}
+
+		template <typename BlockIterator>
+		static BlockDiagonalMatrix FromBlocks(BlockIterator first, BlockIterator last)
+		{
+			using Category = typename std::iterator_traits<BlockIterator>::iterator_category;
+			static_assert(std::is_base_of_v<std::forward_iterator_tag, Category>,
+			              "FromBlocks requires forward iterators");
+			std::vector<Eigen::Index> dimensions;
+			for (auto iterator = first; iterator != last; ++iterator)
+			{
+				const auto& block = *iterator;
+				if (block.rows() != block.cols())
+				{
+					eigen_assert(false && "FromBlocks requires square blocks");
+					return {};
+				}
+				dimensions.push_back(block.rows());
+			}
+			BlockDiagonalMatrix result(dimensions);
+			Eigen::Index index = 0;
+			for (; first != last; ++first, ++index)
+			{
+				const auto& block = *first;
+				result[index] = block.template cast<Scalar>();
+			}
+			return result;
+		}
+
+		template <typename TBlock>
+		static BlockDiagonalMatrix FromBlocks(std::initializer_list<TBlock> blocks)
+		{
+			return FromBlocks(blocks.begin(), blocks.end());
+		}
+
+		template <typename DenseDerived>
+		static BlockDiagonalMatrix SingleBlock(const Eigen::MatrixBase<DenseDerived>& dense)
+		{
+			if (dense.rows() != dense.cols())
+			{
+				eigen_assert(false && "SingleBlock requires a square matrix");
+				return {};
+			}
+			BlockDiagonalMatrix result({dense.rows()});
+			result[0] = dense.template cast<Scalar>();
+			return result;
+		}
+
 	private:
+		template <typename Iterator, typename Fill>
+		BlockDiagonalMatrix& reblockAndFill(Iterator first, Iterator last, Fill fill)
+		{
+			BlockDiagonalMatrix replacement(first, last);
+			fill(replacement);
+			swap(replacement);
+			return *this;
+		}
+
 		Detail::PackedStorage<Scalar> m_Storage;
 	};
 

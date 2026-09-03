@@ -3,6 +3,8 @@
 #include "HoppyTestSupport.hpp"
 
 #include <SecUtility/Hoppy/BlockPolicy.hpp>
+#include <SecUtility/Hoppy/BlockDiagonalMatrix.hpp>
+#include <SecUtility/Hoppy/BlockVector.hpp>
 #include <SecUtility/Hoppy/Detail/CheckedDimensions.hpp>
 #include <SecUtility/Hoppy/Detail/Traits.hpp>
 
@@ -28,6 +30,14 @@ namespace
 	        Iterator,
 	        std::void_t<decltype(Hoppy::Detail::BuildCheckedDimensions(
 	                std::declval<Iterator>(), std::declval<Iterator>()))>> : std::true_type
+	{};
+
+	template <typename T, typename = void>
+	struct has_two_argument_resize : std::false_type
+	{};
+
+	template <typename T>
+	struct has_two_argument_resize<T, std::void_t<decltype(std::declval<T&>().resize(1, 2))>> : std::true_type
 	{};
 
 	class CountingForwardIterator
@@ -108,6 +118,8 @@ namespace
 	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::Row>>::ColsAtCompileTime
 	              == Eigen::Dynamic);
 	static_assert(!std::is_same_v<Hoppy::Column, Hoppy::Row>);
+	static_assert(!has_two_argument_resize<Hoppy::BlockDiagonalMatrix<double>>::value);
+	static_assert(!has_two_argument_resize<Hoppy::BlockVector<double>>::value);
 }
 
 TEST_CASE("DenseBlockPolicy reports dense square storage and maps")
@@ -202,5 +214,98 @@ TEST_CASE("checked dimensions reject invalid values and every independent overfl
 	const Eigen::Index largeValidBlock = largestSquareRoot;
 	expectRejected(std::vector<Eigen::Index>{largeValidBlock, largeValidBlock, largeValidBlock});
 	expectRejected(std::vector<Eigen::Index>{largeValidBlock, 1});
+}
+#endif
+
+TEST_CASE("owning factories and fills preserve exact specialization and blocking")
+{
+	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
+	using RowVector = Hoppy::BlockVector<double, Hoppy::Row>;
+	const std::vector<Eigen::Index> dimensions{1, 2, 3};
+
+	const auto zero = Matrix::Zero(dimensions);
+	const auto ones = Matrix::Ones({1, 2, 3});
+	const auto constant = Matrix::Constant(dimensions.begin(), dimensions.end(), 4.0);
+	const auto identity = Matrix::Identity(dimensions);
+	static_assert(std::is_same_v<std::remove_const_t<decltype(zero)>, Matrix>);
+	REQUIRE(zero.data()[0] == 0.0);
+	REQUIRE(ones[2].isOnes());
+	REQUIRE(constant[1].isConstant(4.0));
+	REQUIRE(identity[2].isIdentity());
+
+	Matrix matrix{3};
+	matrix.setZero(dimensions).setOnes();
+	REQUIRE(matrix.blockingInfo() == dimensions);
+	REQUIRE(matrix[0].isOnes());
+	matrix.setIdentity({2, 1});
+	REQUIRE(matrix.blockingInfo() == std::vector<Eigen::Index>{2, 1});
+	REQUIRE(matrix[0].isIdentity());
+
+	const auto row = RowVector::Constant({1, 2, 3}, 7.0);
+	static_assert(std::is_same_v<std::remove_const_t<decltype(row)>, RowVector>);
+	REQUIRE(row.blockingInfo() == dimensions);
+	REQUIRE(row.asDense().isConstant(7.0));
+}
+
+TEST_CASE("FromDense and FromDenseLike extract exact blocks and vector orientation")
+{
+	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
+	using ColumnVector = Hoppy::BlockVector<double, Hoppy::Column>;
+	using RowVector = Hoppy::BlockVector<double, Hoppy::Row>;
+	Eigen::MatrixXd dense = Eigen::MatrixXd::Zero(3, 3);
+	dense.diagonal() << 1.0, 2.0, 3.0;
+	dense(1, 2) = 4.0;
+	dense(2, 1) = 5.0;
+	const auto matrix = Matrix::FromDense(dense, {1, 2});
+	REQUIRE(matrix[0](0, 0) == 1.0);
+	REQUIRE(matrix[1].isApprox(dense.bottomRightCorner(2, 2)));
+	const auto like = Matrix::FromDenseLike(dense, matrix);
+	REQUIRE(like[1].isApprox(matrix[1]));
+
+	Eigen::RowVectorXd rowDense(3);
+	rowDense << 6.0, 7.0, 8.0;
+	const auto column = ColumnVector::FromDense(rowDense, {1, 2});
+	const auto row = RowVector::FromDenseLike(column.asDense(), matrix);
+	REQUIRE(column.asDense().isApprox(rowDense.transpose()));
+	REQUIRE(row.asDense().isApprox(rowDense));
+}
+
+TEST_CASE("FromBlocks and SingleBlock infer blocking and convert scalar values")
+{
+	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
+	std::vector<Eigen::MatrixXf> blocks;
+	blocks.emplace_back(Eigen::MatrixXf::Constant(1, 1, 2.0F));
+	blocks.emplace_back(Eigen::MatrixXf::Constant(2, 2, 3.0F));
+	const auto matrix = Matrix::FromBlocks(blocks.begin(), blocks.end());
+	REQUIRE(matrix.blockingInfo() == std::vector<Eigen::Index>{1, 2});
+	REQUIRE(matrix[1].isConstant(3.0));
+
+	Eigen::MatrixXd source = Eigen::MatrixXd::Identity(2, 2);
+	const auto single = Matrix::SingleBlock(source + source);
+	REQUIRE(single.blockingInfo() == std::vector<Eigen::Index>{2});
+	REQUIRE(single[0].isApprox(2.0 * source));
+
+	std::vector<Eigen::VectorXf> vectors;
+	vectors.emplace_back(Eigen::VectorXf::Constant(1, 4.0F));
+	vectors.emplace_back(Eigen::VectorXf::Constant(2, 5.0F));
+	const auto vector = Hoppy::BlockVector<double>::FromBlocks(vectors.begin(), vectors.end());
+	REQUIRE(vector.blockingInfo() == std::vector<Eigen::Index>{1, 2});
+	REQUIRE(vector.asDense().isApprox((Eigen::Vector3d() << 4.0, 5.0, 5.0).finished()));
+}
+
+#ifndef EIGEN_NO_DEBUG
+TEST_CASE("reblocking and extraction failures leave the old object untouched")
+{
+	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};
+	matrix.setConstant(9.0);
+	REQUIRE_THROWS_AS(matrix.resize({1, 0}), Hoppy::Test::EigenAssertionFailure);
+	REQUIRE(matrix.blockingInfo() == std::vector<Eigen::Index>{1, 2});
+	REQUIRE(matrix[1].isConstant(9.0));
+
+	Eigen::MatrixXd wrong = Eigen::MatrixXd::Zero(2, 3);
+	REQUIRE_THROWS_AS((Hoppy::BlockDiagonalMatrix<double>::FromDense(wrong, {2})),
+	                  Hoppy::Test::EigenAssertionFailure);
+	REQUIRE_THROWS_AS((Hoppy::BlockVector<double>::SingleBlock(wrong)),
+	                  Hoppy::Test::EigenAssertionFailure);
 }
 #endif
