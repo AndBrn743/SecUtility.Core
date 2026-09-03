@@ -7,10 +7,13 @@
 
 #include <Eigen/Core>
 
+#include <algorithm>
 #include <cstdint>
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <cmath>
+#include <ostream>
 
 namespace Hoppy
 {
@@ -78,5 +81,66 @@ namespace Hoppy
 		ConstIterator end() const { return cend(); }
 		ConstIterator cbegin() const { return ConstIterator(derived(), 0); }
 		ConstIterator cend() const { return ConstIterator(derived(), blockCount()); }
+
+		Derived& setConstant(const Scalar& value)
+		{
+			for (Eigen::Index i = 0; i < blockCount(); ++i)
+				derived()[i].setConstant(value);
+			return derived();
+		}
+		Derived& setZero() { return setConstant(Scalar{}); }
+		Derived& setOnes() { return setConstant(Scalar{1}); }
+		Derived& setRandom() { for (Eigen::Index i = 0; i < blockCount(); ++i) derived()[i].setRandom(); return derived(); }
+
+		Scalar sum() const { Scalar result{}; for (Eigen::Index i = 0; i < blockCount(); ++i) result += derived()[i].sum(); return result; }
+		using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+		RealScalar squaredNorm() const { RealScalar result{}; for (Eigen::Index i = 0; i < blockCount(); ++i) result += derived()[i].squaredNorm(); return result; }
+		RealScalar norm() const { using std::sqrt; return sqrt(squaredNorm()); }
+		RealScalar rootMeanSquare() const { if (size() == 0) return RealScalar{}; using std::sqrt; return sqrt(squaredNorm() / static_cast<RealScalar>(size())); }
+		Scalar mean() const { if (size() == 0) { eigen_assert(false && "mean requires a nonempty expression"); return Scalar{}; } return sum() / static_cast<Scalar>(size()); }
+		RealScalar maxAbsCoeff() const
+		{
+			if (storedSize() == 0) { eigen_assert(false && "maxAbsCoeff requires a nonempty expression"); return RealScalar{}; }
+			RealScalar result = derived()[0].cwiseAbs().maxCoeff();
+			for (Eigen::Index i = 1; i < blockCount(); ++i) result = (std::max)(result, derived()[i].cwiseAbs().maxCoeff());
+			return result;
+		}
+		template <typename S = Scalar, typename = std::enable_if_t<!Eigen::NumTraits<S>::IsComplex>>
+		Scalar maxCoeff() const
+		{
+			if (storedSize() == 0) { eigen_assert(false && "maxCoeff requires a nonempty expression"); return Scalar{}; }
+			Scalar result = derived()[0].maxCoeff();
+			for (Eigen::Index i = 1; i < blockCount(); ++i) result = (std::max)(result, derived()[i].maxCoeff());
+			return result;
+		}
+		template <typename S = Scalar, typename = std::enable_if_t<!Eigen::NumTraits<S>::IsComplex>>
+		Scalar minCoeff() const
+		{
+			if (storedSize() == 0) { eigen_assert(false && "minCoeff requires a nonempty expression"); return Scalar{}; }
+			Scalar result = derived()[0].minCoeff();
+			for (Eigen::Index i = 1; i < blockCount(); ++i) result = (std::min)(result, derived()[i].minCoeff());
+			return result;
+		}
+		bool allFinite() const { for (Eigen::Index i = 0; i < blockCount(); ++i) if (!derived()[i].allFinite()) return false; return true; }
+		bool hasNaN() const { for (Eigen::Index i = 0; i < blockCount(); ++i) if (derived()[i].hasNaN()) return true; return false; }
+		template <typename Other>
+		bool isApprox(const Other& other, const RealScalar& precision = Eigen::NumTraits<Scalar>::dummy_precision()) const
+		{
+			if (!hasSameBlockingAs(other)) { eigen_assert(false && "isApprox requires equal blocking"); return false; }
+			for (Eigen::Index i = 0; i < blockCount(); ++i) if (!derived()[i].isApprox(other[i], precision)) return false;
+			return true;
+		}
 	};
+
+	template <typename Derived>
+	std::ostream& operator<<(std::ostream& stream, const BlockExpressionBase<Derived>& expression)
+	{
+		for (Eigen::Index index = 0; index < expression.blockCount(); ++index)
+		{
+			if (index != 0)
+				stream << '\n' << '\n';
+			stream << expression.derived()[index];
+		}
+		return stream;
+	}
 }  // namespace Hoppy

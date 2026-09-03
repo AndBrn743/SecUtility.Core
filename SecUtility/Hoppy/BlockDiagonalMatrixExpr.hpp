@@ -6,6 +6,7 @@
 #include <SecUtility/Hoppy/ForwardDeclarations.hpp>
 
 #include <Eigen/Core>
+#include <Eigen/LU>
 
 namespace Hoppy
 {
@@ -16,6 +17,30 @@ namespace Hoppy
 		using Base = BlockExpressionBase<Derived>;
 		using Scalar = typename Base::Scalar;
 		using Base::derived;
+
+		auto operator+() const&;
+		auto operator-() const&;
+		auto transpose() const&;
+		auto conjugate() const&;
+		auto adjoint() const&;
+		auto real() const&;
+		auto imag() const&;
+		template <typename NewScalar> auto cast() const&;
+		template <typename NewScalar> auto cast() const&& = delete;
+		auto operator+() const&& = delete;
+		auto operator-() const&& = delete;
+		auto transpose() const&& = delete;
+		auto conjugate() const&& = delete;
+		auto adjoint() const&& = delete;
+		auto real() const&& = delete;
+		auto imag() const&& = delete;
+
+		Scalar trace() const { Scalar result{}; for (Eigen::Index i = 0; i < this->blockCount(); ++i) result += derived()[i].trace(); return result; }
+		Scalar determinant() const { Scalar result{1}; for (Eigen::Index i = 0; i < this->blockCount(); ++i) result *= derived()[i].determinant(); return result; }
+		template <typename S = Scalar, typename = std::enable_if_t<!Eigen::NumTraits<S>::IsComplex>>
+		Scalar maxCoeff() const { Scalar result = Base::template maxCoeff<S>(); return this->blockCount() > 1 ? (std::max)(result, Scalar{}) : result; }
+		template <typename S = Scalar, typename = std::enable_if_t<!Eigen::NumTraits<S>::IsComplex>>
+		Scalar minCoeff() const { Scalar result = Base::template minCoeff<S>(); return this->blockCount() > 1 ? (std::min)(result, Scalar{}) : result; }
 
 		BlockDiagonalMatrix<Scalar> eval() const { return BlockDiagonalMatrix<Scalar>(derived()); }
 

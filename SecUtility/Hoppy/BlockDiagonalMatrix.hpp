@@ -380,3 +380,5 @@ namespace Hoppy
 		lhs.swap(rhs);
 	}
 }  // namespace Hoppy
+
+#include <SecUtility/Hoppy/Detail/BlockExpressions.hpp>

@@ -17,10 +17,30 @@ namespace Hoppy
 	public:
 		using Base = BlockExpressionBase<Derived>;
 		using Scalar = typename Base::Scalar;
+		using RealScalar = typename Base::RealScalar;
 		using Orientation = typename Eigen::internal::traits<Derived>::Orientation;
 		using DensePlain = std::conditional_t<std::is_same_v<Orientation, Row>,
 		                                      Eigen::Matrix<Scalar, 1, Eigen::Dynamic>, Eigen::VectorX<Scalar>>;
 		using Base::derived;
+
+		auto operator+() const&;
+		auto operator-() const&;
+		auto transpose() const&;
+		auto conjugate() const&;
+		auto adjoint() const&;
+		auto real() const&;
+		auto imag() const&;
+		template <typename NewScalar> auto cast() const&;
+		template <typename NewScalar> auto cast() const&& = delete;
+		auto operator+() const&& = delete;
+		auto operator-() const&& = delete;
+		auto transpose() const&& = delete;
+		auto conjugate() const&& = delete;
+		auto adjoint() const&& = delete;
+		auto real() const&& = delete;
+		auto imag() const&& = delete;
+
+		RealScalar absSum() const { RealScalar result{}; for (Eigen::Index i = 0; i < this->blockCount(); ++i) result += derived()[i].cwiseAbs().sum(); return result; }
 
 		BlockVector<Scalar, Orientation> eval() const { return BlockVector<Scalar, Orientation>(derived()); }
 

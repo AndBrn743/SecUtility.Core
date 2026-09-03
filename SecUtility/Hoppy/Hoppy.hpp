@@ -9,3 +9,4 @@
 #include <SecUtility/Hoppy/BlockVectorExpr.hpp>
 #include <SecUtility/Hoppy/BlockDiagonalMatrix.hpp>
 #include <SecUtility/Hoppy/BlockVector.hpp>
+#include <SecUtility/Hoppy/Detail/BlockExpressions.hpp>
