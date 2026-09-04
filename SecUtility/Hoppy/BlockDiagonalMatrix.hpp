@@ -431,6 +431,7 @@ namespace Hoppy
 
 #include <SecUtility/Hoppy/Detail/BlockExpressions.hpp>
 #include <SecUtility/Hoppy/Detail/DiagonalViews.hpp>
+#include <SecUtility/Hoppy/Detail/DenseInterop.hpp>
 
 namespace Hoppy
 {
