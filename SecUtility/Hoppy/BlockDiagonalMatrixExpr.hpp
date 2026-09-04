@@ -57,7 +57,11 @@ namespace Hoppy
 		auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&;
 		template <typename OtherDerived> auto operator+(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
 		template <typename OtherDerived> auto operator-(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
-		template <typename TOtherScalar> auto operator*(const TOtherScalar& scalar) const&& = delete;
+		template <typename TOtherScalar,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, TOtherScalar,
+		                  Eigen::internal::scalar_product_op<Scalar, TOtherScalar>>::ReturnType>
+		auto operator*(const TOtherScalar& scalar) const&& = delete;
 		template <typename TOtherScalar> auto operator/(const TOtherScalar& scalar) const&& = delete;
 		template <typename OtherDerived> auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
 		auto diagonal() const&;

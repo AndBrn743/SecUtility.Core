@@ -70,6 +70,109 @@ namespace Hoppy
 	{
 		return Detail::BlockwiseProduct<Derived, OtherDerived>(derived(), other.derived());
 	}
+	template <typename MatrixDerived, typename VectorDerived,
+	          typename = std::enable_if_t<std::is_same_v<
+	                  typename Eigen::internal::traits<VectorDerived>::Orientation, Column>>,
+	          typename = typename Eigen::ScalarBinaryOpTraits<
+	                  typename Eigen::internal::traits<MatrixDerived>::Scalar,
+	                  typename Eigen::internal::traits<VectorDerived>::Scalar,
+	                  Eigen::internal::scalar_product_op<
+	                          typename Eigen::internal::traits<MatrixDerived>::Scalar,
+	                          typename Eigen::internal::traits<VectorDerived>::Scalar>>::ReturnType>
+	auto operator*(const BlockDiagonalMatrixExpr<MatrixDerived>& matrix,
+	               const BlockVectorExpr<VectorDerived>& vector)
+	{
+		using ResultScalar = typename Eigen::ScalarBinaryOpTraits<
+		        typename Eigen::internal::traits<MatrixDerived>::Scalar,
+		        typename Eigen::internal::traits<VectorDerived>::Scalar,
+		        Eigen::internal::scalar_product_op<
+		                typename Eigen::internal::traits<MatrixDerived>::Scalar,
+		                typename Eigen::internal::traits<VectorDerived>::Scalar>>::ReturnType;
+		eigen_assert(matrix.hasSameBlockingAs(vector));
+		BlockVector<ResultScalar, Column> result(matrix.blockingInfo());
+		for (Eigen::Index index = 0; index < matrix.blockCount(); ++index)
+			result[index].noalias() = matrix.derived()[index] * vector.derived()[index];
+		return result;
+	}
+	template <typename MatrixDerived, typename DenseDerived,
+	          typename = std::enable_if_t<DenseDerived::ColsAtCompileTime == 1>,
+	          typename = typename Eigen::ScalarBinaryOpTraits<
+	                  typename Eigen::internal::traits<MatrixDerived>::Scalar,
+	                  typename DenseDerived::Scalar,
+	                  Eigen::internal::scalar_product_op<
+	                          typename Eigen::internal::traits<MatrixDerived>::Scalar,
+	                          typename DenseDerived::Scalar>>::ReturnType>
+	auto operator*(const BlockDiagonalMatrixExpr<MatrixDerived>& matrix,
+	               const Eigen::MatrixBase<DenseDerived>& vector)
+	{
+		using ResultScalar = typename Eigen::ScalarBinaryOpTraits<
+		        typename Eigen::internal::traits<MatrixDerived>::Scalar, typename DenseDerived::Scalar,
+		        Eigen::internal::scalar_product_op<
+		                typename Eigen::internal::traits<MatrixDerived>::Scalar,
+		                typename DenseDerived::Scalar>>::ReturnType;
+		eigen_assert(vector.size() == matrix.totalDimension());
+		BlockVector<ResultScalar, Column> result(matrix.blockingInfo());
+		for (Eigen::Index index = 0; index < matrix.blockCount(); ++index)
+		{
+			const auto offset = matrix.blockOffset(index);
+			const auto dimension = matrix.dimensionOfBlock(index);
+			result[index].noalias() = matrix.derived()[index] * vector.derived().middleRows(offset, dimension);
+		}
+		return result;
+	}
+
+	template <typename VectorDerived, typename MatrixDerived,
+	          typename = std::enable_if_t<std::is_same_v<
+	                  typename Eigen::internal::traits<VectorDerived>::Orientation, Row>>,
+	          typename = typename Eigen::ScalarBinaryOpTraits<
+	                  typename Eigen::internal::traits<VectorDerived>::Scalar,
+	                  typename Eigen::internal::traits<MatrixDerived>::Scalar,
+	                  Eigen::internal::scalar_product_op<
+		                  typename Eigen::internal::traits<VectorDerived>::Scalar,
+		                  typename Eigen::internal::traits<MatrixDerived>::Scalar>>::ReturnType>
+	auto operator*(const BlockVectorExpr<VectorDerived>& vector,
+	               const BlockDiagonalMatrixExpr<MatrixDerived>& matrix)
+	{
+		using ResultScalar = typename Eigen::ScalarBinaryOpTraits<
+		        typename Eigen::internal::traits<VectorDerived>::Scalar,
+		        typename Eigen::internal::traits<MatrixDerived>::Scalar,
+		        Eigen::internal::scalar_product_op<
+		                typename Eigen::internal::traits<VectorDerived>::Scalar,
+		                typename Eigen::internal::traits<MatrixDerived>::Scalar>>::ReturnType;
+		eigen_assert(vector.hasSameBlockingAs(matrix));
+		BlockVector<ResultScalar, Row> result(matrix.blockingInfo());
+		for (Eigen::Index index = 0; index < matrix.blockCount(); ++index)
+			result[index].noalias() = vector.derived()[index] * matrix.derived()[index];
+		return result;
+	}
+
+	template <typename DenseDerived, typename MatrixDerived,
+	          typename = std::enable_if_t<DenseDerived::RowsAtCompileTime == 1>,
+	          typename = typename Eigen::ScalarBinaryOpTraits<
+	                  typename DenseDerived::Scalar,
+	                  typename Eigen::internal::traits<MatrixDerived>::Scalar,
+	                  Eigen::internal::scalar_product_op<
+		                  typename DenseDerived::Scalar,
+		                  typename Eigen::internal::traits<MatrixDerived>::Scalar>>::ReturnType>
+	auto operator*(const Eigen::MatrixBase<DenseDerived>& vector,
+	               const BlockDiagonalMatrixExpr<MatrixDerived>& matrix)
+	{
+		using ResultScalar = typename Eigen::ScalarBinaryOpTraits<
+		        typename DenseDerived::Scalar,
+		        typename Eigen::internal::traits<MatrixDerived>::Scalar,
+		        Eigen::internal::scalar_product_op<
+		                typename DenseDerived::Scalar,
+		                typename Eigen::internal::traits<MatrixDerived>::Scalar>>::ReturnType;
+		eigen_assert(vector.size() == matrix.totalDimension());
+		BlockVector<ResultScalar, Row> result(matrix.blockingInfo());
+		for (Eigen::Index index = 0; index < matrix.blockCount(); ++index)
+		{
+			const auto offset = matrix.blockOffset(index);
+			const auto dimension = matrix.dimensionOfBlock(index);
+			result[index].noalias() = vector.derived().middleCols(offset, dimension) * matrix.derived()[index];
+		}
+		return result;
+	}
 
 	template <typename Derived>
 	template <typename OtherDerived, typename, typename>
