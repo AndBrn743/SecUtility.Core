@@ -145,6 +145,39 @@ namespace Hoppy
 			return *this;
 		}
 
+		template <typename RhsDerived,
+		          typename = std::enable_if_t<
+		                  std::is_same_v<typename Eigen::internal::traits<RhsDerived>::Orientation, Column>
+		                  && std::is_same_v<typename Eigen::internal::traits<RhsDerived>::Scalar, Scalar>
+		                  && std::is_floating_point_v<typename Eigen::NumTraits<Scalar>::Real>>>
+		BlockVector<Scalar, Column> solve(const BlockVectorExpr<RhsDerived>& rhs) const
+		{
+			eigen_assert(this->hasSameBlockingAs(rhs));
+			BlockVector<Scalar, Column> result(this->blockingInfo());
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+				result[index] = (*this)[index].partialPivLu().solve(rhs.derived()[index]);
+			return result;
+		}
+
+		template <typename RhsDerived,
+		          typename = std::enable_if_t<RhsDerived::ColsAtCompileTime != 1
+		                                      && std::is_same_v<typename RhsDerived::Scalar, Scalar>
+		                                      && std::is_floating_point_v<
+		                                              typename Eigen::NumTraits<Scalar>::Real>>>
+		Eigen::MatrixX<Scalar> solve(const Eigen::MatrixBase<RhsDerived>& rhs) const
+		{
+			eigen_assert(rhs.rows() == totalDimension());
+			Eigen::MatrixX<Scalar> result(totalDimension(), rhs.cols());
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+			{
+				const auto offset = blockOffset(index);
+				const auto dimension = dimensionOfBlock(index);
+				result.middleRows(offset, dimension) = (*this)[index].partialPivLu().solve(
+				        rhs.derived().middleRows(offset, dimension));
+			}
+			return result;
+		}
+
 		void resize(const std::vector<Eigen::Index>& dimensions) { resize(dimensions.begin(), dimensions.end()); }
 		void resize(const std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
 

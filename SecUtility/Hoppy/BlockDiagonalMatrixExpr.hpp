@@ -64,6 +64,14 @@ namespace Hoppy
 		auto operator*(const TOtherScalar& scalar) const&& = delete;
 		template <typename TOtherScalar> auto operator/(const TOtherScalar& scalar) const&& = delete;
 		template <typename OtherDerived> auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
+		template <typename S = Scalar,
+		          typename = std::enable_if_t<
+		                  std::is_floating_point_v<typename Eigen::NumTraits<S>::Real>>>
+		auto inverse() const&;
+		template <typename S = Scalar,
+		          typename = std::enable_if_t<
+		                  std::is_floating_point_v<typename Eigen::NumTraits<S>::Real>>>
+		auto inverse() const&& = delete;
 		auto diagonal() const&;
 		auto operator+() const&& = delete;
 		auto operator-() const&& = delete;

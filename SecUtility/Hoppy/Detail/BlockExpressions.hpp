@@ -21,6 +21,7 @@ namespace Hoppy::Detail
 	struct AdjointOp { template <typename T> auto operator()(const T& value) const { return value.adjoint(); } };
 	struct RealOp { template <typename T> auto operator()(const T& value) const { return value.real(); } };
 	struct ImagOp { template <typename T> auto operator()(const T& value) const { return value.imag(); } };
+	struct InverseOp { template <typename T> auto operator()(const T& value) const { return value.inverse(); } };
 	template <typename TScalar>
 	struct CastOp { template <typename T> auto operator()(const T& value) const { return value.template cast<TScalar>(); } };
 
@@ -270,6 +271,7 @@ namespace Hoppy
 	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::adjoint() const& { return Detail::UnaryBlockExpression<Derived, Detail::AdjointOp, Column>(derived()); }
 	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::real() const& { return Detail::UnaryBlockExpression<Derived, Detail::RealOp, Column>(derived()); }
 	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::imag() const& { return Detail::UnaryBlockExpression<Derived, Detail::ImagOp, Column>(derived()); }
+	template <typename Derived> template <typename S, typename> auto BlockDiagonalMatrixExpr<Derived>::inverse() const& { return Detail::UnaryBlockExpression<Derived, Detail::InverseOp, Column>(derived()); }
 	template <typename Derived> template <typename NewScalar> auto BlockDiagonalMatrixExpr<Derived>::cast() const& { return Detail::UnaryBlockExpression<Derived, Detail::CastOp<NewScalar>, Column>(derived()); }
 
 	template <typename Derived> auto BlockVectorExpr<Derived>::operator+() const& { return Detail::UnaryBlockExpression<Derived, Detail::PositiveOp, Orientation>(derived()); }
@@ -312,6 +314,15 @@ namespace Hoppy::Detail
 		auto conjugate() const { return UnaryBlockExpression<UnaryBlockExpression, ConjugateOp, TOrientation>(*this); }
 		auto real() const { return UnaryBlockExpression<UnaryBlockExpression, RealOp, TOrientation>(*this); }
 		auto imag() const { return UnaryBlockExpression<UnaryBlockExpression, ImagOp, TOrientation>(*this); }
+		template <typename S = Scalar,
+		          typename Kind = typename Eigen::internal::traits<Source>::StorageKind,
+		          typename = std::enable_if_t<std::is_same_v<Kind, BlockDiagonalStorage>
+		                                      && std::is_floating_point_v<
+		                                              typename Eigen::NumTraits<S>::Real>>>
+		auto inverse() const
+		{
+			return UnaryBlockExpression<UnaryBlockExpression, InverseOp, TOrientation>(*this);
+		}
 		template <typename NewScalar>
 		auto cast() const { return UnaryBlockExpression<UnaryBlockExpression, CastOp<NewScalar>, TOrientation>(*this); }
 		template <typename OtherDerived, typename Kind = typename Eigen::internal::traits<Source>::StorageKind,
@@ -485,6 +496,15 @@ namespace Hoppy::Detail
 		auto conjugate() const { return UnaryBlockExpression<BinaryBlockExpression, ConjugateOp, TOrientation>(*this); }
 		auto real() const { return UnaryBlockExpression<BinaryBlockExpression, RealOp, TOrientation>(*this); }
 		auto imag() const { return UnaryBlockExpression<BinaryBlockExpression, ImagOp, TOrientation>(*this); }
+		template <typename S = Scalar,
+		          typename Kind = typename Eigen::internal::traits<Lhs>::StorageKind,
+		          typename = std::enable_if_t<std::is_same_v<Kind, BlockDiagonalStorage>
+		                                      && std::is_floating_point_v<
+		                                              typename Eigen::NumTraits<S>::Real>>>
+		auto inverse() const
+		{
+			return UnaryBlockExpression<BinaryBlockExpression, InverseOp, TOrientation>(*this);
+		}
 		template <typename NewScalar>
 		auto cast() const { return UnaryBlockExpression<BinaryBlockExpression, CastOp<NewScalar>, TOrientation>(*this); }
 		auto transpose() const
