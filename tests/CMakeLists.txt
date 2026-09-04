@@ -183,6 +183,14 @@ target_compile_options(HoppySolveTest PRIVATE
 add_secutility_test(HoppySolveNoDebugTest HoppySolveTest.cpp)
 target_compile_definitions(HoppySolveNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 
+add_secutility_test(HoppyCongruenceTest HoppyCongruenceTest.cpp)
+target_compile_options(HoppyCongruenceTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_secutility_test(HoppyCongruenceNoDebugTest HoppyCongruenceTest.cpp)
+target_compile_definitions(HoppyCongruenceNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)

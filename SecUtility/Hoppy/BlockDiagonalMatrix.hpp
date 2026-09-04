@@ -178,6 +178,54 @@ namespace Hoppy
 			return result;
 		}
 
+		template <typename TransformDerived,
+		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
+		          typename IntermediateScalar = typename Eigen::ScalarBinaryOpTraits<
+		                  TransformScalar, Scalar,
+		                  Eigen::internal::scalar_product_op<TransformScalar, Scalar>>::ReturnType,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  IntermediateScalar, TransformScalar,
+		                  Eigen::internal::scalar_product_op<IntermediateScalar,
+		                                                     TransformScalar>>::ReturnType>
+		BlockDiagonalMatrix& transformBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) &
+		{
+			eigen_assert(this->hasSameBlockingAs(transform));
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+			{
+				const Eigen::MatrixX<Scalar> temporary =
+				        transform.derived()[index] * (*this)[index]
+				        * transform.derived()[index].adjoint();
+				(*this)[index] = temporary;
+			}
+			return *this;
+		}
+		template <typename TransformDerived>
+		BlockDiagonalMatrix& transformBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) && = delete;
+
+		template <typename TransformDerived,
+		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
+		          typename IntermediateScalar = typename Eigen::ScalarBinaryOpTraits<
+		                  TransformScalar, Scalar,
+		                  Eigen::internal::scalar_product_op<TransformScalar, Scalar>>::ReturnType,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  IntermediateScalar, TransformScalar,
+		                  Eigen::internal::scalar_product_op<IntermediateScalar,
+		                                                     TransformScalar>>::ReturnType>
+		BlockDiagonalMatrix& backTransformBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) &
+		{
+			eigen_assert(this->hasSameBlockingAs(transform));
+			for (Eigen::Index index = 0; index < blockCount(); ++index)
+			{
+				const Eigen::MatrixX<Scalar> temporary =
+				        transform.derived()[index].adjoint() * (*this)[index]
+				        * transform.derived()[index];
+				(*this)[index] = temporary;
+			}
+			return *this;
+		}
+		template <typename TransformDerived>
+		BlockDiagonalMatrix& backTransformBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) && = delete;
+
 		void resize(const std::vector<Eigen::Index>& dimensions) { resize(dimensions.begin(), dimensions.end()); }
 		void resize(const std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
 

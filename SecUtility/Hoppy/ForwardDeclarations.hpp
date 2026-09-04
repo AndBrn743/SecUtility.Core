@@ -34,6 +34,8 @@ namespace Hoppy
 
 	namespace Detail
 	{
+		template <typename Matrix, typename Transform, bool Back>
+		class CongruenceExpression;
 		template <typename Source, bool Writable>
 		class DiagonalReturnType;
 		struct BlockDiagonalStorage;

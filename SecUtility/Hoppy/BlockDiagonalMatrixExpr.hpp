@@ -72,6 +72,30 @@ namespace Hoppy
 		          typename = std::enable_if_t<
 		                  std::is_floating_point_v<typename Eigen::NumTraits<S>::Real>>>
 		auto inverse() const&& = delete;
+		template <typename TransformDerived,
+		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
+		          typename IntermediateScalar = typename Eigen::ScalarBinaryOpTraits<
+		                  TransformScalar, Scalar,
+		                  Eigen::internal::scalar_product_op<TransformScalar, Scalar>>::ReturnType,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  IntermediateScalar, TransformScalar,
+		                  Eigen::internal::scalar_product_op<IntermediateScalar,
+		                                                     TransformScalar>>::ReturnType>
+		auto transformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&;
+		template <typename TransformDerived,
+		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
+		          typename IntermediateScalar = typename Eigen::ScalarBinaryOpTraits<
+		                  TransformScalar, Scalar,
+		                  Eigen::internal::scalar_product_op<TransformScalar, Scalar>>::ReturnType,
+		          typename = typename Eigen::ScalarBinaryOpTraits<
+		                  IntermediateScalar, TransformScalar,
+		                  Eigen::internal::scalar_product_op<IntermediateScalar,
+		                                                     TransformScalar>>::ReturnType>
+		auto backTransformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&;
+		template <typename TransformDerived>
+		auto transformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&& = delete;
+		template <typename TransformDerived>
+		auto backTransformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&& = delete;
 		auto diagonal() const&;
 		auto operator+() const&& = delete;
 		auto operator-() const&& = delete;
