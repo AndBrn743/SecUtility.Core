@@ -64,6 +64,58 @@ namespace Hoppy
 		template <typename TOtherScalar> auto operator/(const TOtherScalar& scalar) const&& = delete;
 		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
 		auto asDiagonal() const&;
+		template <typename OtherDerived,
+		          typename OtherScalar = typename Eigen::internal::traits<OtherDerived>::Scalar,
+		          typename Operation = Eigen::internal::scalar_conj_product_op<Scalar, OtherScalar>,
+		          typename ResultScalar = typename Eigen::ScalarBinaryOpTraits<
+		                  Scalar, OtherScalar, Operation>::ReturnType>
+		ResultScalar dot(const BlockVectorExpr<OtherDerived>& other) const
+		{
+			eigen_assert(this->totalDimension() == other.totalDimension());
+			ResultScalar result{};
+			Operation operation;
+			Eigen::Index lhsBlock = 0;
+			Eigen::Index rhsBlock = 0;
+			Eigen::Index lhsIndex = 0;
+			Eigen::Index rhsIndex = 0;
+			while (lhsBlock < this->blockCount())
+			{
+				const auto lhsRemaining = this->dimensionOfBlock(lhsBlock) - lhsIndex;
+				const auto rhsRemaining = other.dimensionOfBlock(rhsBlock) - rhsIndex;
+				const auto count = (std::min)(lhsRemaining, rhsRemaining);
+				for (Eigen::Index index = 0; index < count; ++index)
+					result += operation(derived()[lhsBlock].coeff(lhsIndex + index),
+					                    other.derived()[rhsBlock].coeff(rhsIndex + index));
+				lhsIndex += count;
+				rhsIndex += count;
+				if (lhsIndex == this->dimensionOfBlock(lhsBlock))
+				{
+					++lhsBlock;
+					lhsIndex = 0;
+				}
+				if (rhsIndex == other.dimensionOfBlock(rhsBlock))
+				{
+					++rhsBlock;
+					rhsIndex = 0;
+				}
+			}
+			return result;
+		}
+
+		template <typename S = Scalar,
+		          typename = std::enable_if_t<
+		                  std::is_floating_point_v<typename Eigen::NumTraits<S>::Real>>>
+		BlockVector<Scalar, Orientation> normalized() const
+		{
+			BlockVector<Scalar, Orientation> result(derived());
+			const RealScalar squaredNorm = result.squaredNorm();
+			if (squaredNorm > RealScalar{})
+			{
+				using std::sqrt;
+				result /= sqrt(squaredNorm);
+			}
+			return result;
+		}
 		auto operator+() const&& = delete;
 		auto operator-() const&& = delete;
 		auto transpose() const&& = delete;

@@ -146,6 +146,23 @@ namespace Hoppy
 			return *this;
 		}
 
+		template <typename S = Scalar,
+		          typename = std::enable_if_t<
+		                  std::is_floating_point_v<typename Eigen::NumTraits<S>::Real>>>
+		void normalize() &
+		{
+			const auto squaredNorm = this->squaredNorm();
+			if (squaredNorm > typename Eigen::NumTraits<Scalar>::Real{})
+			{
+				using std::sqrt;
+				*this /= sqrt(squaredNorm);
+			}
+		}
+		template <typename S = Scalar,
+		          typename = std::enable_if_t<
+		                  std::is_floating_point_v<typename Eigen::NumTraits<S>::Real>>>
+		void normalize() && = delete;
+
 		void resize(const std::vector<Eigen::Index>& dimensions) { resize(dimensions.begin(), dimensions.end()); }
 		void resize(const std::initializer_list<Eigen::Index> dimensions) { resize(dimensions.begin(), dimensions.end()); }
 		template <typename Iterator,

@@ -167,6 +167,14 @@ target_compile_options(HoppyDenseSumTest PRIVATE
 add_secutility_test(HoppyDenseSumNoDebugTest HoppyDenseSumTest.cpp)
 target_compile_definitions(HoppyDenseSumNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 
+add_secutility_test(HoppyVectorAlgebraTest HoppyVectorAlgebraTest.cpp)
+target_compile_options(HoppyVectorAlgebraTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_secutility_test(HoppyVectorAlgebraNoDebugTest HoppyVectorAlgebraTest.cpp)
+target_compile_definitions(HoppyVectorAlgebraNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)
