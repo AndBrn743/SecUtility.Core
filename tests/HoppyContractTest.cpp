@@ -106,18 +106,18 @@ namespace
 	              && IsDetected<product, const FixedRow&, const BD&>);
 	static_assert(IsDetected<plus, const Dense&, const BD&> && IsDetected<minus, const BD&, const Dense&>);
 	static_assert(IsDetected<diagonal, BD&> && IsDetected<diagonal, const BD&>);
-	static_assert(!IsDetected<diagonal, BD&&> && IsDetected<diagonal, BDExpression&&>);
+	static_assert(IsDetected<diagonal, BD&&> && IsDetected<diagonal, BDExpression&&>);
 	static_assert(IsDetected<as_diagonal, const BV&> && !IsDetected<as_diagonal, const BVR&>);
-	static_assert(!IsDetected<as_diagonal, BV&&> && IsDetected<as_diagonal, BVExpression&&>);
+	static_assert(IsDetected<as_diagonal, BV&&> && IsDetected<as_diagonal, BVExpression&&>);
 	static_assert(IsDetected<dot, const BV&, const BVR&> && IsDetected<normalized, const BV&>);
 	static_assert(IsDetected<normalize, BV&> && !IsDetected<normalize, BV&&>);
 	static_assert(!IsDetected<normalized, const BVi&> && !IsDetected<normalize, BVi&>);
 	static_assert(IsDetected<inverse, const BD&> && !IsDetected<inverse, const BDi&>);
-	static_assert(!IsDetected<inverse, BD&&> && IsDetected<inverse, BDExpression&&>);
+	static_assert(IsDetected<inverse, BD&&> && IsDetected<inverse, BDExpression&&>);
 	static_assert(IsDetected<solve, const BD&, const BV&> && !IsDetected<solve, const BD&, const BVR&>);
 	static_assert(IsDetected<solve, const BD&, const Dense&> && !IsDetected<solve, const BD&, const FixedColumn&>);
 	static_assert(IsDetected<transformed, const BD&, const BD&>);
-	static_assert(!IsDetected<transformed, BD&&, const BD&>
+	static_assert(IsDetected<transformed, BD&&, const BD&>
 	              && IsDetected<transformed, BDExpression&&, const BD&>);
 	static_assert(IsDetected<transform_in_place, BD&, const BD&>
 	              && !IsDetected<transform_in_place, BD&&, const BD&>);

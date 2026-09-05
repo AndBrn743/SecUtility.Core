@@ -99,8 +99,6 @@ namespace Hoppy
 
 		auto diagonal() &;
 		auto diagonal() const&;
-		auto diagonal() && = delete;
-		auto diagonal() const&& = delete;
 
 		template <typename Derived> BlockDiagonalMatrix& operator+=(const BlockDiagonalMatrixExpr<Derived>& other)
 		{

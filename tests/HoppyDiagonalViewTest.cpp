@@ -89,12 +89,12 @@ TEST_CASE("view participation separates owning rvalues, orientation, and express
 
 	static_assert(has_diagonal<Matrix&>::value);
 	static_assert(has_diagonal<const Matrix&>::value);
-	static_assert(!has_diagonal<Matrix&&>::value);
-	static_assert(!has_diagonal<const Matrix&&>::value);
+	static_assert(has_diagonal<Matrix&&>::value);
+	static_assert(has_diagonal<const Matrix&&>::value);
 	static_assert(has_diagonal<MatrixExpression&&>::value);
 	static_assert(has_as_diagonal<const ColumnVector&>::value);
-	static_assert(!has_as_diagonal<ColumnVector&&>::value);
-	static_assert(!has_as_diagonal<const ColumnVector&&>::value);
+	static_assert(has_as_diagonal<ColumnVector&&>::value);
+	static_assert(has_as_diagonal<const ColumnVector&&>::value);
 	static_assert(!has_as_diagonal<const RowVector&>::value);
 	static_assert(has_as_diagonal<VectorExpression&&>::value);
 	static_assert(has_as_diagonal<TwiceTransposed&&>::value);

@@ -27,7 +27,6 @@ namespace Hoppy
 		auto real() const&;
 		auto imag() const&;
 		template <typename NewScalar> auto cast() const&;
-		template <typename NewScalar> auto cast() const&& = delete;
 		template <typename OtherDerived,
 		          typename = typename Eigen::ScalarBinaryOpTraits<
 		                  Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar,
@@ -56,23 +55,10 @@ namespace Hoppy
 		                  Eigen::internal::scalar_product_op<
 		                          Scalar, typename Eigen::internal::traits<OtherDerived>::Scalar>>::ReturnType>
 		auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&;
-		template <typename OtherDerived> auto operator+(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
-		template <typename OtherDerived> auto operator-(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
-		template <typename TOtherScalar,
-		          typename = typename Eigen::ScalarBinaryOpTraits<
-		                  Scalar, TOtherScalar,
-		                  Eigen::internal::scalar_product_op<Scalar, TOtherScalar>>::ReturnType>
-		auto operator*(const TOtherScalar& scalar) const&& = delete;
-		template <typename TOtherScalar> auto operator/(const TOtherScalar& scalar) const&& = delete;
-		template <typename OtherDerived> auto operator*(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&& = delete;
 		template <typename S = Scalar,
 		          typename = std::enable_if_t<
 		                  std::is_floating_point_v<typename Eigen::NumTraits<S>::Real>>>
 		auto inverse() const&;
-		template <typename S = Scalar,
-		          typename = std::enable_if_t<
-		                  std::is_floating_point_v<typename Eigen::NumTraits<S>::Real>>>
-		auto inverse() const&& = delete;
 		template <typename TransformDerived,
 		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
 		          typename = typename Detail::congruence_result_scalar<Scalar,
@@ -83,18 +69,7 @@ namespace Hoppy
 		          typename = typename Detail::congruence_result_scalar<Scalar,
 		                                                               TransformScalar>::type>
 		auto backTransformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&;
-		template <typename TransformDerived>
-		auto transformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&& = delete;
-		template <typename TransformDerived>
-		auto backTransformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&& = delete;
 		auto diagonal() const&;
-		auto operator+() const&& = delete;
-		auto operator-() const&& = delete;
-		auto transpose() const&& = delete;
-		auto conjugate() const&& = delete;
-		auto adjoint() const&& = delete;
-		auto real() const&& = delete;
-		auto imag() const&& = delete;
 
 		Scalar trace() const { Scalar result{}; for (Eigen::Index i = 0; i < this->blockCount(); ++i) result += derived()[i].trace(); return result; }
 		Scalar determinant() const { Scalar result{1}; for (Eigen::Index i = 0; i < this->blockCount(); ++i) result *= derived()[i].determinant(); return result; }

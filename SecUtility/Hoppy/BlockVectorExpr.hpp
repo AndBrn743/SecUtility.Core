@@ -31,7 +31,6 @@ namespace Hoppy
 		auto real() const&;
 		auto imag() const&;
 		template <typename NewScalar> auto cast() const&;
-		template <typename NewScalar> auto cast() const&& = delete;
 		template <typename OtherDerived,
 		          typename = std::enable_if_t<std::is_same_v<Orientation,
 		                                                     typename Eigen::internal::traits<OtherDerived>::Orientation>>,
@@ -58,10 +57,6 @@ namespace Hoppy
 		                  Scalar, TOtherScalar,
 		                  Eigen::internal::scalar_quotient_op<Scalar, TOtherScalar>>::ReturnType>
 		auto operator/(const TOtherScalar& scalar) const&;
-		template <typename OtherDerived> auto operator+(const BlockVectorExpr<OtherDerived>& other) const&& = delete;
-		template <typename OtherDerived> auto operator-(const BlockVectorExpr<OtherDerived>& other) const&& = delete;
-		template <typename TOtherScalar> auto operator*(const TOtherScalar& scalar) const&& = delete;
-		template <typename TOtherScalar> auto operator/(const TOtherScalar& scalar) const&& = delete;
 		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
 		auto asDiagonal() const&;
 		template <typename OtherDerived,
@@ -116,13 +111,6 @@ namespace Hoppy
 			}
 			return result;
 		}
-		auto operator+() const&& = delete;
-		auto operator-() const&& = delete;
-		auto transpose() const&& = delete;
-		auto conjugate() const&& = delete;
-		auto adjoint() const&& = delete;
-		auto real() const&& = delete;
-		auto imag() const&& = delete;
 
 		RealScalar absSum() const { RealScalar result{}; for (Eigen::Index i = 0; i < this->blockCount(); ++i) result += derived()[i].cwiseAbs().sum(); return result; }
 

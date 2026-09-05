@@ -43,9 +43,23 @@ namespace
 		for (Eigen::Index index = 0; index < value.storedSize(); ++index)
 			value.data()[index] = static_cast<typename T::Scalar>(index + 1) + offset;
 	}
+
+	Hoppy::BlockDiagonalMatrix<double> makeMatrix()
+	{
+		Hoppy::BlockDiagonalMatrix<double> result{1, 2};
+		fill(result);
+		return result;
+	}
+
+	Hoppy::BlockVector<double> makeVector()
+	{
+		Hoppy::BlockVector<double> result{1, 2};
+		fill(result);
+		return result;
+	}
 }
 
-TEST_CASE("owning rvalues are rejected while expression rvalues remain chainable")
+TEST_CASE("lazy operators accept owning and expression rvalues")
 {
 	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
 	using Vector = Hoppy::BlockVector<double>;
@@ -54,12 +68,12 @@ TEST_CASE("owning rvalues are rejected while expression rvalues remain chainable
 	using VectorUnary = decltype(std::declval<const Vector&>().transpose());
 	using VectorBinary = decltype(std::declval<const Vector&>() + std::declval<const Vector&>());
 
-	static_assert(!has_rvalue_transpose<Matrix>::value);
-	static_assert(!has_rvalue_transpose<Vector>::value);
-	static_assert(!has_rvalue_divide<Matrix>::value);
-	static_assert(!has_rvalue_divide<Vector>::value);
-	static_assert(!has_rvalue_cast<Matrix>::value);
-	static_assert(!has_rvalue_cast<Vector>::value);
+	static_assert(has_rvalue_transpose<Matrix>::value);
+	static_assert(has_rvalue_transpose<Vector>::value);
+	static_assert(has_rvalue_divide<Matrix>::value);
+	static_assert(has_rvalue_divide<Vector>::value);
+	static_assert(has_rvalue_cast<Matrix>::value);
+	static_assert(has_rvalue_cast<Vector>::value);
 
 	static_assert(has_rvalue_transpose<MatrixUnary>::value);
 	static_assert(has_rvalue_transpose<MatrixBinary>::value);
@@ -73,6 +87,23 @@ TEST_CASE("owning rvalues are rejected while expression rvalues remain chainable
 	static_assert(has_rvalue_cast<MatrixBinary>::value);
 	static_assert(has_rvalue_cast<VectorUnary>::value);
 	static_assert(has_rvalue_cast<VectorBinary>::value);
+}
+
+TEST_CASE("owning-rvalue expressions can be evaluated within their full expression")
+{
+	const auto matrixDense = makeMatrix().toDense();
+	const auto vectorDense = makeVector().toDense();
+
+	Hoppy::Test::requireApprox((makeMatrix().transpose() / 2.0).eval().toDense(),
+	                           (matrixDense.transpose() / 2.0).eval());
+	Hoppy::Test::requireApprox((makeMatrix() + makeMatrix()).eval().toDense(),
+	                           (matrixDense + matrixDense).eval());
+	Hoppy::Test::requireApprox(makeMatrix().template cast<float>().eval().toDense(),
+	                           matrixDense.cast<float>());
+	Hoppy::Test::requireApprox((makeVector().transpose() / 2.0).eval().toDense(),
+	                           (vectorDense.transpose() / 2.0).eval());
+	Hoppy::Test::requireApprox((makeVector() + makeVector()).eval().toDense(),
+	                           (vectorDense + vectorDense).eval());
 }
 
 TEST_CASE("unary expression prvalues can be consumed by scalar and unary operators")

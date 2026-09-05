@@ -108,10 +108,6 @@ namespace Hoppy
 
 		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
 		auto asDiagonal() const&;
-		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
-		auto asDiagonal() && = delete;
-		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
-		auto asDiagonal() const&& = delete;
 
 		template <typename Derived,
 		          typename = std::enable_if_t<std::is_same_v<Orientation,
