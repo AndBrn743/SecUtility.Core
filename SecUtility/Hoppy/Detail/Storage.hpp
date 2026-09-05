@@ -43,7 +43,7 @@ namespace Hoppy::Detail
 		TScalar* data() noexcept { return m_Data.data(); }
 		const TScalar* data() const noexcept { return m_Data.data(); }
 
-		std::vector<Eigen::Index> blockingInfo() const { return m_Dimensions; }
+		const std::vector<Eigen::Index>& blockingInfo() const noexcept { return m_Dimensions; }
 
 		Eigen::Index dimensionOfBlock(const Eigen::Index index) const
 		{

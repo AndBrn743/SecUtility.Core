@@ -7,6 +7,7 @@
 #include <Eigen/Core>
 
 #include <complex>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -104,6 +105,18 @@ TEST_CASE("owning-rvalue expressions can be evaluated within their full expressi
 	                           (vectorDense.transpose() / 2.0).eval());
 	Hoppy::Test::requireApprox((makeVector() + makeVector()).eval().toDense(),
 	                           (vectorDense + vectorDense).eval());
+}
+
+TEST_CASE("blocking information is referenced from lvalues and copied from rvalues")
+{
+	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};
+	const auto& referenced = matrix.blockingInfo();
+	REQUIRE(std::addressof(referenced) == std::addressof(matrix.blockingInfo()));
+
+	const auto owningTemporary = makeMatrix().blockingInfo();
+	const auto expressionTemporary = (makeMatrix() + makeMatrix()).blockingInfo();
+	REQUIRE(owningTemporary == (std::vector<Eigen::Index>{1, 2}));
+	REQUIRE(expressionTemporary == (std::vector<Eigen::Index>{1, 2}));
 }
 
 TEST_CASE("unary expression prvalues can be consumed by scalar and unary operators")

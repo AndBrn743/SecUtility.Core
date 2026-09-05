@@ -326,7 +326,8 @@ namespace Hoppy::Detail
 		Eigen::Index dimensionOfBlock(Eigen::Index i) const { return m_Source.dimensionOfBlock(i); }
 		Eigen::Index blockOffset(Eigen::Index i) const { return m_Source.blockOffset(i); }
 		Eigen::Index storageOffset(Eigen::Index i) const { return m_Source.storageOffset(i); }
-		std::vector<Eigen::Index> blockingInfo() const { return m_Source.blockingInfo(); }
+		const std::vector<Eigen::Index>& blockingInfo() const& { return m_Source.blockingInfo(); }
+		std::vector<Eigen::Index> blockingInfo() const&& { return m_Source.blockingInfo(); }
 		auto operator[](Eigen::Index i) const { return m_Operation(m_Source[i]); }
 
 	private:
@@ -356,7 +357,8 @@ namespace Hoppy::Detail
 		Eigen::Index dimensionOfBlock(Eigen::Index i) const { return m_Lhs.dimensionOfBlock(i); }
 		Eigen::Index blockOffset(Eigen::Index i) const { return m_Lhs.blockOffset(i); }
 		Eigen::Index storageOffset(Eigen::Index i) const { return m_Lhs.storageOffset(i); }
-		std::vector<Eigen::Index> blockingInfo() const { return m_Lhs.blockingInfo(); }
+		const std::vector<Eigen::Index>& blockingInfo() const& { return m_Lhs.blockingInfo(); }
+		std::vector<Eigen::Index> blockingInfo() const&& { return m_Lhs.blockingInfo(); }
 		auto operator[](Eigen::Index i) const { return Operation{}(m_Lhs[i], m_Rhs[i]); }
 
 	private:
@@ -383,7 +385,8 @@ namespace Hoppy::Detail
 		Eigen::Index dimensionOfBlock(Eigen::Index index) const { return m_Matrix.dimensionOfBlock(index); }
 		Eigen::Index blockOffset(Eigen::Index index) const { return m_Matrix.blockOffset(index); }
 		Eigen::Index storageOffset(Eigen::Index index) const { return m_Matrix.storageOffset(index); }
-		std::vector<Eigen::Index> blockingInfo() const { return m_Matrix.blockingInfo(); }
+		const std::vector<Eigen::Index>& blockingInfo() const& { return m_Matrix.blockingInfo(); }
+		std::vector<Eigen::Index> blockingInfo() const&& { return m_Matrix.blockingInfo(); }
 		auto operator[](Eigen::Index index) const
 		{
 			if constexpr (Back)

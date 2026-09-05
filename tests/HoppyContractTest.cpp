@@ -88,6 +88,7 @@ namespace
 	using Dense = Eigen::MatrixXd;
 	using FixedColumn = Eigen::Vector3d;
 	using FixedRow = Eigen::RowVector3d;
+	using BlockingInfo = std::vector<Eigen::Index>;
 	using BDExpression = decltype(std::declval<const BD&>() + std::declval<const BD&>());
 	using BVExpression = decltype(std::declval<const BV&>() + std::declval<const BV&>());
 
@@ -125,6 +126,16 @@ namespace
 	static_assert(std::is_same_v<congruence_scalar<double, std::complex<double>>,
 	                             std::complex<double>>);
 	static_assert(!IsDetected<congruence_scalar, int, std::complex<double>>);
+	static_assert(std::is_same_v<decltype(std::declval<BD&>().blockingInfo()),
+	                             const BlockingInfo&>);
+	static_assert(std::is_same_v<decltype(std::declval<const BD&>().blockingInfo()),
+	                             const BlockingInfo&>);
+	static_assert(std::is_same_v<decltype(std::declval<BD&&>().blockingInfo()), BlockingInfo>);
+	static_assert(std::is_same_v<decltype(std::declval<const BD&&>().blockingInfo()), BlockingInfo>);
+	static_assert(std::is_same_v<decltype(std::declval<BVExpression&>().blockingInfo()),
+	                             const BlockingInfo&>);
+	static_assert(std::is_same_v<decltype(std::declval<BVExpression&&>().blockingInfo()),
+	                             BlockingInfo>);
 }  // namespace
 
 TEST_CASE("the Hoppy operation matrix is enforced at compile time") { SUCCEED(); }

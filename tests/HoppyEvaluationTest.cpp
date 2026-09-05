@@ -42,7 +42,8 @@ namespace Hoppy::Test
 		Eigen::Index dimensionOfBlock(Eigen::Index i) const { return m_Source.dimensionOfBlock(i); }
 		Eigen::Index blockOffset(Eigen::Index i) const { return m_Source.blockOffset(i); }
 		Eigen::Index storageOffset(Eigen::Index i) const { return m_Source.storageOffset(i); }
-		std::vector<Eigen::Index> blockingInfo() const { return m_Source.blockingInfo(); }
+		const std::vector<Eigen::Index>& blockingInfo() const& { return m_Source.blockingInfo(); }
+		std::vector<Eigen::Index> blockingInfo() const&& { return m_Source.blockingInfo(); }
 		auto operator[](Eigen::Index i) const { return m_Source[i]; }
 		const Scalar* data() const { return m_Source.data(); }
 

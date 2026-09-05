@@ -70,7 +70,8 @@ namespace Hoppy::Detail
 		Eigen::Index dimensionOfBlock(Eigen::Index index) const { return m_Source.dimensionOfBlock(index); }
 		Eigen::Index blockOffset(Eigen::Index index) const { return m_Source.blockOffset(index); }
 		Eigen::Index storageOffset(Eigen::Index index) const { return m_Source.blockOffset(index); }
-		std::vector<Eigen::Index> blockingInfo() const { return m_Source.blockingInfo(); }
+		const std::vector<Eigen::Index>& blockingInfo() const& { return m_Source.blockingInfo(); }
+		std::vector<Eigen::Index> blockingInfo() const&& { return m_Source.blockingInfo(); }
 
 		auto operator[](Eigen::Index index)
 		{
@@ -142,7 +143,8 @@ namespace Eigen
 				result += dimensionOfBlock(current) * dimensionOfBlock(current);
 			return result;
 		}
-		std::vector<Index> blockingInfo() const { return m_Vector.blockingInfo(); }
+		const std::vector<Index>& blockingInfo() const& { return m_Vector.blockingInfo(); }
+		std::vector<Index> blockingInfo() const&& { return m_Vector.blockingInfo(); }
 		auto operator[](Index index) const
 		{
 			return m_Vector[index].asDiagonal();

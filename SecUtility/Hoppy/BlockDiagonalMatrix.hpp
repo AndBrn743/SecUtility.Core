@@ -80,7 +80,11 @@ namespace Hoppy
 		Eigen::Index storedSize() const noexcept { return m_Storage.storedSize(); }
 		Scalar* data() noexcept { return m_Storage.data(); }
 		const Scalar* data() const noexcept { return m_Storage.data(); }
-		std::vector<Eigen::Index> blockingInfo() const { return m_Storage.blockingInfo(); }
+		const std::vector<Eigen::Index>& blockingInfo() const& noexcept
+		{
+			return m_Storage.blockingInfo();
+		}
+		std::vector<Eigen::Index> blockingInfo() const&& { return m_Storage.blockingInfo(); }
 		Eigen::Index dimensionOfBlock(Eigen::Index index) const { return m_Storage.dimensionOfBlock(index); }
 		Eigen::Index blockOffset(Eigen::Index index) const { return m_Storage.blockOffset(index); }
 		Eigen::Index storageOffset(Eigen::Index index) const { return m_Storage.storageOffset(index); }

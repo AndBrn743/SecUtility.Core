@@ -70,7 +70,11 @@ namespace Hoppy
 		Eigen::Index dimensionOfBlock(Eigen::Index index) const { return derived().dimensionOfBlock(index); }
 		Eigen::Index blockOffset(Eigen::Index index) const { return derived().blockOffset(index); }
 		Eigen::Index storageOffset(Eigen::Index index) const { return derived().storageOffset(index); }
-		std::vector<Eigen::Index> blockingInfo() const { return derived().blockingInfo(); }
+		const std::vector<Eigen::Index>& blockingInfo() const& { return derived().blockingInfo(); }
+		std::vector<Eigen::Index> blockingInfo() const&&
+		{
+			return std::move(derived()).blockingInfo();
+		}
 
 		template <typename TOther>
 		bool hasSameBlockingAs(const TOther& other) const { return blockingInfo() == other.blockingInfo(); }
