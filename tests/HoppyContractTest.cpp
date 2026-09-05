@@ -76,6 +76,9 @@ namespace
 	template <typename L, typename R> using solve = decltype(std::declval<L>().solve(std::declval<R>()));
 	template <typename L, typename R> using transformed = decltype(std::declval<L>().transformedBy(std::declval<R>()));
 	template <typename L, typename R> using transform_in_place = decltype(std::declval<L>().transformBy(std::declval<R>()));
+	template <typename MatrixScalar, typename TransformScalar>
+	using congruence_scalar = typename Hoppy::Detail::congruence_result_scalar<
+	        MatrixScalar, TransformScalar>::type;
 
 	using BD = Hoppy::BlockDiagonalMatrix<double>;
 	using BDi = Hoppy::BlockDiagonalMatrix<int>;
@@ -118,6 +121,10 @@ namespace
 	              && IsDetected<transformed, BDExpression&&, const BD&>);
 	static_assert(IsDetected<transform_in_place, BD&, const BD&>
 	              && !IsDetected<transform_in_place, BD&&, const BD&>);
+	static_assert(IsDetected<congruence_scalar, double, std::complex<double>>);
+	static_assert(std::is_same_v<congruence_scalar<double, std::complex<double>>,
+	                             std::complex<double>>);
+	static_assert(!IsDetected<congruence_scalar, int, std::complex<double>>);
 }  // namespace
 
 TEST_CASE("the Hoppy operation matrix is enforced at compile time") { SUCCEED(); }

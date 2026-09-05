@@ -10,6 +10,43 @@
 
 namespace Hoppy::Detail
 {
+	template <typename MatrixScalar, typename TransformScalar, typename IntermediateScalar,
+	          typename = void>
+	struct congruence_result_scalar_second
+	{};
+
+	template <typename MatrixScalar, typename TransformScalar, typename IntermediateScalar>
+	struct congruence_result_scalar_second<
+	        MatrixScalar, TransformScalar, IntermediateScalar,
+	        std::void_t<typename Eigen::ScalarBinaryOpTraits<
+	                IntermediateScalar, TransformScalar,
+	                Eigen::internal::scalar_product_op<IntermediateScalar,
+	                                                   TransformScalar>>::ReturnType>>
+	{
+		using type = typename Eigen::ScalarBinaryOpTraits<
+		        IntermediateScalar, TransformScalar,
+		        Eigen::internal::scalar_product_op<IntermediateScalar, TransformScalar>>::ReturnType;
+	};
+
+	template <typename MatrixScalar, typename TransformScalar, typename = void>
+	struct congruence_result_scalar
+	{};
+
+	template <typename MatrixScalar, typename TransformScalar>
+	struct congruence_result_scalar<
+	        MatrixScalar, TransformScalar,
+	        std::void_t<typename Eigen::ScalarBinaryOpTraits<
+	                TransformScalar, MatrixScalar,
+	                Eigen::internal::scalar_product_op<TransformScalar,
+	                                                   MatrixScalar>>::ReturnType>>
+	    : congruence_result_scalar_second<
+	              MatrixScalar, TransformScalar,
+	              typename Eigen::ScalarBinaryOpTraits<
+	                      TransformScalar, MatrixScalar,
+	                      Eigen::internal::scalar_product_op<TransformScalar,
+	                                                         MatrixScalar>>::ReturnType>
+	{};
+
 	struct BlockDiagonalStorage
 	{};
 	struct BlockVectorStorage

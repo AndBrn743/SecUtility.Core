@@ -180,13 +180,8 @@ namespace Hoppy
 
 		template <typename TransformDerived,
 		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
-		          typename IntermediateScalar = typename Eigen::ScalarBinaryOpTraits<
-		                  TransformScalar, Scalar,
-		                  Eigen::internal::scalar_product_op<TransformScalar, Scalar>>::ReturnType,
-		          typename = typename Eigen::ScalarBinaryOpTraits<
-		                  IntermediateScalar, TransformScalar,
-		                  Eigen::internal::scalar_product_op<IntermediateScalar,
-		                                                     TransformScalar>>::ReturnType>
+		          typename = typename Detail::congruence_result_scalar<Scalar,
+		                                                               TransformScalar>::type>
 		BlockDiagonalMatrix& transformBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) &
 		{
 			eigen_assert(this->hasSameBlockingAs(transform));
@@ -204,13 +199,8 @@ namespace Hoppy
 
 		template <typename TransformDerived,
 		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
-		          typename IntermediateScalar = typename Eigen::ScalarBinaryOpTraits<
-		                  TransformScalar, Scalar,
-		                  Eigen::internal::scalar_product_op<TransformScalar, Scalar>>::ReturnType,
-		          typename = typename Eigen::ScalarBinaryOpTraits<
-		                  IntermediateScalar, TransformScalar,
-		                  Eigen::internal::scalar_product_op<IntermediateScalar,
-		                                                     TransformScalar>>::ReturnType>
+		          typename = typename Detail::congruence_result_scalar<Scalar,
+		                                                               TransformScalar>::type>
 		BlockDiagonalMatrix& backTransformBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) &
 		{
 			eigen_assert(this->hasSameBlockingAs(transform));

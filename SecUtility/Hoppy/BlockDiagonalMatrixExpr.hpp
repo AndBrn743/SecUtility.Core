@@ -3,6 +3,7 @@
 #pragma once
 
 #include <SecUtility/Hoppy/BlockExpressionBase.hpp>
+#include <SecUtility/Hoppy/Detail/Traits.hpp>
 #include <SecUtility/Hoppy/ForwardDeclarations.hpp>
 
 #include <Eigen/Core>
@@ -74,23 +75,13 @@ namespace Hoppy
 		auto inverse() const&& = delete;
 		template <typename TransformDerived,
 		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
-		          typename IntermediateScalar = typename Eigen::ScalarBinaryOpTraits<
-		                  TransformScalar, Scalar,
-		                  Eigen::internal::scalar_product_op<TransformScalar, Scalar>>::ReturnType,
-		          typename = typename Eigen::ScalarBinaryOpTraits<
-		                  IntermediateScalar, TransformScalar,
-		                  Eigen::internal::scalar_product_op<IntermediateScalar,
-		                                                     TransformScalar>>::ReturnType>
+		          typename = typename Detail::congruence_result_scalar<Scalar,
+		                                                               TransformScalar>::type>
 		auto transformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&;
 		template <typename TransformDerived,
 		          typename TransformScalar = typename Eigen::internal::traits<TransformDerived>::Scalar,
-		          typename IntermediateScalar = typename Eigen::ScalarBinaryOpTraits<
-		                  TransformScalar, Scalar,
-		                  Eigen::internal::scalar_product_op<TransformScalar, Scalar>>::ReturnType,
-		          typename = typename Eigen::ScalarBinaryOpTraits<
-		                  IntermediateScalar, TransformScalar,
-		                  Eigen::internal::scalar_product_op<IntermediateScalar,
-		                                                     TransformScalar>>::ReturnType>
+		          typename = typename Detail::congruence_result_scalar<Scalar,
+		                                                               TransformScalar>::type>
 		auto backTransformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&;
 		template <typename TransformDerived>
 		auto transformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const&& = delete;
