@@ -191,6 +191,26 @@ target_compile_options(HoppyCongruenceTest PRIVATE
 add_secutility_test(HoppyCongruenceNoDebugTest HoppyCongruenceTest.cpp)
 target_compile_definitions(HoppyCongruenceNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 
+add_secutility_test(HoppyContractTest HoppyContractTest.cpp)
+target_compile_options(HoppyContractTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_secutility_test(HoppyContractNoDebugTest HoppyContractTest.cpp)
+target_compile_definitions(HoppyContractNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
+add_library(HoppyHeaderSelfContainment OBJECT
+	HoppyHeaderForwardDeclarations.cpp
+	HoppyHeaderBlockPolicy.cpp
+	HoppyHeaderBlockExpressionBase.cpp
+	HoppyHeaderBlockDiagonalMatrixExpr.cpp
+	HoppyHeaderBlockVectorExpr.cpp
+	HoppyHeaderBlockDiagonalMatrix.cpp
+	HoppyHeaderBlockVector.cpp
+	HoppyHeaderHoppy.cpp
+	HoppyHeaderReverseOrder.cpp)
+target_link_libraries(HoppyHeaderSelfContainment PRIVATE SecUtility::Core)
+
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)
