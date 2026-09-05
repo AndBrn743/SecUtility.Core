@@ -211,6 +211,20 @@ add_library(HoppyHeaderSelfContainment OBJECT
 	HoppyHeaderReverseOrder.cpp)
 target_link_libraries(HoppyHeaderSelfContainment PRIVATE SecUtility::Core)
 
+add_secutility_test(HoppyPropertyTest HoppyPropertyTest.cpp)
+target_compile_options(HoppyPropertyTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_secutility_test(HoppyPropertyNoDebugTest HoppyPropertyTest.cpp)
+target_compile_definitions(HoppyPropertyNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
+add_secutility_test(HoppyComplexityTest HoppyComplexityTest.cpp)
+target_compile_definitions(HoppyComplexityTest PRIVATE EIGEN_RUNTIME_NO_MALLOC)
+target_compile_options(HoppyComplexityTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
 # Utility tests
 add_secutility_test(BitflagTest BitflagTest.cpp)
 add_secutility_test(MiscSmokeTest MiscSmokeTest.cpp)
