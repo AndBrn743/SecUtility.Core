@@ -81,6 +81,11 @@ namespace Hoppy::Detail
 				return std::as_const(m_Source)[index].diagonal();
 		}
 		auto operator[](Eigen::Index index) const { return std::as_const(m_Source)[index].diagonal(); }
+		template <typename Visitor>
+		void visitStorageLeaves(Visitor&& visitor) const
+		{
+			Detail::visitStorageLeaves(m_Source, std::forward<Visitor>(visitor));
+		}
 
 		template <typename Derived, typename T = std::integral_constant<bool, IsWritable>,
 		          typename = std::enable_if_t<T::value>>
@@ -148,6 +153,11 @@ namespace Eigen
 		auto operator[](Index index) const
 		{
 			return m_Vector[index].asDiagonal();
+		}
+		template <typename Visitor>
+		void visitStorageLeaves(Visitor&& visitor) const
+		{
+			Hoppy::Detail::visitStorageLeaves(m_Vector, std::forward<Visitor>(visitor));
 		}
 
 	private:

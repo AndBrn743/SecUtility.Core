@@ -126,4 +126,17 @@ TEST_CASE("diagonal assignment requires equal blocking")
 	auto diagonal = matrix.diagonal();
 	REQUIRE_THROWS_AS(diagonal = vector, Hoppy::Test::EigenAssertionFailure);
 }
+
+TEST_CASE("diagonal views expose their source to overlap detection")
+{
+	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};
+	Eigen::Map<Eigen::VectorXd> matrixStorage(matrix.data(), matrix.storedSize());
+	REQUIRE_THROWS_AS(matrix.diagonal().evalTo(matrixStorage),
+	                  Hoppy::Test::EigenAssertionFailure);
+
+	Hoppy::BlockVector<double> vector{1, 2};
+	Eigen::Map<Eigen::VectorXd> vectorStorage(vector.data(), vector.storedSize());
+	REQUIRE_THROWS_AS(vector.asDiagonal().evalTo(vectorStorage),
+	                  Hoppy::Test::EigenAssertionFailure);
+}
 #endif

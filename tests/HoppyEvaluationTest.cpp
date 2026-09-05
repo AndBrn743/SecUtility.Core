@@ -131,6 +131,13 @@ TEST_CASE("evalTo rejects destination overlap and fixed-size shape mismatch")
 	Hoppy::Test::PassThrough expression(vector);
 	auto overlapping = vector.asDense();
 	REQUIRE_THROWS_AS(expression.evalTo(overlapping), Hoppy::Test::EigenAssertionFailure);
+	REQUIRE_THROWS_AS((-vector).evalTo(overlapping), Hoppy::Test::EigenAssertionFailure);
+
+	Hoppy::BlockVector<double> other{1, 2};
+	REQUIRE_THROWS_AS((other + vector).evalTo(overlapping),
+	                  Hoppy::Test::EigenAssertionFailure);
+	REQUIRE_THROWS_AS(((-other) + (vector / 2.0)).evalTo(overlapping),
+	                  Hoppy::Test::EigenAssertionFailure);
 
 	Eigen::Matrix<double, 2, 2> wrongSize;
 	REQUIRE_THROWS_AS(expression.evalTo(wrongSize), Hoppy::Test::EigenAssertionFailure);

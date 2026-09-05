@@ -129,4 +129,16 @@ TEST_CASE("congruence transforms enforce identical blocking")
 	REQUIRE_THROWS_AS((void)matrix.transformBy(transform), Hoppy::Test::EigenAssertionFailure);
 	REQUIRE_THROWS_AS((void)matrix.backTransformBy(transform), Hoppy::Test::EigenAssertionFailure);
 }
+
+TEST_CASE("congruence evalTo detects overlap in either expression branch")
+{
+	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};
+	Hoppy::BlockDiagonalMatrix<double> transform{1, 2};
+	const auto expression = matrix.transformedBy(transform);
+	Eigen::Map<Eigen::VectorXd> matrixStorage(matrix.data(), matrix.storedSize());
+	Eigen::Map<Eigen::VectorXd> transformStorage(transform.data(), transform.storedSize());
+
+	REQUIRE_THROWS_AS(expression.evalTo(matrixStorage), Hoppy::Test::EigenAssertionFailure);
+	REQUIRE_THROWS_AS(expression.evalTo(transformStorage), Hoppy::Test::EigenAssertionFailure);
+}
 #endif

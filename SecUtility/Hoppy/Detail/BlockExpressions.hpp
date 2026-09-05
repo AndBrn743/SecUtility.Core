@@ -329,6 +329,11 @@ namespace Hoppy::Detail
 		const std::vector<Eigen::Index>& blockingInfo() const& { return m_Source.blockingInfo(); }
 		std::vector<Eigen::Index> blockingInfo() const&& { return m_Source.blockingInfo(); }
 		auto operator[](Eigen::Index i) const { return m_Operation(m_Source[i]); }
+		template <typename Visitor>
+		void visitStorageLeaves(Visitor&& visitor) const
+		{
+			Detail::visitStorageLeaves(m_Source, std::forward<Visitor>(visitor));
+		}
 
 	private:
 		typename Eigen::internal::ref_selector<Source>::type m_Source;
@@ -360,6 +365,12 @@ namespace Hoppy::Detail
 		const std::vector<Eigen::Index>& blockingInfo() const& { return m_Lhs.blockingInfo(); }
 		std::vector<Eigen::Index> blockingInfo() const&& { return m_Lhs.blockingInfo(); }
 		auto operator[](Eigen::Index i) const { return Operation{}(m_Lhs[i], m_Rhs[i]); }
+		template <typename Visitor>
+		void visitStorageLeaves(Visitor&& visitor) const
+		{
+			Detail::visitStorageLeaves(m_Lhs, visitor);
+			Detail::visitStorageLeaves(m_Rhs, std::forward<Visitor>(visitor));
+		}
 
 	private:
 		typename Eigen::internal::ref_selector<Lhs>::type m_Lhs;
@@ -393,6 +404,12 @@ namespace Hoppy::Detail
 				return m_Transform[index].adjoint() * m_Matrix[index] * m_Transform[index];
 			else
 				return m_Transform[index] * m_Matrix[index] * m_Transform[index].adjoint();
+		}
+		template <typename Visitor>
+		void visitStorageLeaves(Visitor&& visitor) const
+		{
+			Detail::visitStorageLeaves(m_Matrix, visitor);
+			Detail::visitStorageLeaves(m_Transform, std::forward<Visitor>(visitor));
 		}
 
 	private:

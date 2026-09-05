@@ -27,18 +27,49 @@ namespace Hoppy
 		struct has_data<T, std::void_t<decltype(std::declval<const T&>().data())>> : std::true_type
 		{};
 
+		struct storage_leaf_probe  // can be replaced with an inline lambda `[](const auto&){}` in C++20
+		{
+			template <typename T>
+			void operator()(const T&) const;
+		};
+
+		template <typename T, typename = void>
+		struct has_storage_leaf_visitor : std::false_type
+		{};
+
+		template <typename T>
+		struct has_storage_leaf_visitor<
+		        T, std::void_t<decltype(std::declval<const T&>().visitStorageLeaves(
+		                   storage_leaf_probe{}))>> : std::true_type
+		{};
+
+		template <typename Source, typename Visitor>
+		void visitStorageLeaves(const Source& source, Visitor&& visitor)
+		{
+			if constexpr (has_data<Source>::value)
+				std::forward<Visitor>(visitor)(source);
+			else if constexpr (has_storage_leaf_visitor<Source>::value)
+				source.visitStorageLeaves(std::forward<Visitor>(visitor));
+		}
+
 		template <typename Source, typename Destination>
 		void assertNoOverlap(const Source& source, const Destination& destination)
 		{
-			if constexpr (has_data<Source>::value && has_data<Destination>::value)
+			if constexpr (has_data<Destination>::value)
 			{
-				if (source.storedSize() == 0 || destination.size() == 0)
-					return;
-				const auto sourceBegin = reinterpret_cast<std::uintptr_t>(source.data());
-				const auto sourceEnd = sourceBegin + static_cast<std::uintptr_t>(source.storedSize()) * sizeof(typename Source::Scalar);
-				const auto destinationBegin = reinterpret_cast<std::uintptr_t>(destination.data());
-				const auto destinationEnd = destinationBegin + static_cast<std::uintptr_t>(destination.size()) * sizeof(typename Destination::Scalar);
-				eigen_assert(destinationEnd <= sourceBegin || sourceEnd <= destinationBegin);
+				visitStorageLeaves(source, [&destination](const auto& leaf) {
+					if (leaf.storedSize() == 0 || destination.size() == 0)
+						return;
+					const auto sourceBegin = reinterpret_cast<std::uintptr_t>(leaf.data());
+					const auto sourceEnd = sourceBegin
+					        + static_cast<std::uintptr_t>(leaf.storedSize())
+					                  * sizeof(typename std::decay_t<decltype(leaf)>::Scalar);
+					const auto destinationBegin = reinterpret_cast<std::uintptr_t>(destination.data());
+					const auto destinationEnd = destinationBegin
+					        + static_cast<std::uintptr_t>(destination.size())
+					                  * sizeof(typename Destination::Scalar);
+					eigen_assert(destinationEnd <= sourceBegin || sourceEnd <= destinationBegin);
+				});
 			}
 		}
 	}  // namespace Detail
