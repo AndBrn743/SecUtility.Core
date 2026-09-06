@@ -9,6 +9,7 @@
 #include <SecUtility/Hoppy/BlockVectorExpr.hpp>
 #include <SecUtility/Hoppy/BlockDiagonalMatrix.hpp>
 #include <SecUtility/Hoppy/BlockVector.hpp>
+#include <SecUtility/Hoppy/TriangularCompressedMatrix.hpp>
 #include <SecUtility/Hoppy/Detail/BlockExpressions.hpp>
 #include <SecUtility/Hoppy/Detail/DiagonalViews.hpp>
 #include <SecUtility/Hoppy/Detail/DenseInterop.hpp>

@@ -91,6 +91,25 @@ target_link_libraries(HoppyUnsupportedEigenVersion PRIVATE SecUtility::Core)
 target_include_directories(HoppyUnsupportedEigenVersion BEFORE PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/UnsupportedEigen)
 
+# Triangular-compressed Phase 1 targets intentionally use add_test directly:
+# unlike catch_discover_tests, this never invokes a produced binary while building.
+add_executable(HoppyTriangularVocabularyTest HoppyTriangularVocabularyTest.cpp)
+target_link_libraries(HoppyTriangularVocabularyTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_options(HoppyTriangularVocabularyTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+add_test(NAME HoppyTriangularVocabularyTest COMMAND HoppyTriangularVocabularyTest)
+
+add_executable(HoppyTriangularVocabularyNoDebugTest HoppyTriangularVocabularyTest.cpp)
+target_link_libraries(HoppyTriangularVocabularyNoDebugTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_definitions(HoppyTriangularVocabularyNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+add_test(NAME HoppyTriangularVocabularyNoDebugTest COMMAND HoppyTriangularVocabularyNoDebugTest)
+
+add_library(HoppyTriangularPhase1HeaderSelfContainment OBJECT
+	HoppyHeaderTrianglePacking.cpp
+	HoppyHeaderTriangularCompressedMatrix.cpp)
+target_link_libraries(HoppyTriangularPhase1HeaderSelfContainment PRIVATE SecUtility::Core)
+
 add_secutility_test(HoppyFactoryTest HoppyFactoryTest.cpp)
 target_compile_options(HoppyFactoryTest PRIVATE
 	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
