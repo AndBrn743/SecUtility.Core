@@ -72,6 +72,18 @@ target_compile_options(HoppyEigenIntegrationTest PRIVATE
 add_secutility_test(HoppyEigenNoDebugTest HoppyEigenIntegrationTest.cpp)
 target_compile_definitions(HoppyEigenNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 
+# Triangular-compressed Phase 0 gate targets. The shared source is deliberately
+# self-contained and retains the existing block-storage regression spike.
+add_executable(HoppyTriangularEigenSpikeTest HoppyEigenIntegrationTest.cpp)
+target_link_libraries(HoppyTriangularEigenSpikeTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_options(HoppyTriangularEigenSpikeTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+
+add_executable(HoppyTriangularEigenSpikeNoDebugTest HoppyEigenIntegrationTest.cpp)
+target_link_libraries(HoppyTriangularEigenSpikeNoDebugTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_definitions(HoppyTriangularEigenSpikeNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+
 # This opt-in target must fail with ForwardDeclarations.hpp's actionable Eigen
 # version diagnostic. EXCLUDE_FROM_ALL keeps normal builds green.
 add_executable(HoppyUnsupportedEigenVersion EXCLUDE_FROM_ALL HoppyUnsupportedEigenVersion.cpp)

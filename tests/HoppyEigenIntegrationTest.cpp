@@ -7,11 +7,52 @@
 #include <Eigen/Dense>
 
 #include <complex>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
 namespace Hoppy::Test::Spike
 {
+	enum class Packing
+	{
+		Lower,
+		Upper
+	};
+
+	struct SymmetricTag
+	{};
+	struct AntiSymmetricTag
+	{};
+	struct HermitianTag
+	{};
+	struct AntiHermitianTag
+	{};
+
+	template <typename Scalar, typename Tag>
+	using normalized_tag_t = std::conditional_t<
+	        Eigen::NumTraits<Scalar>::IsComplex == 0,
+	        std::conditional_t<std::is_same_v<Tag, HermitianTag>, SymmetricTag,
+	                           std::conditional_t<std::is_same_v<Tag, AntiHermitianTag>, AntiSymmetricTag, Tag>>,
+	        Tag>;
+
+	template <typename TScalar, typename Tag, Packing TPacking>
+	class MappedMatrix
+	{
+	public:
+		using Scalar = TScalar;
+		using Structure = normalized_tag_t<std::remove_const_t<Scalar>, Tag>;
+		static constexpr Packing PackingValue = TPacking;
+	};
+
+	template <typename Scalar, Packing TPacking>
+	using Symmetric = MappedMatrix<Scalar, normalized_tag_t<Scalar, SymmetricTag>, TPacking>;
+	template <typename Scalar, Packing TPacking>
+	using AntiSymmetric = MappedMatrix<Scalar, normalized_tag_t<Scalar, AntiSymmetricTag>, TPacking>;
+	template <typename Scalar, Packing TPacking>
+	using Hermitian = MappedMatrix<Scalar, normalized_tag_t<Scalar, HermitianTag>, TPacking>;
+	template <typename Scalar, Packing TPacking>
+	using AntiHermitian = MappedMatrix<Scalar, normalized_tag_t<Scalar, AntiHermitianTag>, TPacking>;
+
 	struct BlockStorage;
 	struct VectorStorage;
 	struct BlockShape;
@@ -20,6 +61,80 @@ namespace Hoppy::Test::Spike
 	template <typename TStorage>
 	class Expression;
 }  // namespace Hoppy::Test::Spike
+
+namespace Eigen
+{
+	template <typename Scalar, typename Tag, Hoppy::Test::Spike::Packing PackingValue, int MapOptions>
+	class Map<Hoppy::Test::Spike::MappedMatrix<Scalar, Tag, PackingValue>, MapOptions, Stride<0, 0>>
+	{
+	public:
+		using Index = Eigen::Index;
+		using Value = std::remove_const_t<Scalar>;
+		using StrideType = Stride<0, 0>;
+		static constexpr bool IsAligned = (MapOptions & Eigen::Aligned) == Eigen::Aligned;
+
+		Map(Scalar* data, Index dimension) : m_Data(data), m_Dimension(dimension)
+		{
+			eigen_assert(dimension >= 0);
+			if constexpr (IsAligned)
+				eigen_assert(reinterpret_cast<std::uintptr_t>(data) % EIGEN_MAX_ALIGN_BYTES == 0);
+		}
+
+		Index rows() const { return m_Dimension; }
+		Index cols() const { return m_Dimension; }
+		Scalar& coeffRef(Index row, Index column) const { return m_Data[offset(row, column)]; }
+		const Value& coeff(Index row, Index column) const { return m_Data[offset(row, column)]; }
+
+	private:
+		Index offset(Index row, Index column) const
+		{
+			eigen_assert(row >= 0 && row < m_Dimension && column >= 0 && column < m_Dimension);
+			if constexpr (PackingValue == Hoppy::Test::Spike::Packing::Lower)
+			{
+				if (row < column) std::swap(row, column);
+				return row * (row + 1) / 2 + column;
+			}
+			if (column < row) std::swap(row, column);
+			return column * (column + 1) / 2 + row;
+		}
+
+		Scalar* m_Data;
+		Index m_Dimension;
+	};
+
+	template <typename Scalar, typename Tag, Hoppy::Test::Spike::Packing PackingValue, int MapOptions>
+	class Map<const Hoppy::Test::Spike::MappedMatrix<Scalar, Tag, PackingValue>, MapOptions, Stride<0, 0>>
+	{
+	public:
+		using Index = Eigen::Index;
+		using StrideType = Stride<0, 0>;
+		static constexpr bool IsAligned = (MapOptions & Eigen::Aligned) == Eigen::Aligned;
+
+		Map(const Scalar* data, Index dimension) : m_Data(data), m_Dimension(dimension)
+		{
+			eigen_assert(dimension >= 0);
+			if constexpr (IsAligned)
+				eigen_assert(reinterpret_cast<std::uintptr_t>(data) % EIGEN_MAX_ALIGN_BYTES == 0);
+		}
+
+		Index rows() const { return m_Dimension; }
+		Index cols() const { return m_Dimension; }
+		const Scalar& coeff(Index row, Index column) const
+		{
+			if constexpr (PackingValue == Hoppy::Test::Spike::Packing::Lower)
+			{
+				if (row < column) std::swap(row, column);
+				return m_Data[row * (row + 1) / 2 + column];
+			}
+			if (column < row) std::swap(row, column);
+			return m_Data[column * (column + 1) / 2 + row];
+		}
+
+	private:
+		const Scalar* m_Data;
+		Index m_Dimension;
+	};
+}  // namespace Eigen
 
 namespace Eigen::internal
 {
@@ -115,6 +230,24 @@ namespace Hoppy::Test::Spike
 
 namespace Eigen::internal
 {
+	template <typename Derived>
+	struct generic_xpr_base<Derived, MatrixXpr, Hoppy::Test::Spike::BlockStorage>
+	{
+		using type = Hoppy::Test::Spike::ExpressionBase<Derived>;
+	};
+
+	template <typename Derived>
+	struct generic_xpr_base<Derived, MatrixXpr, Hoppy::Test::Spike::VectorStorage>
+	{
+		using type = Hoppy::Test::Spike::ExpressionBase<Derived>;
+	};
+
+	template <typename TStorage>
+	struct plain_object_eval<Hoppy::Test::Spike::Expression<TStorage>, TStorage>
+	{
+		using type = Eigen::MatrixXd;
+	};
+
 	template <>
 	struct storage_kind_to_shape<Hoppy::Test::Spike::BlockStorage>
 	{
@@ -235,6 +368,22 @@ namespace Hoppy::Test::Spike
 	struct has_return_type<T, std::void_t<typename T::ReturnType>> : std::true_type
 	{};
 
+	template <typename MapType>
+	struct is_supported_map : std::false_type
+	{};
+
+	template <typename Scalar, typename Tag, Packing PackingValue, int MapOptions>
+	struct is_supported_map<
+	        Eigen::Map<MappedMatrix<Scalar, Tag, PackingValue>, MapOptions, Eigen::Stride<0, 0>>>
+	    : std::true_type
+	{};
+
+	template <typename Scalar, typename Tag, Packing PackingValue, int MapOptions>
+	struct is_supported_map<
+	        Eigen::Map<const MappedMatrix<Scalar, Tag, PackingValue>, MapOptions, Eigen::Stride<0, 0>>>
+	    : std::true_type
+	{};
+
 	using SumOp = Eigen::internal::scalar_sum_op<double, double>;
 	using NegateOp = Eigen::internal::scalar_opposite_op<double>;
 	using Unary = Eigen::CwiseUnaryOp<NegateOp, const BlockExpression>;
@@ -255,13 +404,71 @@ namespace Hoppy::Test::Spike
 	static_assert(std::is_same_v<typename Eigen::internal::ref_selector<BlockExpression>::type,
 	                             const BlockExpression&>);
 	static_assert(std::is_same_v<typename Eigen::internal::evaluator_traits<BlockExpression>::Shape, BlockShape>);
+	static_assert(std::is_same_v<typename Eigen::internal::generic_xpr_base<
+	                                     BlockExpression, Eigen::MatrixXpr, BlockStorage>::type,
+	                             ExpressionBase<BlockExpression>>);
+	static_assert(std::is_same_v<typename Eigen::internal::plain_object_eval<
+	                                     BlockExpression, BlockStorage>::type,
+	                             Eigen::MatrixXd>);
 	static_assert(std::is_same_v<typename Eigen::ScalarBinaryOpTraits<double, double, SumOp>::ReturnType, double>);
 	static_assert(!has_return_type<Eigen::ScalarBinaryOpTraits<int, std::complex<double>, SumOp>>::value);
 	static_assert(std::is_same_v<Eigen::MatrixX<double>, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>>);
 	static_assert(std::is_same_v<Eigen::VectorX<double>, Eigen::Vector<double, Eigen::Dynamic>>);
 	static_assert(std::is_constructible_v<Eigen::DiagonalWrapper<const Eigen::VectorXd>, const Eigen::VectorXd&>);
 	static_assert(std::is_class_v<Eigen::internal::generic_product_impl<Eigen::MatrixXd, Eigen::MatrixXd>>);
+
+	static_assert(std::is_same_v<Hermitian<double, Packing::Lower>, Symmetric<double, Packing::Lower>>);
+	static_assert(std::is_same_v<AntiHermitian<double, Packing::Upper>,
+	                             AntiSymmetric<double, Packing::Upper>>);
+	static_assert(!std::is_same_v<Hermitian<std::complex<double>, Packing::Lower>,
+	                              Symmetric<std::complex<double>, Packing::Lower>>);
+	static_assert(!std::is_same_v<AntiHermitian<std::complex<double>, Packing::Upper>,
+	                              AntiSymmetric<std::complex<double>, Packing::Upper>>);
+
+	using LowerMap = Eigen::Map<Symmetric<double, Packing::Lower>>;
+	using UpperMap = Eigen::Map<Symmetric<double, Packing::Upper>>;
+	using ConstLowerMap = Eigen::Map<const Symmetric<double, Packing::Lower>>;
+	using ConstUpperMap = Eigen::Map<const Symmetric<double, Packing::Upper>>;
+	using AlignedLowerMap = Eigen::Map<Symmetric<double, Packing::Lower>, Eigen::Aligned>;
+	using AlignedConstUpperMap = Eigen::Map<const Symmetric<double, Packing::Upper>, Eigen::Aligned>;
+	using CustomStrideMap = Eigen::Map<Symmetric<double, Packing::Lower>, Eigen::Unaligned,
+	                                  Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>;
+	static_assert(is_supported_map<LowerMap>::value);
+	static_assert(is_supported_map<UpperMap>::value);
+	static_assert(is_supported_map<ConstLowerMap>::value);
+	static_assert(is_supported_map<ConstUpperMap>::value);
+	static_assert(is_supported_map<AlignedLowerMap>::value);
+	static_assert(is_supported_map<AlignedConstUpperMap>::value);
+	static_assert(!is_supported_map<CustomStrideMap>::value);
+	static_assert(std::is_same_v<typename LowerMap::StrideType, Eigen::Stride<0, 0>>);
+	static_assert(!LowerMap::IsAligned);
+	static_assert(AlignedLowerMap::IsAligned);
 }  // namespace Hoppy::Test::Spike
+
+TEST_CASE("triangular spike maps mutable and const packed buffers in both orders")
+{
+	using namespace Hoppy::Test::Spike;
+	alignas(EIGEN_MAX_ALIGN_BYTES) double lowerBuffer[] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+	LowerMap lower(lowerBuffer, 3);
+	lower.coeffRef(0, 2) = 7.0;
+	REQUIRE(lowerBuffer[3] == 7.0);
+	REQUIRE(lower.coeff(2, 0) == 7.0);
+	ConstLowerMap constLower(lowerBuffer, 3);
+	REQUIRE(constLower.coeff(0, 2) == 7.0);
+
+	alignas(EIGEN_MAX_ALIGN_BYTES) double upperBuffer[] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+	UpperMap mutableUpper(upperBuffer, 3);
+	mutableUpper.coeffRef(2, 0) = 8.0;
+	REQUIRE(upperBuffer[3] == 8.0);
+	ConstUpperMap upper(upperBuffer, 3);
+	REQUIRE(upper.coeff(0, 2) == 8.0);
+	REQUIRE(upper.coeff(2, 0) == 8.0);
+
+	AlignedLowerMap aligned(lowerBuffer, 3);
+	REQUIRE(aligned.coeff(1, 1) == 3.0);
+	AlignedConstUpperMap alignedConst(upperBuffer, 3);
+	REQUIRE(alignedConst.coeff(1, 1) == 3.0);
+}
 
 TEST_CASE("Eigen 5 custom storage dispatch evaluates unary, binary, and transpose expressions")
 {
