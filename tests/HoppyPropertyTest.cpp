@@ -93,10 +93,10 @@ TEST_CASE("all documented public aliases have their exact scalar and orientation
 	                             Hoppy::BlockDiagonalMatrix<std::complex<float>>>);
 	static_assert(std::is_same_v<Hoppy::BlockDiagonalMatrixXi, Hoppy::BlockDiagonalMatrix<int>>);
 	static_assert(std::is_same_v<Hoppy::BlockDiagonalMatrixXl, Hoppy::BlockDiagonalMatrix<long>>);
-	static_assert(std::is_same_v<Hoppy::BlockVectorXd, Hoppy::BlockVector<double, Hoppy::Column>>);
+	static_assert(std::is_same_v<Hoppy::BlockVectorXd, Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>>);
 	static_assert(std::is_same_v<Hoppy::BlockVectorXcd,
-	                             Hoppy::BlockVector<std::complex<double>, Hoppy::Column>>);
-	static_assert(std::is_same_v<Hoppy::BlockRowVectorXd, Hoppy::BlockVector<double, Hoppy::Row>>);
+	                             Hoppy::BlockVector<std::complex<double>, Hoppy::BlockVectorOrientation::Column>>);
+	static_assert(std::is_same_v<Hoppy::BlockRowVectorXd, Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>>);
 	static_assert(std::is_same_v<Hoppy::BlockRowVectorXcd,
-	                             Hoppy::BlockVector<std::complex<double>, Hoppy::Row>>);
+	                             Hoppy::BlockVector<std::complex<double>, Hoppy::BlockVectorOrientation::Row>>);
 }

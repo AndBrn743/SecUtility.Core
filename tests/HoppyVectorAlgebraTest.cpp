@@ -58,10 +58,10 @@ TEST_CASE("dot supports every orientation pair and different blocking")
 	lhsDense << 1.0, -2.0, 3.0, 4.0;
 	Eigen::Vector4d rhsDense;
 	rhsDense << 2.0, 5.0, -1.0, 3.0;
-	const auto lhsColumn = Hoppy::BlockVector<double, Hoppy::Column>::FromDense(lhsDense, {1, 3});
-	const auto lhsRow = Hoppy::BlockVector<double, Hoppy::Row>::FromDense(lhsDense, {1, 3});
-	const auto rhsColumn = Hoppy::BlockVector<double, Hoppy::Column>::FromDense(rhsDense, {2, 2});
-	const auto rhsRow = Hoppy::BlockVector<double, Hoppy::Row>::FromDense(rhsDense, {2, 2});
+	const auto lhsColumn = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>::FromDense(lhsDense, {1, 3});
+	const auto lhsRow = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>::FromDense(lhsDense, {1, 3});
+	const auto rhsColumn = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>::FromDense(rhsDense, {2, 2});
+	const auto rhsRow = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>::FromDense(rhsDense, {2, 2});
 	const double expected = lhsDense.dot(rhsDense);
 
 	REQUIRE(lhsColumn.dot(rhsColumn) == expected);
@@ -70,7 +70,7 @@ TEST_CASE("dot supports every orientation pair and different blocking")
 	REQUIRE(lhsRow.dot(rhsRow) == expected);
 
 	const Hoppy::BlockVector<double> emptyColumn;
-	const Hoppy::BlockVector<double, Hoppy::Row> emptyRow;
+	const Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> emptyRow;
 	REQUIRE(emptyColumn.dot(emptyRow) == 0.0);
 }
 
@@ -82,7 +82,7 @@ TEST_CASE("dot conjugates the lhs and follows Eigen mixed-scalar promotion")
 	Eigen::Vector3d rhsDense;
 	rhsDense << 2.0, -1.0, 0.5;
 	const auto lhs = Hoppy::BlockVector<Complex>::FromDense(lhsDense, {2, 1});
-	const auto rhs = Hoppy::BlockVector<double, Hoppy::Row>::FromDense(rhsDense, {1, 2});
+	const auto rhs = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>::FromDense(rhsDense, {1, 2});
 	const auto result = lhs.dot(rhs);
 	static_assert(std::is_same_v<std::remove_cv_t<decltype(result)>, Complex>);
 	REQUIRE(result == lhsDense.dot(rhsDense));
@@ -99,16 +99,16 @@ TEST_CASE("normalization uses one global norm and preserves orientation and sour
 	const Eigen::Vector3d original = column.asDense();
 	const auto normalizedColumn = column.normalized();
 	static_assert(std::is_same_v<std::remove_cv_t<decltype(normalizedColumn)>,
-	                             Hoppy::BlockVector<double, Hoppy::Column>>);
+	                             Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>>);
 	Hoppy::Test::requireApprox(normalizedColumn.asDense(), original.normalized());
 	Hoppy::Test::requireApprox(column.asDense(), original);
 	REQUIRE(normalizedColumn.blockingInfo() == column.blockingInfo());
 
-	Hoppy::BlockVector<double, Hoppy::Row> row{1, 2};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> row{1, 2};
 	row.asDense() = original.transpose();
 	const auto normalizedRow = row.normalized();
 	static_assert(std::is_same_v<std::remove_cv_t<decltype(normalizedRow)>,
-	                             Hoppy::BlockVector<double, Hoppy::Row>>);
+	                             Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>>);
 	Hoppy::Test::requireApprox(normalizedRow.asDense(), original.transpose().normalized());
 	row.normalize();
 	Hoppy::Test::requireApprox(row.asDense(), original.transpose().normalized());
@@ -160,7 +160,7 @@ TEST_CASE("normalization availability is restricted to supported scalars and pla
 TEST_CASE("dot enforces equal logical dimensions")
 {
 	const Hoppy::BlockVector<double> lhs{1, 2};
-	const Hoppy::BlockVector<double, Hoppy::Row> rhs{2};
+	const Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> rhs{2};
 	REQUIRE_THROWS_AS((void)lhs.dot(rhs), Hoppy::Test::EigenAssertionFailure);
 }
 #endif

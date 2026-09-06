@@ -43,9 +43,9 @@ TEST_CASE("BV transpose and adjoint flip orientation while conjugate preserves i
 	const auto transposed = vector.transpose();
 	const auto adjoint = vector.adjoint();
 	const auto conjugated = vector.conjugate();
-	static_assert(std::is_same_v<typename Eigen::internal::traits<decltype(transposed)>::Orientation, Hoppy::Row>);
-	static_assert(std::is_same_v<typename Eigen::internal::traits<decltype(adjoint)>::Orientation, Hoppy::Row>);
-	static_assert(std::is_same_v<typename Eigen::internal::traits<decltype(conjugated)>::Orientation, Hoppy::Column>);
+	static_assert(std::is_same_v<typename Eigen::internal::traits<decltype(transposed)>::Orientation, Hoppy::BlockVectorOrientation::Row>);
+	static_assert(std::is_same_v<typename Eigen::internal::traits<decltype(adjoint)>::Orientation, Hoppy::BlockVectorOrientation::Row>);
+	static_assert(std::is_same_v<typename Eigen::internal::traits<decltype(conjugated)>::Orientation, Hoppy::BlockVectorOrientation::Column>);
 	Hoppy::Test::requireApprox(transposed.toDense(), vector.asDense().transpose());
 	Hoppy::Test::requireApprox(adjoint.toDense(), vector.asDense().adjoint());
 	Hoppy::Test::requireApprox(conjugated.toDense(), vector.asDense().conjugate());

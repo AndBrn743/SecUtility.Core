@@ -101,12 +101,12 @@ TEST_CASE("BD expressions evaluate to plain and structurally dense results")
 
 TEST_CASE("oriented BV expressions evaluate and resize dense destinations")
 {
-	Hoppy::BlockVector<double, Hoppy::Row> row{1, 2};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> row{1, 2};
 	row.asDense() << 1.0, 2.0, 3.0;
 	Hoppy::Test::PassThrough expression(row);
 	const auto plain = expression.eval();
 	static_assert(std::is_same_v<std::remove_const_t<decltype(plain)>,
-	                             Hoppy::BlockVector<double, Hoppy::Row>>);
+	                             Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>>);
 	REQUIRE(plain.asDense().isApprox(row.asDense()));
 	Eigen::MatrixXd destination;
 	expression.evalTo(destination);
@@ -114,7 +114,7 @@ TEST_CASE("oriented BV expressions evaluate and resize dense destinations")
 	REQUIRE(destination.cols() == 3);
 	REQUIRE(destination.isApprox(row.asDense()));
 
-	Hoppy::BlockVector<double, Hoppy::Column> column{1, 2};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column> column{1, 2};
 	column.asDense() << 4.0, 5.0, 6.0;
 	Hoppy::Test::PassThrough columnExpression(column);
 	Eigen::MatrixXd columnDestination;

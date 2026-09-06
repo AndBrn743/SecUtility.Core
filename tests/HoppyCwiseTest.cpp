@@ -86,10 +86,10 @@ TEST_CASE("vector cwise algebra preserves orientation and supports nested lifeti
 	lhs -= lhs;
 	REQUIRE(lhs.asDense().isZero());
 
-	Hoppy::BlockVector<double, Hoppy::Row> row{1, 2, 3};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> row{1, 2, 3};
 	fill(row);
 	using RowSum = decltype(row + row);
-	static_assert(std::is_same_v<typename Eigen::internal::traits<RowSum>::Orientation, Hoppy::Row>);
+	static_assert(std::is_same_v<typename Eigen::internal::traits<RowSum>::Orientation, Hoppy::BlockVectorOrientation::Row>);
 	Hoppy::Test::requireApprox((row + row).toDense(), row.asDense() + row.asDense());
 }
 
@@ -138,8 +138,8 @@ TEST_CASE("integer scalar algebra follows Eigen coefficient semantics")
 TEST_CASE("unsupported kind and orientation combinations are absent")
 {
 	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
-	using ColumnVector = Hoppy::BlockVector<double, Hoppy::Column>;
-	using RowVector = Hoppy::BlockVector<double, Hoppy::Row>;
+	using ColumnVector = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>;
+	using RowVector = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>;
 	static_assert(!has_addition<Matrix, ColumnVector>::value);
 	static_assert(!has_addition<ColumnVector, Matrix>::value);
 	static_assert(!has_addition<ColumnVector, RowVector>::value);

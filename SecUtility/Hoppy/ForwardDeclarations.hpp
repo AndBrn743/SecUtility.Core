@@ -12,17 +12,20 @@
 
 namespace Hoppy
 {
-	struct Column
-	{};
-	struct Row
-	{};
+	namespace BlockVectorOrientation
+	{
+		struct Column
+		{};
+		struct Row
+		{};
+	}  // namespace BlockVectorOrientation
 
 	struct DenseBlockPolicy;
 
 	template <typename TScalar, typename TBlockPolicy = DenseBlockPolicy>
 	class BlockDiagonalMatrix;
 
-	template <typename TScalar, typename TOrientation = Column>
+	template <typename TScalar, typename TOrientation = BlockVectorOrientation::Column>
 	class BlockVector;
 
 	template <typename Derived>
@@ -48,12 +51,12 @@ namespace Hoppy
 	using BlockVectorXi = BlockVector<int>;
 	using BlockVectorXl = BlockVector<long>;
 
-	using BlockRowVectorXd = BlockVector<double, Row>;
-	using BlockRowVectorXf = BlockVector<float, Row>;
-	using BlockRowVectorXcd = BlockVector<std::complex<double>, Row>;
-	using BlockRowVectorXcf = BlockVector<std::complex<float>, Row>;
-	using BlockRowVectorXi = BlockVector<int, Row>;
-	using BlockRowVectorXl = BlockVector<long, Row>;
+	using BlockRowVectorXd = BlockVector<double, BlockVectorOrientation::Row>;
+	using BlockRowVectorXf = BlockVector<float, BlockVectorOrientation::Row>;
+	using BlockRowVectorXcd = BlockVector<std::complex<double>, BlockVectorOrientation::Row>;
+	using BlockRowVectorXcf = BlockVector<std::complex<float>, BlockVectorOrientation::Row>;
+	using BlockRowVectorXi = BlockVector<int, BlockVectorOrientation::Row>;
+	using BlockRowVectorXl = BlockVector<long, BlockVectorOrientation::Row>;
 
 	namespace Detail
 	{

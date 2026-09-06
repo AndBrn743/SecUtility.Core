@@ -21,12 +21,12 @@ namespace Hoppy
 	template <typename TScalar, typename TOrientation>
 	class BlockVector : public BlockVectorExpr<BlockVector<TScalar, TOrientation>>
 	{
-		static_assert(std::is_same_v<TOrientation, Column> || std::is_same_v<TOrientation, Row>,
-		              "BlockVector orientation must be Hoppy::Column or Hoppy::Row");
+		static_assert(std::is_same_v<TOrientation, BlockVectorOrientation::Column> || std::is_same_v<TOrientation, BlockVectorOrientation::Row>,
+		              "BlockVector orientation must be Hoppy::BlockVectorOrientation::Column or Hoppy::BlockVectorOrientation::Row");
 
 		using ColumnPlain = Eigen::VectorX<TScalar>;
 		using RowPlain = Eigen::Matrix<TScalar, 1, Eigen::Dynamic>;
-		using Plain = std::conditional_t<std::is_same_v<TOrientation, Column>, ColumnPlain, RowPlain>;
+		using Plain = std::conditional_t<std::is_same_v<TOrientation, BlockVectorOrientation::Column>, ColumnPlain, RowPlain>;
 
 	public:
 		using Scalar = TScalar;
@@ -34,8 +34,8 @@ namespace Hoppy
 		using Block = Eigen::Map<Plain, Eigen::Unaligned>;
 		using ConstBlock = Eigen::Map<const Plain, Eigen::Unaligned>;
 		using StorageIndex = Eigen::Index;
-		static constexpr int RowsAtCompileTime = std::is_same_v<Orientation, Row> ? 1 : Eigen::Dynamic;
-		static constexpr int ColsAtCompileTime = std::is_same_v<Orientation, Row> ? Eigen::Dynamic : 1;
+		static constexpr int RowsAtCompileTime = std::is_same_v<Orientation, BlockVectorOrientation::Row> ? 1 : Eigen::Dynamic;
+		static constexpr int ColsAtCompileTime = std::is_same_v<Orientation, BlockVectorOrientation::Row> ? Eigen::Dynamic : 1;
 		static constexpr int SizeAtCompileTime = Eigen::Dynamic;
 		static constexpr int MaxSizeAtCompileTime = Eigen::Dynamic;
 		static constexpr int Flags = Eigen::NestByRefBit;
@@ -79,8 +79,8 @@ namespace Hoppy
 		void swap(BlockVector& other) noexcept { m_Storage.swap(other.m_Storage); }
 
 		Eigen::Index blockCount() const noexcept { return m_Storage.blockCount(); }
-		Eigen::Index rows() const noexcept { return std::is_same_v<Orientation, Row> ? 1 : totalDimension(); }
-		Eigen::Index cols() const noexcept { return std::is_same_v<Orientation, Row> ? totalDimension() : 1; }
+		Eigen::Index rows() const noexcept { return std::is_same_v<Orientation, BlockVectorOrientation::Row> ? 1 : totalDimension(); }
+		Eigen::Index cols() const noexcept { return std::is_same_v<Orientation, BlockVectorOrientation::Row> ? totalDimension() : 1; }
 		Eigen::Index size() const noexcept { return totalDimension(); }
 		Eigen::Index totalDimension() const noexcept { return m_Storage.totalDimension(); }
 		Eigen::Index storedSize() const noexcept { return m_Storage.storedSize(); }
@@ -110,7 +110,7 @@ namespace Hoppy
 		Block asDense() { return Block(data(), totalDimension()); }
 		ConstBlock asDense() const { return ConstBlock(data(), totalDimension()); }
 
-		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
+		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, BlockVectorOrientation::Column>>>
 		auto asDiagonal() const&;
 
 		template <typename Derived,

@@ -16,8 +16,8 @@
 namespace
 {
 	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
-	using ColumnVector = Hoppy::BlockVector<double, Hoppy::Column>;
-	using RowVector = Hoppy::BlockVector<double, Hoppy::Row>;
+	using ColumnVector = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>;
+	using RowVector = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>;
 
 	template <typename T>
 	void accept_lvalue(T&);

@@ -83,7 +83,7 @@ namespace
 	using BD = Hoppy::BlockDiagonalMatrix<double>;
 	using BDi = Hoppy::BlockDiagonalMatrix<int>;
 	using BV = Hoppy::BlockVector<double>;
-	using BVR = Hoppy::BlockVector<double, Hoppy::Row>;
+	using BVR = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>;
 	using BVi = Hoppy::BlockVector<int>;
 	using Dense = Eigen::MatrixXd;
 	using FixedColumn = Eigen::Vector3d;

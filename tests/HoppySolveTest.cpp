@@ -142,9 +142,9 @@ TEST_CASE("inverse and solve availability follows the scalar and rhs contracts")
 {
 	using RealMatrix = Hoppy::BlockDiagonalMatrix<double>;
 	using IntegerMatrix = Hoppy::BlockDiagonalMatrix<int>;
-	using Column = Hoppy::BlockVector<double, Hoppy::Column>;
-	using Row = Hoppy::BlockVector<double, Hoppy::Row>;
-	using FloatColumn = Hoppy::BlockVector<float, Hoppy::Column>;
+	using Column = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>;
+	using Row = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>;
+	using FloatColumn = Hoppy::BlockVector<float, Hoppy::BlockVectorOrientation::Column>;
 	static_assert(has_inverse<RealMatrix>::value);
 	static_assert(!has_inverse<IntegerMatrix>::value);
 	static_assert(has_solve<RealMatrix, Column>::value);

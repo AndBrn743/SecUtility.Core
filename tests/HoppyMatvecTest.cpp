@@ -37,7 +37,7 @@ TEST_CASE("block matrix times column block vector is eager and oriented")
 	const auto lazyOperands = (matrix + matrix) * (vector + vector);
 
 	static_assert(std::is_same_v<std::remove_cv_t<decltype(result)>, Hoppy::BlockVector<double>>);
-	static_assert(std::is_same_v<typename decltype(result)::Orientation, Hoppy::Column>);
+	static_assert(std::is_same_v<typename decltype(result)::Orientation, Hoppy::BlockVectorOrientation::Column>);
 	REQUIRE(result.blockingInfo() == matrix.blockingInfo());
 	Hoppy::Test::requireApprox(result.asDense(), matrix.toDense() * vector.asDense());
 	Hoppy::Test::requireApprox(lazyOperands.asDense(),
@@ -48,14 +48,14 @@ TEST_CASE("row block vector times block matrix is eager and oriented")
 {
 	using Complex = std::complex<double>;
 	Hoppy::BlockDiagonalMatrix<Complex> matrix{1, 2};
-	Hoppy::BlockVector<double, Hoppy::Row> vector{1, 2};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> vector{1, 2};
 	fill(matrix);
 	vector.asDense() << 2.0, 3.0, 4.0;
 	const auto result = vector * matrix;
 
 	using DenseResult = decltype(vector.asDense() * matrix.toDense());
 	static_assert(std::is_same_v<typename decltype(result)::Scalar, typename DenseResult::Scalar>);
-	static_assert(std::is_same_v<typename decltype(result)::Orientation, Hoppy::Row>);
+	static_assert(std::is_same_v<typename decltype(result)::Orientation, Hoppy::BlockVectorOrientation::Row>);
 	Hoppy::Test::requireApprox(result.asDense(), vector.asDense() * matrix.toDense());
 }
 
@@ -71,7 +71,7 @@ TEST_CASE("fixed-shape dense column and row expressions select eager paths")
 	const auto rowResult = row.segment<3>(0) * matrix;
 	static_assert(std::is_same_v<std::remove_cv_t<decltype(columnResult)>, Hoppy::BlockVector<double>>);
 	static_assert(std::is_same_v<std::remove_cv_t<decltype(rowResult)>,
-	                             Hoppy::BlockVector<double, Hoppy::Row>>);
+	                             Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>>);
 	Hoppy::Test::requireApprox(columnResult.asDense(), matrix.toDense() * (column + column));
 	Hoppy::Test::requireApprox(rowResult.asDense(), row * matrix.toDense());
 
@@ -89,8 +89,8 @@ TEST_CASE("one-by-one operand position determines result orientation")
 	value(0, 0) = 2.0;
 	const auto column = matrix * value;
 	const auto row = value * matrix;
-	static_assert(std::is_same_v<typename decltype(column)::Orientation, Hoppy::Column>);
-	static_assert(std::is_same_v<typename decltype(row)::Orientation, Hoppy::Row>);
+	static_assert(std::is_same_v<typename decltype(column)::Orientation, Hoppy::BlockVectorOrientation::Column>);
+	static_assert(std::is_same_v<typename decltype(row)::Orientation, Hoppy::BlockVectorOrientation::Row>);
 	REQUIRE(column[0](0) == 6.0);
 	REQUIRE(row[0](0) == 6.0);
 }
@@ -99,7 +99,7 @@ TEST_CASE("empty matvecs and diagonal block matrices are supported")
 {
 	Hoppy::BlockDiagonalMatrix<double> emptyMatrix;
 	Hoppy::BlockVector<double> emptyColumn;
-	Hoppy::BlockVector<double, Hoppy::Row> emptyRow;
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> emptyRow;
 	REQUIRE((emptyMatrix * emptyColumn).size() == 0);
 	REQUIRE((emptyRow * emptyMatrix).size() == 0);
 
@@ -114,8 +114,8 @@ TEST_CASE("empty matvecs and diagonal block matrices are supported")
 TEST_CASE("unsupported block-vector orientations are absent")
 {
 	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
-	using Column = Hoppy::BlockVector<double, Hoppy::Column>;
-	using Row = Hoppy::BlockVector<double, Hoppy::Row>;
+	using Column = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>;
+	using Row = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>;
 	static_assert(has_product<Matrix, Column>::value);
 	static_assert(has_product<Row, Matrix>::value);
 	static_assert(!has_product<Matrix, Row>::value);
@@ -127,7 +127,7 @@ TEST_CASE("matvec operands must match dimensions and blocking")
 {
 	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};
 	Hoppy::BlockVector<double> wrongBlocking{3};
-	Hoppy::BlockVector<double, Hoppy::Row> wrongRowBlocking{3};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> wrongRowBlocking{3};
 	REQUIRE_THROWS_AS((void)(matrix * wrongBlocking), Hoppy::Test::EigenAssertionFailure);
 	REQUIRE_THROWS_AS((void)(wrongRowBlocking * matrix), Hoppy::Test::EigenAssertionFailure);
 

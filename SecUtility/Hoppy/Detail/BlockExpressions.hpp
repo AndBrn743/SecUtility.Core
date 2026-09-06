@@ -33,7 +33,7 @@ namespace Hoppy::Detail
 	struct SubtractOp { template <typename L, typename R> auto operator()(const L& lhs, const R& rhs) const { return lhs - rhs; } };
 	struct MultiplyOp { template <typename L, typename R> auto operator()(const L& lhs, const R& rhs) const { return lhs * rhs; } };
 	template <typename Lhs, typename Rhs>
-	using BlockwiseProduct = BinaryBlockExpression<Lhs, Rhs, MultiplyOp, Column>;
+	using BlockwiseProduct = BinaryBlockExpression<Lhs, Rhs, MultiplyOp, BlockVectorOrientation::Column>;
 	template <typename Scalar> struct RightMultiplyOp { Scalar Value; template <typename T> auto operator()(const T& value) const { return value * Value; } };
 	template <typename Scalar> struct LeftMultiplyOp { Scalar Value; template <typename T> auto operator()(const T& value) const { return Value * value; } };
 	template <typename Scalar> struct DivideOp { Scalar Value; template <typename T> auto operator()(const T& value) const { return value / Value; } };
@@ -45,25 +45,25 @@ namespace Hoppy
 	template <typename OtherDerived, typename>
 	auto BlockDiagonalMatrixExpr<Derived>::operator+(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&
 	{
-		return Detail::BinaryBlockExpression<Derived, OtherDerived, Detail::AddOp, Column>(derived(), other.derived());
+		return Detail::BinaryBlockExpression<Derived, OtherDerived, Detail::AddOp, BlockVectorOrientation::Column>(derived(), other.derived());
 	}
 	template <typename Derived>
 	template <typename OtherDerived, typename>
 	auto BlockDiagonalMatrixExpr<Derived>::operator-(const BlockDiagonalMatrixExpr<OtherDerived>& other) const&
 	{
-		return Detail::BinaryBlockExpression<Derived, OtherDerived, Detail::SubtractOp, Column>(derived(), other.derived());
+		return Detail::BinaryBlockExpression<Derived, OtherDerived, Detail::SubtractOp, BlockVectorOrientation::Column>(derived(), other.derived());
 	}
 	template <typename Derived>
 	template <typename TOtherScalar, typename>
 	auto BlockDiagonalMatrixExpr<Derived>::operator*(const TOtherScalar& scalar) const&
 	{
-		return Detail::UnaryBlockExpression<Derived, Detail::RightMultiplyOp<TOtherScalar>, Column>(derived(), {scalar});
+		return Detail::UnaryBlockExpression<Derived, Detail::RightMultiplyOp<TOtherScalar>, BlockVectorOrientation::Column>(derived(), {scalar});
 	}
 	template <typename Derived>
 	template <typename TOtherScalar, typename>
 	auto BlockDiagonalMatrixExpr<Derived>::operator/(const TOtherScalar& scalar) const&
 	{
-		return Detail::UnaryBlockExpression<Derived, Detail::DivideOp<TOtherScalar>, Column>(derived(), {scalar});
+		return Detail::UnaryBlockExpression<Derived, Detail::DivideOp<TOtherScalar>, BlockVectorOrientation::Column>(derived(), {scalar});
 	}
 	template <typename Derived>
 	template <typename OtherDerived, typename>
@@ -73,7 +73,7 @@ namespace Hoppy
 	}
 	template <typename MatrixDerived, typename VectorDerived,
 	          typename = std::enable_if_t<std::is_same_v<
-	                  typename Eigen::internal::traits<VectorDerived>::Orientation, Column>>,
+	                  typename Eigen::internal::traits<VectorDerived>::Orientation, BlockVectorOrientation::Column>>,
 	          typename = typename Eigen::ScalarBinaryOpTraits<
 	                  typename Eigen::internal::traits<MatrixDerived>::Scalar,
 	                  typename Eigen::internal::traits<VectorDerived>::Scalar,
@@ -90,7 +90,7 @@ namespace Hoppy
 		                typename Eigen::internal::traits<MatrixDerived>::Scalar,
 		                typename Eigen::internal::traits<VectorDerived>::Scalar>>::ReturnType;
 		eigen_assert(matrix.hasSameBlockingAs(vector));
-		BlockVector<ResultScalar, Column> result(matrix.blockingInfo());
+		BlockVector<ResultScalar, BlockVectorOrientation::Column> result(matrix.blockingInfo());
 		for (Eigen::Index index = 0; index < matrix.blockCount(); ++index)
 			result[index].noalias() = matrix.derived()[index] * vector.derived()[index];
 		return result;
@@ -112,7 +112,7 @@ namespace Hoppy
 		                typename Eigen::internal::traits<MatrixDerived>::Scalar,
 		                typename DenseDerived::Scalar>>::ReturnType;
 		eigen_assert(vector.size() == matrix.totalDimension());
-		BlockVector<ResultScalar, Column> result(matrix.blockingInfo());
+		BlockVector<ResultScalar, BlockVectorOrientation::Column> result(matrix.blockingInfo());
 		for (Eigen::Index index = 0; index < matrix.blockCount(); ++index)
 		{
 			const auto offset = matrix.blockOffset(index);
@@ -124,7 +124,7 @@ namespace Hoppy
 
 	template <typename VectorDerived, typename MatrixDerived,
 	          typename = std::enable_if_t<std::is_same_v<
-	                  typename Eigen::internal::traits<VectorDerived>::Orientation, Row>>,
+	                  typename Eigen::internal::traits<VectorDerived>::Orientation, BlockVectorOrientation::Row>>,
 	          typename = typename Eigen::ScalarBinaryOpTraits<
 	                  typename Eigen::internal::traits<VectorDerived>::Scalar,
 	                  typename Eigen::internal::traits<MatrixDerived>::Scalar,
@@ -141,7 +141,7 @@ namespace Hoppy
 		                typename Eigen::internal::traits<VectorDerived>::Scalar,
 		                typename Eigen::internal::traits<MatrixDerived>::Scalar>>::ReturnType;
 		eigen_assert(vector.hasSameBlockingAs(matrix));
-		BlockVector<ResultScalar, Row> result(matrix.blockingInfo());
+		BlockVector<ResultScalar, BlockVectorOrientation::Row> result(matrix.blockingInfo());
 		for (Eigen::Index index = 0; index < matrix.blockCount(); ++index)
 			result[index].noalias() = vector.derived()[index] * matrix.derived()[index];
 		return result;
@@ -165,7 +165,7 @@ namespace Hoppy
 		                typename DenseDerived::Scalar,
 		                typename Eigen::internal::traits<MatrixDerived>::Scalar>>::ReturnType;
 		eigen_assert(vector.size() == matrix.totalDimension());
-		BlockVector<ResultScalar, Row> result(matrix.blockingInfo());
+		BlockVector<ResultScalar, BlockVectorOrientation::Row> result(matrix.blockingInfo());
 		for (Eigen::Index index = 0; index < matrix.blockCount(); ++index)
 		{
 			const auto offset = matrix.blockOffset(index);
@@ -207,7 +207,7 @@ namespace Hoppy
 	                          Scalar, typename Eigen::internal::traits<Derived>::Scalar>>::ReturnType>
 	auto operator*(const Scalar& scalar, const BlockDiagonalMatrixExpr<Derived>& expression)
 	{
-		return Detail::UnaryBlockExpression<Derived, Detail::LeftMultiplyOp<Scalar>, Column>(expression.derived(), {scalar});
+		return Detail::UnaryBlockExpression<Derived, Detail::LeftMultiplyOp<Scalar>, BlockVectorOrientation::Column>(expression.derived(), {scalar});
 	}
 	template <typename Scalar, typename Derived,
 	          typename = typename Eigen::ScalarBinaryOpTraits<
@@ -234,10 +234,10 @@ struct Eigen::internal::traits<Hoppy::Detail::UnaryBlockExpression<Source, Opera
 	using Orientation = TOrientation;
 	static constexpr int Flags = 0;
 	static constexpr int RowsAtCompileTime = std::is_same_v<StorageKind, Hoppy::Detail::BlockVectorStorage>
-	                                                 ? (std::is_same_v<Orientation, Hoppy::Row> ? 1 : Dynamic)
+	                                                 ? (std::is_same_v<Orientation, Hoppy::BlockVectorOrientation::Row> ? 1 : Dynamic)
 	                                                 : Dynamic;
 	static constexpr int ColsAtCompileTime = std::is_same_v<StorageKind, Hoppy::Detail::BlockVectorStorage>
-	                                                 ? (std::is_same_v<Orientation, Hoppy::Row> ? Dynamic : 1)
+	                                                 ? (std::is_same_v<Orientation, Hoppy::BlockVectorOrientation::Row> ? Dynamic : 1)
 	                                                 : Dynamic;
 	static constexpr int MaxRowsAtCompileTime = RowsAtCompileTime;
 	static constexpr int MaxColsAtCompileTime = ColsAtCompileTime;
@@ -271,7 +271,7 @@ struct Eigen::internal::traits<Hoppy::Detail::CongruenceExpression<Matrix, Trans
 	using XprKind = MatrixXpr;
 	using StorageIndex = Eigen::Index;
 	using BlockPolicy = Hoppy::DenseBlockPolicy;
-	using Orientation = Hoppy::Column;
+	using Orientation = Hoppy::BlockVectorOrientation::Column;
 	static constexpr int Flags = 0;
 	static constexpr int RowsAtCompileTime = Dynamic;
 	static constexpr int ColsAtCompileTime = Dynamic;
@@ -281,23 +281,23 @@ struct Eigen::internal::traits<Hoppy::Detail::CongruenceExpression<Matrix, Trans
 
 namespace Hoppy
 {
-	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::operator+() const& { return Detail::UnaryBlockExpression<Derived, Detail::PositiveOp, Column>(derived()); }
-	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::operator-() const& { return Detail::UnaryBlockExpression<Derived, Detail::NegativeOp, Column>(derived()); }
-	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::transpose() const& { return Detail::UnaryBlockExpression<Derived, Detail::TransposeOp, Column>(derived()); }
-	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::conjugate() const& { return Detail::UnaryBlockExpression<Derived, Detail::ConjugateOp, Column>(derived()); }
-	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::adjoint() const& { return Detail::UnaryBlockExpression<Derived, Detail::AdjointOp, Column>(derived()); }
-	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::real() const& { return Detail::UnaryBlockExpression<Derived, Detail::RealOp, Column>(derived()); }
-	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::imag() const& { return Detail::UnaryBlockExpression<Derived, Detail::ImagOp, Column>(derived()); }
-	template <typename Derived> template <typename S, typename> auto BlockDiagonalMatrixExpr<Derived>::inverse() const& { return Detail::UnaryBlockExpression<Derived, Detail::InverseOp, Column>(derived()); }
+	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::operator+() const& { return Detail::UnaryBlockExpression<Derived, Detail::PositiveOp, BlockVectorOrientation::Column>(derived()); }
+	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::operator-() const& { return Detail::UnaryBlockExpression<Derived, Detail::NegativeOp, BlockVectorOrientation::Column>(derived()); }
+	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::transpose() const& { return Detail::UnaryBlockExpression<Derived, Detail::TransposeOp, BlockVectorOrientation::Column>(derived()); }
+	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::conjugate() const& { return Detail::UnaryBlockExpression<Derived, Detail::ConjugateOp, BlockVectorOrientation::Column>(derived()); }
+	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::adjoint() const& { return Detail::UnaryBlockExpression<Derived, Detail::AdjointOp, BlockVectorOrientation::Column>(derived()); }
+	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::real() const& { return Detail::UnaryBlockExpression<Derived, Detail::RealOp, BlockVectorOrientation::Column>(derived()); }
+	template <typename Derived> auto BlockDiagonalMatrixExpr<Derived>::imag() const& { return Detail::UnaryBlockExpression<Derived, Detail::ImagOp, BlockVectorOrientation::Column>(derived()); }
+	template <typename Derived> template <typename S, typename> auto BlockDiagonalMatrixExpr<Derived>::inverse() const& { return Detail::UnaryBlockExpression<Derived, Detail::InverseOp, BlockVectorOrientation::Column>(derived()); }
 	template <typename Derived> template <typename TransformDerived, typename, typename> auto BlockDiagonalMatrixExpr<Derived>::transformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const& { return Detail::CongruenceExpression<Derived, TransformDerived, false>(derived(), transform.derived()); }
 	template <typename Derived> template <typename TransformDerived, typename, typename> auto BlockDiagonalMatrixExpr<Derived>::backTransformedBy(const BlockDiagonalMatrixExpr<TransformDerived>& transform) const& { return Detail::CongruenceExpression<Derived, TransformDerived, true>(derived(), transform.derived()); }
-	template <typename Derived> template <typename NewScalar> auto BlockDiagonalMatrixExpr<Derived>::cast() const& { return Detail::UnaryBlockExpression<Derived, Detail::CastOp<NewScalar>, Column>(derived()); }
+	template <typename Derived> template <typename NewScalar> auto BlockDiagonalMatrixExpr<Derived>::cast() const& { return Detail::UnaryBlockExpression<Derived, Detail::CastOp<NewScalar>, BlockVectorOrientation::Column>(derived()); }
 
 	template <typename Derived> auto BlockVectorExpr<Derived>::operator+() const& { return Detail::UnaryBlockExpression<Derived, Detail::PositiveOp, Orientation>(derived()); }
 	template <typename Derived> auto BlockVectorExpr<Derived>::operator-() const& { return Detail::UnaryBlockExpression<Derived, Detail::NegativeOp, Orientation>(derived()); }
-	template <typename Derived> auto BlockVectorExpr<Derived>::transpose() const& { using ResultOrientation = std::conditional_t<std::is_same_v<Orientation, Column>, Row, Column>; return Detail::UnaryBlockExpression<Derived, Detail::TransposeOp, ResultOrientation>(derived()); }
+	template <typename Derived> auto BlockVectorExpr<Derived>::transpose() const& { using ResultOrientation = std::conditional_t<std::is_same_v<Orientation, BlockVectorOrientation::Column>, BlockVectorOrientation::Row, BlockVectorOrientation::Column>; return Detail::UnaryBlockExpression<Derived, Detail::TransposeOp, ResultOrientation>(derived()); }
 	template <typename Derived> auto BlockVectorExpr<Derived>::conjugate() const& { return Detail::UnaryBlockExpression<Derived, Detail::ConjugateOp, Orientation>(derived()); }
-	template <typename Derived> auto BlockVectorExpr<Derived>::adjoint() const& { using ResultOrientation = std::conditional_t<std::is_same_v<Orientation, Column>, Row, Column>; return Detail::UnaryBlockExpression<Derived, Detail::AdjointOp, ResultOrientation>(derived()); }
+	template <typename Derived> auto BlockVectorExpr<Derived>::adjoint() const& { using ResultOrientation = std::conditional_t<std::is_same_v<Orientation, BlockVectorOrientation::Column>, BlockVectorOrientation::Row, BlockVectorOrientation::Column>; return Detail::UnaryBlockExpression<Derived, Detail::AdjointOp, ResultOrientation>(derived()); }
 	template <typename Derived> auto BlockVectorExpr<Derived>::real() const& { return Detail::UnaryBlockExpression<Derived, Detail::RealOp, Orientation>(derived()); }
 	template <typename Derived> auto BlockVectorExpr<Derived>::imag() const& { return Detail::UnaryBlockExpression<Derived, Detail::ImagOp, Orientation>(derived()); }
 	template <typename Derived> template <typename NewScalar> auto BlockVectorExpr<Derived>::cast() const& { return Detail::UnaryBlockExpression<Derived, Detail::CastOp<NewScalar>, Orientation>(derived()); }
@@ -321,8 +321,8 @@ namespace Hoppy::Detail
 		Eigen::Index totalDimension() const { return m_Source.totalDimension(); }
 		Eigen::Index storedSize() const { return m_Source.storedSize(); }
 		Eigen::Index size() const { return rows() * cols(); }
-		Eigen::Index rows() const { if constexpr (std::is_same_v<typename Eigen::internal::traits<Source>::StorageKind, BlockVectorStorage>) return std::is_same_v<TOrientation, Row> ? 1 : totalDimension(); else return totalDimension(); }
-		Eigen::Index cols() const { if constexpr (std::is_same_v<typename Eigen::internal::traits<Source>::StorageKind, BlockVectorStorage>) return std::is_same_v<TOrientation, Row> ? totalDimension() : 1; else return totalDimension(); }
+		Eigen::Index rows() const { if constexpr (std::is_same_v<typename Eigen::internal::traits<Source>::StorageKind, BlockVectorStorage>) return std::is_same_v<TOrientation, BlockVectorOrientation::Row> ? 1 : totalDimension(); else return totalDimension(); }
+		Eigen::Index cols() const { if constexpr (std::is_same_v<typename Eigen::internal::traits<Source>::StorageKind, BlockVectorStorage>) return std::is_same_v<TOrientation, BlockVectorOrientation::Row> ? totalDimension() : 1; else return totalDimension(); }
 		Eigen::Index dimensionOfBlock(Eigen::Index i) const { return m_Source.dimensionOfBlock(i); }
 		Eigen::Index blockOffset(Eigen::Index i) const { return m_Source.blockOffset(i); }
 		Eigen::Index storageOffset(Eigen::Index i) const { return m_Source.storageOffset(i); }

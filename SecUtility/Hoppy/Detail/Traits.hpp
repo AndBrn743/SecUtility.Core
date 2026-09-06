@@ -95,8 +95,8 @@ namespace Eigen::internal
 		using XprKind = MatrixXpr;
 		using StorageIndex = Eigen::Index;
 		static constexpr int Flags = NestByRefBit;
-		static constexpr int RowsAtCompileTime = std::is_same_v<TOrientation, Hoppy::Row> ? 1 : Dynamic;
-		static constexpr int ColsAtCompileTime = std::is_same_v<TOrientation, Hoppy::Row> ? Dynamic : 1;
+		static constexpr int RowsAtCompileTime = std::is_same_v<TOrientation, Hoppy::BlockVectorOrientation::Row> ? 1 : Dynamic;
+		static constexpr int ColsAtCompileTime = std::is_same_v<TOrientation, Hoppy::BlockVectorOrientation::Row> ? Dynamic : 1;
 		static constexpr int MaxRowsAtCompileTime = RowsAtCompileTime;
 		static constexpr int MaxColsAtCompileTime = ColsAtCompileTime;
 	};

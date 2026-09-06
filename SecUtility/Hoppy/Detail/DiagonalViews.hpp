@@ -22,7 +22,7 @@ template <typename Source, bool Writable>
 struct Eigen::internal::traits<Hoppy::Detail::DiagonalReturnType<Source, Writable>>
 {
 	using Scalar = typename traits<Source>::Scalar;
-	using Orientation = Hoppy::Column;
+	using Orientation = Hoppy::BlockVectorOrientation::Column;
 	using StorageKind = Hoppy::Detail::BlockVectorStorage;
 	using XprKind = MatrixXpr;
 	using StorageIndex = Eigen::Index;

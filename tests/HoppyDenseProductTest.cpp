@@ -95,7 +95,7 @@ TEST_CASE("dynamic runtime vectors use dense products while fixed vectors remain
 	Eigen::Vector3d fixedColumn = dynamicColumn;
 	Eigen::RowVector3d fixedRow = dynamicRow;
 	static_assert(std::is_same_v<decltype(matrix * fixedColumn), Hoppy::BlockVector<double>>);
-	static_assert(std::is_same_v<decltype(fixedRow * matrix), Hoppy::BlockVector<double, Hoppy::Row>>);
+	static_assert(std::is_same_v<decltype(fixedRow * matrix), Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>>);
 }
 
 TEST_CASE("empty dimensions and zero-column products are supported")

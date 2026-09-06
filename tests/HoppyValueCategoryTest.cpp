@@ -159,15 +159,15 @@ TEST_CASE("owning lvalues use the CRTP scalar multiply and divide overloads")
 	Hoppy::Test::requireApprox(columnProduct.toDense(), column.toDense() * 4.0);
 	Hoppy::Test::requireApprox(columnQuotient.toDense(), column.toDense() / 2.0);
 
-	Hoppy::BlockVector<double, Hoppy::Row> row{1, 2};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> row{1, 2};
 	fill(row);
 	const auto rowProduct = row * 5.0;
 	const auto rowQuotient = row / 4.0;
 	row[1](1) = 29.0;
 	using ProductOrientation = typename Eigen::internal::traits<decltype(rowProduct)>::Orientation;
 	using QuotientOrientation = typename Eigen::internal::traits<decltype(rowQuotient)>::Orientation;
-	static_assert(std::is_same_v<ProductOrientation, Hoppy::Row>);
-	static_assert(std::is_same_v<QuotientOrientation, Hoppy::Row>);
+	static_assert(std::is_same_v<ProductOrientation, Hoppy::BlockVectorOrientation::Row>);
+	static_assert(std::is_same_v<QuotientOrientation, Hoppy::BlockVectorOrientation::Row>);
 	Hoppy::Test::requireApprox(rowProduct.toDense(), row.toDense() * 5.0);
 	Hoppy::Test::requireApprox(rowQuotient.toDense(), row.toDense() / 4.0);
 }
@@ -211,15 +211,15 @@ TEST_CASE("block-vector prvalue chains preserve orientation and nested lifetimes
 	const auto rowChain = (lhs + rhs).transpose() / 2.0;
 	using ColumnOrientation = typename Eigen::internal::traits<decltype(columnChain)>::Orientation;
 	using RowOrientation = typename Eigen::internal::traits<decltype(rowChain)>::Orientation;
-	static_assert(std::is_same_v<ColumnOrientation, Hoppy::Column>);
-	static_assert(std::is_same_v<RowOrientation, Hoppy::Row>);
+	static_assert(std::is_same_v<ColumnOrientation, Hoppy::BlockVectorOrientation::Column>);
+	static_assert(std::is_same_v<RowOrientation, Hoppy::BlockVectorOrientation::Row>);
 
 	Hoppy::Test::requireApprox(columnChain.toDense(), ((lhsDense + rhsDense) / 2.0) - lhsDense);
 	Hoppy::Test::requireApprox(rowChain.toDense(), (lhsDense + rhsDense).transpose() / 2.0);
 	REQUIRE(((lhs + rhs) / 2.0).isApprox((lhs + rhs) / 2.0));
 
-	Hoppy::BlockVector<double, Hoppy::Row> rowLhs{1, 2};
-	Hoppy::BlockVector<double, Hoppy::Row> rowRhs{1, 2};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> rowLhs{1, 2};
+	Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row> rowRhs{1, 2};
 	fill(rowLhs);
 	fill(rowRhs, 2.0);
 	const auto storedRowExpression = (rowLhs + rowRhs).conjugate() / 2.0;

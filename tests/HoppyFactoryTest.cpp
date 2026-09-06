@@ -111,13 +111,13 @@ namespace
 	              == Eigen::Dynamic);
 	static_assert(Eigen::internal::traits<Hoppy::BlockDiagonalMatrix<double>>::ColsAtCompileTime
 	              == Eigen::Dynamic);
-	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::Column>>::RowsAtCompileTime
+	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>>::RowsAtCompileTime
 	              == Eigen::Dynamic);
-	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::Column>>::ColsAtCompileTime == 1);
-	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::Row>>::RowsAtCompileTime == 1);
-	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::Row>>::ColsAtCompileTime
+	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>>::ColsAtCompileTime == 1);
+	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>>::RowsAtCompileTime == 1);
+	static_assert(Eigen::internal::traits<Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>>::ColsAtCompileTime
 	              == Eigen::Dynamic);
-	static_assert(!std::is_same_v<Hoppy::Column, Hoppy::Row>);
+	static_assert(!std::is_same_v<Hoppy::BlockVectorOrientation::Column, Hoppy::BlockVectorOrientation::Row>);
 	static_assert(!has_two_argument_resize<Hoppy::BlockDiagonalMatrix<double>>::value);
 	static_assert(!has_two_argument_resize<Hoppy::BlockVector<double>>::value);
 }
@@ -220,7 +220,7 @@ TEST_CASE("checked dimensions reject invalid values and every independent overfl
 TEST_CASE("owning factories and fills preserve exact specialization and blocking")
 {
 	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
-	using RowVector = Hoppy::BlockVector<double, Hoppy::Row>;
+	using RowVector = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>;
 	const std::vector<Eigen::Index> dimensions{1, 2, 3};
 
 	const auto zero = Matrix::Zero(dimensions);
@@ -250,8 +250,8 @@ TEST_CASE("owning factories and fills preserve exact specialization and blocking
 TEST_CASE("FromDense and FromDenseLike extract exact blocks and vector orientation")
 {
 	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
-	using ColumnVector = Hoppy::BlockVector<double, Hoppy::Column>;
-	using RowVector = Hoppy::BlockVector<double, Hoppy::Row>;
+	using ColumnVector = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Column>;
+	using RowVector = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>;
 	Eigen::MatrixXd dense = Eigen::MatrixXd::Zero(3, 3);
 	dense.diagonal() << 1.0, 2.0, 3.0;
 	dense(1, 2) = 4.0;

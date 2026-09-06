@@ -19,7 +19,7 @@ namespace Hoppy
 		using Scalar = typename Base::Scalar;
 		using RealScalar = typename Base::RealScalar;
 		using Orientation = typename Eigen::internal::traits<Derived>::Orientation;
-		using DensePlain = std::conditional_t<std::is_same_v<Orientation, Row>,
+		using DensePlain = std::conditional_t<std::is_same_v<Orientation, BlockVectorOrientation::Row>,
 		                                      Eigen::Matrix<Scalar, 1, Eigen::Dynamic>, Eigen::VectorX<Scalar>>;
 		using Base::derived;
 
@@ -57,7 +57,7 @@ namespace Hoppy
 		                  Scalar, TOtherScalar,
 		                  Eigen::internal::scalar_quotient_op<Scalar, TOtherScalar>>::ReturnType>
 		auto operator/(const TOtherScalar& scalar) const&;
-		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, Column>>>
+		template <typename T = Orientation, typename = std::enable_if_t<std::is_same_v<T, BlockVectorOrientation::Column>>>
 		auto asDiagonal() const&;
 		template <typename OtherDerived,
 		          typename OtherScalar = typename Eigen::internal::traits<OtherDerived>::Scalar,
@@ -132,7 +132,7 @@ namespace Hoppy
 			{
 				const auto offset = this->blockOffset(index);
 				const auto dimension = this->dimensionOfBlock(index);
-				if constexpr (std::is_same_v<Orientation, Row>)
+				if constexpr (std::is_same_v<Orientation, BlockVectorOrientation::Row>)
 					destination.derived().row(0).segment(offset, dimension) = derived()[index];
 				else
 					destination.derived().col(0).segment(offset, dimension) = derived()[index];

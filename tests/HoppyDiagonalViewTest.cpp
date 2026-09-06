@@ -32,7 +32,7 @@ TEST_CASE("matrix diagonal is a typed column-vector view")
 	using View = decltype(diagonal);
 	static_assert(std::is_same_v<typename Eigen::internal::traits<View>::StorageKind,
 	                             Hoppy::Detail::BlockVectorStorage>);
-	static_assert(std::is_same_v<typename Eigen::internal::traits<View>::Orientation, Hoppy::Column>);
+	static_assert(std::is_same_v<typename Eigen::internal::traits<View>::Orientation, Hoppy::BlockVectorOrientation::Column>);
 	static_assert(std::is_assignable_v<decltype(diagonal[1](0)), double>);
 	REQUIRE(diagonal.blockingInfo() == std::vector<Eigen::Index>{1, 2});
 	Hoppy::Test::requireApprox(diagonal.toDense(), matrix.toDense().diagonal());
@@ -82,7 +82,7 @@ TEST_CASE("view participation separates owning rvalues, orientation, and express
 {
 	using Matrix = Hoppy::BlockDiagonalMatrix<double>;
 	using ColumnVector = Hoppy::BlockVector<double>;
-	using RowVector = Hoppy::BlockVector<double, Hoppy::Row>;
+	using RowVector = Hoppy::BlockVector<double, Hoppy::BlockVectorOrientation::Row>;
 	using MatrixExpression = decltype(std::declval<const Matrix&>().transpose());
 	using VectorExpression = decltype(std::declval<const ColumnVector&>().conjugate());
 	using TwiceTransposed = decltype(std::declval<const ColumnVector&>().transpose().transpose());

@@ -149,13 +149,13 @@ namespace Hoppy
 
 		template <typename RhsDerived,
 		          typename = std::enable_if_t<
-		                  std::is_same_v<typename Eigen::internal::traits<RhsDerived>::Orientation, Column>
+		                  std::is_same_v<typename Eigen::internal::traits<RhsDerived>::Orientation, BlockVectorOrientation::Column>
 		                  && std::is_same_v<typename Eigen::internal::traits<RhsDerived>::Scalar, Scalar>
 		                  && std::is_floating_point_v<typename Eigen::NumTraits<Scalar>::Real>>>
-		BlockVector<Scalar, Column> solve(const BlockVectorExpr<RhsDerived>& rhs) const
+		BlockVector<Scalar, BlockVectorOrientation::Column> solve(const BlockVectorExpr<RhsDerived>& rhs) const
 		{
 			eigen_assert(this->hasSameBlockingAs(rhs));
-			BlockVector<Scalar, Column> result(this->blockingInfo());
+			BlockVector<Scalar, BlockVectorOrientation::Column> result(this->blockingInfo());
 			for (Eigen::Index index = 0; index < blockCount(); ++index)
 				result[index] = (*this)[index].partialPivLu().solve(rhs.derived()[index]);
 			return result;
