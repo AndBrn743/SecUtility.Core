@@ -134,6 +134,18 @@ target_link_libraries(HoppyTriangularMapNoDebugTest PRIVATE Catch2::Catch2WithMa
 target_compile_definitions(HoppyTriangularMapNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 add_test(NAME HoppyTriangularMapNoDebugTest COMMAND HoppyTriangularMapNoDebugTest)
 
+add_executable(HoppyTriangularFactoryTest HoppyTriangularFactoryTest.cpp)
+target_link_libraries(HoppyTriangularFactoryTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_options(HoppyTriangularFactoryTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+add_test(NAME HoppyTriangularFactoryTest COMMAND HoppyTriangularFactoryTest)
+
+add_executable(HoppyTriangularFactoryNoDebugTest HoppyTriangularFactoryTest.cpp)
+target_link_libraries(HoppyTriangularFactoryNoDebugTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_definitions(HoppyTriangularFactoryNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+add_test(NAME HoppyTriangularFactoryNoDebugTest COMMAND HoppyTriangularFactoryNoDebugTest)
+
 add_secutility_test(HoppyFactoryTest HoppyFactoryTest.cpp)
 target_compile_options(HoppyFactoryTest PRIVATE
 	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>

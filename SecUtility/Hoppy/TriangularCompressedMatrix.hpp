@@ -104,6 +104,140 @@ namespace Hoppy::Detail
 			return checkedStoredSize(dimension);
 		}
 
+		static TriangularCompressedMatrix Zero() { return makeZero(defaultDimension()); }
+		static TriangularCompressedMatrix Zero(const Eigen::Index dimension)
+		{
+			return makeZero(dimension);
+		}
+		static TriangularCompressedMatrix Zero(const Eigen::Index rows, const Eigen::Index columns)
+		{
+			return Zero(checkedSquareDimension(rows, columns));
+		}
+
+		template <typename Tag = StructureTag,
+		          typename = std::enable_if_t<!std::is_same_v<Tag, AntiSymmetricTag>
+		                                      && !std::is_same_v<Tag, AntiHermitianTag>>>
+		static TriangularCompressedMatrix Ones() { return makeOnes(defaultDimension()); }
+		template <typename Tag = StructureTag,
+		          typename = std::enable_if_t<!std::is_same_v<Tag, AntiSymmetricTag>
+		                                      && !std::is_same_v<Tag, AntiHermitianTag>>>
+		static TriangularCompressedMatrix Ones(const Eigen::Index dimension)
+		{
+			return makeOnes(dimension);
+		}
+		template <typename Tag = StructureTag,
+		          typename = std::enable_if_t<!std::is_same_v<Tag, AntiSymmetricTag>
+		                                      && !std::is_same_v<Tag, AntiHermitianTag>>>
+		static TriangularCompressedMatrix Ones(const Eigen::Index rows, const Eigen::Index columns)
+		{
+			return Ones(checkedSquareDimension(rows, columns));
+		}
+
+		static TriangularCompressedMatrix Constant(const Scalar& value)
+		{
+			return makeConstant(defaultDimension(), value);
+		}
+		static TriangularCompressedMatrix Constant(const Eigen::Index dimension, const Scalar& value)
+		{
+			return makeConstant(dimension, value);
+		}
+		static TriangularCompressedMatrix Constant(const Eigen::Index rows, const Eigen::Index columns,
+		                                           const Scalar& value)
+		{
+			return makeConstant(checkedSquareDimension(rows, columns), value);
+		}
+
+		static TriangularCompressedMatrix Random() { return makeRandom(defaultDimension()); }
+		static TriangularCompressedMatrix Random(const Eigen::Index dimension)
+		{
+			return makeRandom(dimension);
+		}
+		static TriangularCompressedMatrix Random(const Eigen::Index rows, const Eigen::Index columns)
+		{
+			return Random(checkedSquareDimension(rows, columns));
+		}
+
+		template <typename Tag = StructureTag,
+		          typename = std::enable_if_t<!std::is_same_v<Tag, AntiSymmetricTag>
+		                                      && !std::is_same_v<Tag, AntiHermitianTag>>>
+		static TriangularCompressedMatrix Identity()
+		{
+			return makeIdentity(defaultDimension());
+		}
+		template <typename Tag = StructureTag,
+		          typename = std::enable_if_t<!std::is_same_v<Tag, AntiSymmetricTag>
+		                                      && !std::is_same_v<Tag, AntiHermitianTag>>>
+		static TriangularCompressedMatrix Identity(const Eigen::Index dimension)
+		{
+			return makeIdentity(dimension);
+		}
+		template <typename Tag = StructureTag,
+		          typename = std::enable_if_t<!std::is_same_v<Tag, AntiSymmetricTag>
+		                                      && !std::is_same_v<Tag, AntiHermitianTag>>>
+		static TriangularCompressedMatrix Identity(const Eigen::Index rows, const Eigen::Index columns)
+		{
+			return Identity(checkedSquareDimension(rows, columns));
+		}
+
+		template <typename Expression, typename Tag = StructureTag,
+		          typename = std::enable_if_t<!std::is_same_v<Tag, LowerTriangularTag>>>
+		static TriangularCompressedMatrix FromUpper(const Expression& expression)
+		{
+			return fromSelectedTriangle(expression, true);
+		}
+
+		template <typename Expression, typename Tag = StructureTag,
+		          typename = std::enable_if_t<!std::is_same_v<Tag, UpperTriangularTag>>>
+		static TriangularCompressedMatrix FromLower(const Expression& expression)
+		{
+			return fromSelectedTriangle(expression, false);
+		}
+
+		template <typename Expression>
+		static TriangularCompressedMatrix FromUncheckedDense(const Expression& expression)
+		{
+			TriangularCompressedMatrix result(checkedSquareDimension(expression.rows(), expression.cols()));
+			const bool upper = std::is_same_v<StructureTag, UpperTriangularTag>
+			                   || (!std::is_same_v<StructureTag, LowerTriangularTag>
+			                       && Packing == TrianglePacking::Upper);
+			forSelectedTriangle(result, expression, upper, true);
+			return result;
+		}
+
+		template <typename Expression>
+		static TriangularCompressedMatrix FromModifiedDense(const Expression& expression)
+		{
+			const Eigen::Index dimension = checkedSquareDimension(expression.rows(), expression.cols());
+			const auto evaluated = expression.eval();
+			TriangularCompressedMatrix result(dimension);
+			const bool upper = std::is_same_v<StructureTag, UpperTriangularTag>
+			                   || (!std::is_same_v<StructureTag, LowerTriangularTag>
+			                       && Packing == TrianglePacking::Upper);
+			for (Eigen::Index row = 0; row < dimension; ++row)
+				for (Eigen::Index column = 0; column < dimension; ++column)
+					if ((upper && row <= column) || (!upper && row >= column))
+					{
+						const Scalar direct = static_cast<Scalar>(evaluated.coeff(row, column));
+						Scalar value;
+						if constexpr (std::is_same_v<StructureTag, UpperTriangularTag>
+						              || std::is_same_v<StructureTag, LowerTriangularTag>) value = direct;
+						else
+						{
+							const Scalar reflected = static_cast<Scalar>(evaluated.coeff(column, row));
+							if constexpr (std::is_same_v<StructureTag, SymmetricTag>)
+								value = (direct + reflected) / Scalar(2);
+							else if constexpr (std::is_same_v<StructureTag, AntiSymmetricTag>)
+								value = (direct - reflected) / Scalar(2);
+							else if constexpr (std::is_same_v<StructureTag, HermitianTag>)
+								value = (direct + Eigen::numext::conj(reflected)) / Scalar(2);
+							else
+								value = (direct - Eigen::numext::conj(reflected)) / Scalar(2);
+						}
+						result.writeCanonicalized(row, column, value);
+					}
+			return result;
+		}
+
 		void resize(const Eigen::Index dimension)
 		{
 			TriangularCompressedMatrix replacement(dimension);
@@ -141,6 +275,58 @@ namespace Hoppy::Detail
 	private:
 		friend PlainBase;
 		using Storage = std::vector<Scalar, Allocator>;
+		static TriangularCompressedMatrix makeZero(const Eigen::Index dimension)
+		{
+			TriangularCompressedMatrix result(dimension);
+			result.setZero();
+			return result;
+		}
+		static TriangularCompressedMatrix makeOnes(const Eigen::Index dimension)
+		{
+			TriangularCompressedMatrix result(dimension);
+			result.setOnes();
+			return result;
+		}
+		static TriangularCompressedMatrix makeRandom(const Eigen::Index dimension)
+		{
+			TriangularCompressedMatrix result(dimension);
+			result.setRandom();
+			return result;
+		}
+		static TriangularCompressedMatrix makeIdentity(const Eigen::Index dimension)
+		{
+			TriangularCompressedMatrix result(dimension);
+			result.setIdentity();
+			return result;
+		}
+		static TriangularCompressedMatrix makeConstant(const Eigen::Index dimension, const Scalar& value)
+		{
+			TriangularCompressedMatrix result(dimension);
+			result.setConstant(value);
+			return result;
+		}
+
+		template <typename Expression>
+		static void forSelectedTriangle(TriangularCompressedMatrix& result, const Expression& expression,
+		                                const bool upper, const bool canonicalizeDiagonal)
+		{
+			for (Eigen::Index row = 0; row < result.dimension(); ++row)
+				for (Eigen::Index column = 0; column < result.dimension(); ++column)
+					if ((upper && row <= column) || (!upper && row >= column))
+					{
+						const Scalar value = static_cast<Scalar>(expression.coeff(row, column));
+						if (canonicalizeDiagonal) result.writeCanonicalized(row, column, value);
+						else result.writeLogical(row, column, value);
+					}
+		}
+
+		template <typename Expression>
+		static TriangularCompressedMatrix fromSelectedTriangle(const Expression& expression, const bool upper)
+		{
+			TriangularCompressedMatrix result(checkedSquareDimension(expression.rows(), expression.cols()));
+			forSelectedTriangle(result, expression, upper, false);
+			return result;
+		}
 
 		static constexpr Eigen::Index defaultDimension() { return Dimension == Eigen::Dynamic ? 0 : Dimension; }
 		static Eigen::Index validatedDimension(const Eigen::Index dimension)

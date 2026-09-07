@@ -7,6 +7,7 @@
 
 #include <Eigen/Core>
 
+#include <algorithm>
 #include <type_traits>
 
 namespace Hoppy::Detail
@@ -33,6 +34,59 @@ namespace Hoppy::Detail
 		const Scalar* data() const noexcept { return derived().coeffDataImpl(); }
 		template <bool Enabled = Writable, typename = std::enable_if_t<Enabled>>
 		Scalar* data() noexcept { return derived().coeffDataImpl(); }
+
+		template <bool Enabled = Writable, typename = std::enable_if_t<Enabled>>
+		Derived& setZero()
+		{
+			std::fill_n(data(), storedSize(), Scalar(0));
+			return derived();
+		}
+
+		template <bool Enabled = Writable, typename = std::enable_if_t<Enabled>>
+		Derived& setConstant(const Scalar& value)
+		{
+			if (!CoefficientPolicy::isValidDiagonal(value))
+			{
+				eigen_assert(false && "constant violates the structure's diagonal invariant");
+				return derived();
+			}
+			std::fill_n(data(), storedSize(), value);
+			return derived();
+		}
+
+		template <bool Enabled = Writable,
+		          typename = std::enable_if_t<Enabled
+		                                      && !std::is_same_v<StructureTag, AntiSymmetricTag>
+		                                      && !std::is_same_v<StructureTag, AntiHermitianTag>>>
+		Derived& setOnes() { return setConstant(Scalar(1)); }
+
+		template <bool Enabled = Writable,
+		          typename = std::enable_if_t<Enabled
+		                                      && !std::is_same_v<StructureTag, AntiSymmetricTag>
+		                                      && !std::is_same_v<StructureTag, AntiHermitianTag>>>
+		Derived& setIdentity()
+		{
+			for (Eigen::Index row = 0; row < dimension(); ++row)
+				for (Eigen::Index column = 0; column < dimension(); ++column)
+					if (CoefficientPolicy::isCanonicalSide(row, column))
+						data()[CoefficientPolicy::offset(dimension(), row, column)]
+						        = row == column ? Scalar(1) : Scalar(0);
+			return derived();
+		}
+
+		template <bool Enabled = Writable, typename = std::enable_if_t<Enabled>>
+		Derived& setRandom()
+		{
+			for (Eigen::Index row = 0; row < dimension(); ++row)
+				for (Eigen::Index column = 0; column < dimension(); ++column)
+					if (CoefficientPolicy::isCanonicalSide(row, column))
+					{
+						Scalar value = Eigen::internal::random<Scalar>();
+						if (row == column) value = CoefficientPolicy::canonicalizeDiagonal(value);
+						data()[CoefficientPolicy::offset(dimension(), row, column)] = value;
+					}
+			return derived();
+		}
 
 		Scalar coeff(const Eigen::Index row, const Eigen::Index column) const
 		{
@@ -85,6 +139,13 @@ namespace Hoppy::Detail
 			}
 			derived().coeffDataImpl()[CoefficientPolicy::offset(dimension(), row, column)]
 			        = CoefficientPolicy::logicalToStored(value, row, column);
+		}
+
+		void writeCanonicalized(const Eigen::Index row, const Eigen::Index column, const Scalar& value)
+		{
+			Scalar stored = row == column ? CoefficientPolicy::canonicalizeDiagonal(value) : value;
+			derived().coeffDataImpl()[CoefficientPolicy::offset(dimension(), row, column)]
+			        = CoefficientPolicy::logicalToStored(stored, row, column);
 		}
 
 		template <typename Other>

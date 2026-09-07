@@ -45,6 +45,16 @@ namespace Hoppy::Detail
 			else return true;
 		}
 
+		static Scalar canonicalizeDiagonal(const Scalar& value)
+		{
+			if constexpr (std::is_same_v<StructureTag, AntiSymmetricTag>) return Scalar(0);
+			else if constexpr (std::is_same_v<StructureTag, HermitianTag>)
+				return Scalar(Eigen::numext::real(value));
+			else if constexpr (std::is_same_v<StructureTag, AntiHermitianTag>)
+				return Scalar(0, Eigen::numext::imag(value));
+			else return value;
+		}
+
 		static Scalar storedToLogical(const Scalar& stored, const Eigen::Index row, const Eigen::Index column)
 		{
 			if (row == column || isCanonicalSide(row, column)) return stored;
