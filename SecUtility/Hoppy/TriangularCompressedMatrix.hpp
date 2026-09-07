@@ -4,7 +4,7 @@
 
 #include <SecUtility/Hoppy/ForwardDeclarations.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedCheckedSize.hpp>
-#include <SecUtility/Hoppy/Detail/TriangularCompressedCoeffProxy.hpp>
+#include <SecUtility/Hoppy/Detail/TriangularCompressedPlainBase.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedTags.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedTraits.hpp>
 
@@ -23,7 +23,12 @@ namespace Hoppy::Detail
 	template <typename TScalar, int Dimension, TrianglePacking Packing, int Options,
 	          typename NormalizedStructureTag>
 	class TriangularCompressedMatrix
+	    : public TriangularCompressedPlainBase<
+	              TriangularCompressedMatrix<TScalar, Dimension, Packing, Options, NormalizedStructureTag>,
+	              TScalar, NormalizedStructureTag, Packing, Dimension, true>
 	{
+		using PlainBase = TriangularCompressedPlainBase<
+		        TriangularCompressedMatrix, TScalar, NormalizedStructureTag, Packing, Dimension, true>;
 		static_assert(is_valid_triangular_dimension_v<Dimension>, "invalid compile-time dimension");
 		static_assert(has_representable_logical_size_v<Dimension>, "fixed logical size is not representable");
 		static_assert(is_valid_triangle_packing_v<Packing>, "invalid triangle packing");
@@ -37,7 +42,7 @@ namespace Hoppy::Detail
 		using PlainObject = TriangularCompressedMatrix;
 		using Nested = const TriangularCompressedMatrix&;
 		using CoeffReturnType = Scalar;
-		using CoeffProxy = TriangularCompressedCoeffProxy<TriangularCompressedMatrix>;
+		using CoeffProxy = typename PlainBase::CoeffProxy;
 		using Allocator = std::conditional_t<Options == Eigen::DontAlign, std::allocator<Scalar>,
 		                                     Eigen::aligned_allocator<Scalar>>;
 
@@ -68,7 +73,7 @@ namespace Hoppy::Detail
 		explicit TriangularCompressedMatrix(const Other& other)
 			: TriangularCompressedMatrix(other.dimension())
 		{
-			assignCoefficients(other);
+			this->assignCoefficientsFrom(other);
 		}
 		TriangularCompressedMatrix(TriangularCompressedMatrix&&)
 		        noexcept(std::is_nothrow_move_constructible_v<std::vector<Scalar, Allocator>>) = default;
@@ -98,44 +103,6 @@ namespace Hoppy::Detail
 			}
 			return checkedStoredSize(dimension);
 		}
-
-		Eigen::Index rows() const noexcept { return m_Dimension; }
-		Eigen::Index cols() const noexcept { return m_Dimension; }
-		Eigen::Index dimension() const noexcept { return m_Dimension; }
-		Eigen::Index size() const { return checkedLogicalSize(m_Dimension); }
-		Eigen::Index storedSize() const noexcept { return static_cast<Eigen::Index>(m_Storage.size()); }
-		Scalar* data() noexcept { return m_Storage.data(); }
-		const Scalar* data() const noexcept { return m_Storage.data(); }
-
-		Scalar coeff(const Eigen::Index row, const Eigen::Index column) const
-		{
-			if (!isValidateIndex(row, column)) return Scalar(0);
-			if (isStructuralZero(row, column)) return Scalar(0);
-			const Scalar& stored = m_Storage[static_cast<std::size_t>(
-			        checkedPackedOffset(row, column, m_Dimension, Packing))];
-			if (row == column || isCanonicalSide(row, column)) return stored;
-			if constexpr (std::is_same_v<StructureTag, AntiSymmetricTag>) return -stored;
-			else if constexpr (std::is_same_v<StructureTag, HermitianTag>) return Eigen::numext::conj(stored);
-			else if constexpr (std::is_same_v<StructureTag, AntiHermitianTag>) return -Eigen::numext::conj(stored);
-			else return stored;
-		}
-
-		CoeffProxy coeffRef(const Eigen::Index row, const Eigen::Index column)
-		{
-			(void) isValidateIndex(row, column);
-			return {*this, row, column};
-		}
-		Scalar operator()(const Eigen::Index row, const Eigen::Index column) const { return coeff(row, column); }
-		CoeffProxy operator()(const Eigen::Index row, const Eigen::Index column) { return coeffRef(row, column); }
-
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		Scalar operator()(const Eigen::Index index) const { return coeff(index, 0); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		CoeffProxy operator()(const Eigen::Index index) { return coeffRef(index, 0); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		Scalar operator[](const Eigen::Index index) const { return coeff(index, 0); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		CoeffProxy operator[](const Eigen::Index index) { return coeffRef(index, 0); }
 
 		void resize(const Eigen::Index dimension)
 		{
@@ -172,8 +139,7 @@ namespace Hoppy::Detail
 		}
 
 	private:
-		template <typename>
-		friend class TriangularCompressedCoeffProxy;
+		friend PlainBase;
 		using Storage = std::vector<Scalar, Allocator>;
 
 		static constexpr Eigen::Index defaultDimension() { return Dimension == Eigen::Dynamic ? 0 : Dimension; }
@@ -207,67 +173,9 @@ namespace Hoppy::Detail
 			return dimension;
 		}
 
-		bool isValidateIndex(const Eigen::Index row, const Eigen::Index column) const
-		{
-			if (row < 0 || column < 0 || row >= m_Dimension || column >= m_Dimension)
-			{
-				eigen_assert(false && "triangular-compressed coefficient index is out of bounds");
-				return false;
-			}
-			return true;
-		}
-		static bool isCanonicalSide(const Eigen::Index row, const Eigen::Index column) noexcept
-		{
-			return Packing == TrianglePacking::Lower ? row >= column : row <= column;
-		}
-		static bool isStructuralZero(const Eigen::Index row, const Eigen::Index column) noexcept
-		{
-			if constexpr (std::is_same_v<StructureTag, UpperTriangularTag>) return row > column;
-			else if constexpr (std::is_same_v<StructureTag, LowerTriangularTag>) return row < column;
-			else return false;
-		}
-		static bool isValidDiagonal(const Scalar& value)
-		{
-			if constexpr (std::is_same_v<StructureTag, AntiSymmetricTag>) return value == Scalar(0);
-			else if constexpr (std::is_same_v<StructureTag, HermitianTag>)
-				return Eigen::numext::imag(value) == RealScalar(0);
-			else if constexpr (std::is_same_v<StructureTag, AntiHermitianTag>)
-				return Eigen::numext::real(value) == RealScalar(0);
-			else return true;
-		}
-
-		void writeLogical(const Eigen::Index row, const Eigen::Index column, const Scalar& value)
-		{
-			if (!isValidateIndex(row, column)) return;
-			if (isStructuralZero(row, column))
-			{
-				eigen_assert(false && "cannot write a structural zero");
-				return;
-			}
-			if (row == column && !isValidDiagonal(value))
-			{
-				eigen_assert(false && "coefficient violates the structure's diagonal invariant");
-				return;
-			}
-			Scalar storedValue = value;
-			if (row != column && !isCanonicalSide(row, column))
-			{
-				if constexpr (std::is_same_v<StructureTag, AntiSymmetricTag>) storedValue = -value;
-				else if constexpr (std::is_same_v<StructureTag, HermitianTag>) storedValue = Eigen::numext::conj(value);
-				else if constexpr (std::is_same_v<StructureTag, AntiHermitianTag>) storedValue = -Eigen::numext::conj(value);
-			}
-			m_Storage[static_cast<std::size_t>(
-			        checkedPackedOffset(row, column, m_Dimension, Packing))] = std::move(storedValue);
-		}
-
-		template <typename Other>
-		void assignCoefficients(const Other& other)
-		{
-			for (Eigen::Index row = 0; row < m_Dimension; ++row)
-				for (Eigen::Index column = 0; column < m_Dimension; ++column)
-					if (!isStructuralZero(row, column))
-						writeLogical(row, column, static_cast<Scalar>(other.coeff(row, column)));
-		}
+		Eigen::Index dimensionImpl() const noexcept { return m_Dimension; }
+		Scalar* coeffDataImpl() noexcept { return m_Storage.data(); }
+		const Scalar* coeffDataImpl() const noexcept { return m_Storage.data(); }
 
 		Eigen::Index m_Dimension;
 		Storage m_Storage;

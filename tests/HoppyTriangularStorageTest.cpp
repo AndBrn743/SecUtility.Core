@@ -78,6 +78,9 @@ namespace
 	                             double>);
 	static_assert(std::is_convertible_v<decltype(std::declval<Hoppy::SymmetricMatrixXd&>().coeffRef(0, 0)),
 	                                    double>);
+	using SymmetricPolicy = Hoppy::Detail::TriangularCompressedCoefficientPolicy<
+	        double, Hoppy::Detail::SymmetricTag, Hoppy::TrianglePacking::Lower>;
+	static_assert(noexcept(SymmetricPolicy::isValidIndex(3, 0, 0)));
 
 	template <typename Matrix>
 	void requireShape(const Matrix& matrix, Eigen::Index dimension)
@@ -181,6 +184,8 @@ namespace
 
 TEST_CASE("owning shapes cover empty, scalar, dynamic, and fixed matrices")
 {
+	REQUIRE(SymmetricPolicy::isValidIndex(3, 2, 2));
+	REQUIRE_FALSE(SymmetricPolicy::isValidIndex(3, 3, 0));
 	REQUIRE(Hoppy::SymmetricMatrixXd::requiredStoredSize(4) == 10);
 	REQUIRE(Hoppy::SymmetricMatrix<double, 3>::requiredStoredSize(3) == 6);
 	Hoppy::SymmetricMatrixXd empty;

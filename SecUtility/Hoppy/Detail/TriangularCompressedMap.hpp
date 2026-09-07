@@ -4,7 +4,7 @@
 
 #include <SecUtility/Hoppy/ForwardDeclarations.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedCheckedSize.hpp>
-#include <SecUtility/Hoppy/Detail/TriangularCompressedCoeffProxy.hpp>
+#include <SecUtility/Hoppy/Detail/TriangularCompressedPlainBase.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedTags.hpp>
 
 #include <Eigen/Core>
@@ -16,87 +16,6 @@
 
 namespace Hoppy::Detail
 {
-	template <typename PlainObject>
-	struct TriangularCompressedMappedAccess
-	{
-		using Scalar = typename PlainObject::Scalar;
-		using RealScalar = typename PlainObject::RealScalar;
-		using StructureTag = typename PlainObject::StructureTag;
-
-		static bool isValidIndex(const Eigen::Index dimension, const Eigen::Index row, const Eigen::Index column)
-		{
-			if (row < 0 || column < 0 || row >= dimension || column >= dimension)
-			{
-				eigen_assert(false && "triangular-compressed coefficient index is out of bounds");
-				return false;
-			}
-			return true;
-		}
-
-		static bool isCanonicalSide(const Eigen::Index row, const Eigen::Index column) noexcept
-		{
-			return PlainObject::PackingValue == TrianglePacking::Lower ? row >= column : row <= column;
-		}
-
-		static bool isStructuralZero(const Eigen::Index row, const Eigen::Index column) noexcept
-		{
-			if constexpr (std::is_same_v<StructureTag, UpperTriangularTag>) return row > column;
-			else if constexpr (std::is_same_v<StructureTag, LowerTriangularTag>) return row < column;
-			else return false;
-		}
-
-		static Scalar read(const Scalar* data,
-		                   const Eigen::Index dimension,
-		                   const Eigen::Index row,
-		                   const Eigen::Index column)
-		{
-			if (!isValidIndex(dimension, row, column) || isStructuralZero(row, column)) return Scalar(0);
-			const Scalar& stored = data[checkedPackedOffset(
-			        row, column, dimension, PlainObject::PackingValue)];
-			if (row == column || isCanonicalSide(row, column)) return stored;
-			if constexpr (std::is_same_v<StructureTag, AntiSymmetricTag>) return -stored;
-			else if constexpr (std::is_same_v<StructureTag, HermitianTag>) return Eigen::numext::conj(stored);
-			else if constexpr (std::is_same_v<StructureTag, AntiHermitianTag>) return -Eigen::numext::conj(stored);
-			else return stored;
-		}
-
-		static bool isValidDiagonal(const Scalar& value)
-		{
-			if constexpr (std::is_same_v<StructureTag, AntiSymmetricTag>) return value == Scalar(0);
-			else if constexpr (std::is_same_v<StructureTag, HermitianTag>)
-				return Eigen::numext::imag(value) == RealScalar(0);
-			else if constexpr (std::is_same_v<StructureTag, AntiHermitianTag>)
-				return Eigen::numext::real(value) == RealScalar(0);
-			else return true;
-		}
-
-		static void write(Scalar* data,
-		                  const Eigen::Index dimension,
-		                  const Eigen::Index row,
-		                  const Eigen::Index column, const Scalar& value)
-		{
-			if (!isValidIndex(dimension, row, column)) return;
-			if (isStructuralZero(row, column))
-			{
-				eigen_assert(false && "cannot write a structural zero");
-				return;
-			}
-			if (row == column && !isValidDiagonal(value))
-			{
-				eigen_assert(false && "coefficient violates the structure's diagonal invariant");
-				return;
-			}
-			Scalar stored = value;
-			if (row != column && !isCanonicalSide(row, column))
-			{
-				if constexpr (std::is_same_v<StructureTag, AntiSymmetricTag>) stored = -value;
-				else if constexpr (std::is_same_v<StructureTag, HermitianTag>) stored = Eigen::numext::conj(value);
-				else if constexpr (std::is_same_v<StructureTag, AntiHermitianTag>) stored = -Eigen::numext::conj(value);
-			}
-			data[checkedPackedOffset(row, column, dimension, PlainObject::PackingValue)] = stored;
-		}
-	};
-
 	template <typename PlainObject, int MapOptions>
 	Eigen::Index validateMappedStorage(const typename PlainObject::Scalar* data, Eigen::Index dimension)
 	{
@@ -167,9 +86,16 @@ namespace Eigen
 	          typename TStructureTag, int MapOptions, typename StrideType>
 	class Map<Hoppy::Detail::TriangularCompressedMatrix<
 	        TScalar, Dimension, Packing, Options, TStructureTag>, MapOptions, StrideType>
+	    : public Hoppy::Detail::TriangularCompressedPlainBase<
+	              Map<Hoppy::Detail::TriangularCompressedMatrix<
+	                          TScalar, Dimension, Packing, Options, TStructureTag>,
+	                  MapOptions, StrideType>,
+	              TScalar, TStructureTag, Packing, Dimension, true>
 	{
 		using Plain = Hoppy::Detail::TriangularCompressedMatrix<
 		        TScalar, Dimension, Packing, Options, TStructureTag>;
+		using PlainBase = Hoppy::Detail::TriangularCompressedPlainBase<
+		        Map, TScalar, TStructureTag, Packing, Dimension, true>;
 		static_assert(std::is_same_v<StrideType, Stride<0, 0>>,
 		              "triangular-compressed maps support only Eigen's default contiguous stride");
 		static_assert(MapOptions == Unaligned || MapOptions == Aligned,
@@ -181,7 +107,7 @@ namespace Eigen
 		using StructureTag = typename Plain::StructureTag;
 		using PlainObject = Plain;
 		using StorageIndex = Eigen::Index;
-		using CoeffProxy = Hoppy::Detail::TriangularCompressedCoeffProxy<Map>;
+		using CoeffProxy = typename PlainBase::CoeffProxy;
 		static constexpr int RowsAtCompileTime = Dimension;
 		static constexpr int ColsAtCompileTime = Dimension;
 		static constexpr int Flags = Eigen::NestByRefBit | Eigen::LvalueBit;
@@ -197,32 +123,6 @@ namespace Eigen
 			: Map(data, Hoppy::Detail::checkedSquareDimension(rows, columns))
 		{}
 
-		Eigen::Index rows() const noexcept { return m_Dimension; }
-		Eigen::Index cols() const noexcept { return m_Dimension; }
-		Eigen::Index dimension() const noexcept { return m_Dimension; }
-		Eigen::Index size() const { return Hoppy::Detail::checkedLogicalSize(m_Dimension); }
-		Eigen::Index storedSize() const { return Hoppy::Detail::checkedStoredSize(m_Dimension); }
-		Scalar* data() const noexcept { return m_Data; }
-		Scalar coeff(Eigen::Index row, Eigen::Index column) const
-		{
-			return Hoppy::Detail::TriangularCompressedMappedAccess<Plain>::read(m_Data, m_Dimension, row, column);
-		}
-		CoeffProxy coeffRef(Eigen::Index row, Eigen::Index column)
-		{
-			(void) Hoppy::Detail::TriangularCompressedMappedAccess<Plain>::isValidIndex(
-			        m_Dimension, row, column);
-			return {*this, row, column};
-		}
-		Scalar operator()(const Eigen::Index row, const Eigen::Index column) const { return coeff(row, column); }
-		CoeffProxy operator()(const Eigen::Index row, const Eigen::Index column) { return coeffRef(row, column); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		Scalar operator()(const Eigen::Index index) const { return coeff(index, 0); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		CoeffProxy operator()(const Eigen::Index index) { return coeffRef(index, 0); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		Scalar operator[](const Eigen::Index index) const { return coeff(index, 0); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		CoeffProxy operator[](const Eigen::Index index) { return coeffRef(index, 0); }
 		Map& operator=(const Map& other) { return assignFrom(other); }
 
 		template <typename Other,
@@ -234,8 +134,7 @@ namespace Eigen
 		}
 
 	private:
-		template <typename>
-		friend class Hoppy::Detail::TriangularCompressedCoeffProxy;
+		friend PlainBase;
 		template <typename Other>
 		Map& assignFrom(const Other& other)
 		{
@@ -245,16 +144,12 @@ namespace Eigen
 				eigen_assert(false && "mapped assignment requires matching dimensions");
 				return *this;
 			}
-			for (Eigen::Index row = 0; row < m_Dimension; ++row)
-				for (Eigen::Index column = 0; column < m_Dimension; ++column)
-					if (!Hoppy::Detail::TriangularCompressedMappedAccess<Plain>::isStructuralZero(row, column))
-						writeLogical(row, column, temporary.coeff(row, column));
+			this->assignCoefficientsFrom(temporary);
 			return *this;
 		}
-		void writeLogical(Eigen::Index row, Eigen::Index column, const Scalar& value)
-		{
-			Hoppy::Detail::TriangularCompressedMappedAccess<Plain>::write(m_Data, m_Dimension, row, column, value);
-		}
+		Eigen::Index dimensionImpl() const noexcept { return m_Dimension; }
+		Scalar* coeffDataImpl() noexcept { return m_Data; }
+		const Scalar* coeffDataImpl() const noexcept { return m_Data; }
 		Scalar* m_Data;
 		Eigen::Index m_Dimension;
 	};
@@ -263,9 +158,16 @@ namespace Eigen
 	          typename TStructureTag, int MapOptions, typename StrideType>
 	class Map<const Hoppy::Detail::TriangularCompressedMatrix<
 	        TScalar, Dimension, Packing, Options, TStructureTag>, MapOptions, StrideType>
+	    : public Hoppy::Detail::TriangularCompressedPlainBase<
+	              Map<const Hoppy::Detail::TriangularCompressedMatrix<
+	                          TScalar, Dimension, Packing, Options, TStructureTag>,
+	                  MapOptions, StrideType>,
+	              TScalar, TStructureTag, Packing, Dimension, false>
 	{
 		using Plain = Hoppy::Detail::TriangularCompressedMatrix<
 		        TScalar, Dimension, Packing, Options, TStructureTag>;
+		using PlainBase = Hoppy::Detail::TriangularCompressedPlainBase<
+		        Map, TScalar, TStructureTag, Packing, Dimension, false>;
 		static_assert(std::is_same_v<StrideType, Stride<0, 0>>,
 		              "triangular-compressed maps support only Eigen's default contiguous stride");
 		static_assert(MapOptions == Unaligned || MapOptions == Aligned,
@@ -293,23 +195,10 @@ namespace Eigen
 			: Map(data, Hoppy::Detail::checkedSquareDimension(rows, columns))
 		{}
 
-		Eigen::Index rows() const noexcept { return m_Dimension; }
-		Eigen::Index cols() const noexcept { return m_Dimension; }
-		Eigen::Index dimension() const noexcept { return m_Dimension; }
-		Eigen::Index size() const { return Hoppy::Detail::checkedLogicalSize(m_Dimension); }
-		Eigen::Index storedSize() const { return Hoppy::Detail::checkedStoredSize(m_Dimension); }
-		const Scalar* data() const noexcept { return m_Data; }
-		Scalar coeff(Eigen::Index row, Eigen::Index column) const
-		{
-			return Hoppy::Detail::TriangularCompressedMappedAccess<Plain>::read(m_Data, m_Dimension, row, column);
-		}
-		Scalar operator()(const Eigen::Index row, const Eigen::Index column) const { return coeff(row, column); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		Scalar operator()(const Eigen::Index index) const { return coeff(index, 0); }
-		template <int D = Dimension, typename = std::enable_if_t<D == 1>>
-		Scalar operator[](const Eigen::Index index) const { return coeff(index, 0); }
-
 	private:
+		friend PlainBase;
+		Eigen::Index dimensionImpl() const noexcept { return m_Dimension; }
+		const Scalar* coeffDataImpl() const noexcept { return m_Data; }
 		const Scalar* m_Data;
 		Eigen::Index m_Dimension;
 	};
