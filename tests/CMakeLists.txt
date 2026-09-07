@@ -110,6 +110,18 @@ add_library(HoppyTriangularPhase1HeaderSelfContainment OBJECT
 	HoppyHeaderTriangularCompressedMatrix.cpp)
 target_link_libraries(HoppyTriangularPhase1HeaderSelfContainment PRIVATE SecUtility::Core)
 
+add_executable(HoppyTriangularStorageTest HoppyTriangularStorageTest.cpp)
+target_link_libraries(HoppyTriangularStorageTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_options(HoppyTriangularStorageTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+add_test(NAME HoppyTriangularStorageTest COMMAND HoppyTriangularStorageTest)
+
+add_executable(HoppyTriangularStorageNoDebugTest HoppyTriangularStorageTest.cpp)
+target_link_libraries(HoppyTriangularStorageNoDebugTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_definitions(HoppyTriangularStorageNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+add_test(NAME HoppyTriangularStorageNoDebugTest COMMAND HoppyTriangularStorageNoDebugTest)
+
 add_secutility_test(HoppyFactoryTest HoppyFactoryTest.cpp)
 target_compile_options(HoppyFactoryTest PRIVATE
 	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
