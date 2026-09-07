@@ -287,12 +287,14 @@ namespace Hoppy::Detail
 
 namespace Hoppy
 {
-	template <typename Factor, typename Derived>
+	template <typename Factor, typename Derived,
+	          typename = std::enable_if_t<Detail::is_scalar_operand_v<Factor>>>
 	auto operator*(Factor&& factor, const TriangularCompressedMatrixExpr<Derived>& expression)
 	{
 		return expression.derived() * std::forward<Factor>(factor);
 	}
-	template <typename Factor, typename Derived>
+	template <typename Factor, typename Derived,
+	          typename = std::enable_if_t<Detail::is_scalar_operand_v<Factor>>>
 	auto operator*(Factor&& factor, TriangularCompressedMatrixExpr<Derived>&& expression)
 	{
 		return std::move(expression.derived()) * std::forward<Factor>(factor);
@@ -346,14 +348,14 @@ namespace Hoppy
 			return Detail::TriangularCompressedBinary<Derived, StoredRight, Detail::DifferenceOperation>(std::move(derived()), std::forward<Other>(other));
 		else return Detail::DenseCwiseBinary<Derived, StoredRight, Detail::DifferenceOperation>(std::move(derived()), std::forward<Other>(other));
 	}
-	template <typename Derived> template <typename Factor>
+	template <typename Derived> template <typename Factor, typename>
 	auto TriangularCompressedMatrixExpr<Derived>::operator*(Factor&& factor) const&
 	{
 		using StoredFactor = std::remove_cv_t<std::remove_reference_t<Factor>>;
 		return Detail::TriangularCompressedScaled<const Derived&, StoredFactor, Detail::ProductOperation,
 		        Detail::preserves_scaled_structure_v<Derived, StoredFactor>>(derived(), std::forward<Factor>(factor));
 	}
-	template <typename Derived> template <typename Factor>
+	template <typename Derived> template <typename Factor, typename>
 	auto TriangularCompressedMatrixExpr<Derived>::operator*(Factor&& factor) &&
 	{
 		using StoredFactor = std::remove_cv_t<std::remove_reference_t<Factor>>;

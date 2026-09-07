@@ -391,3 +391,4 @@ namespace Hoppy::Detail
 #include <SecUtility/Hoppy/Detail/TriangularCompressedMap.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedExpressions.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedViews.hpp>
+#include <SecUtility/Hoppy/Detail/TriangularCompressedProducts.hpp>
