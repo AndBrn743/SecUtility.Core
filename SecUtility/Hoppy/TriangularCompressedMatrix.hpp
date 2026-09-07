@@ -50,6 +50,7 @@ namespace Hoppy::Detail
 		static constexpr int Flags = Eigen::NestByRefBit;
 		static constexpr TrianglePacking PackingValue = Packing;
 		static constexpr bool IsVectorAtCompileTime = Dimension == 1;
+		static constexpr bool IsTriangularCompressed = true;
 
 		TriangularCompressedMatrix() : TriangularCompressedMatrix(defaultDimension()) {}
 		explicit TriangularCompressedMatrix(const Eigen::Index dimension)
@@ -61,9 +62,26 @@ namespace Hoppy::Detail
 		{}
 
 		TriangularCompressedMatrix(const TriangularCompressedMatrix&) = default;
+		template <typename Other,
+		          typename = std::enable_if_t<Other::IsTriangularCompressed
+		                                      && std::is_same_v<StructureTag, typename Other::StructureTag>>>
+		explicit TriangularCompressedMatrix(const Other& other)
+			: TriangularCompressedMatrix(other.dimension())
+		{
+			assignCoefficients(other);
+		}
 		TriangularCompressedMatrix(TriangularCompressedMatrix&&)
 		        noexcept(std::is_nothrow_move_constructible_v<std::vector<Scalar, Allocator>>) = default;
 		TriangularCompressedMatrix& operator=(const TriangularCompressedMatrix&) = default;
+		template <typename Other,
+		          typename = std::enable_if_t<Other::IsTriangularCompressed
+		                                      && std::is_same_v<StructureTag, typename Other::StructureTag>>>
+		TriangularCompressedMatrix& operator=(const Other& other)
+		{
+			TriangularCompressedMatrix replacement(other);
+			swap(replacement);
+			return *this;
+		}
 		TriangularCompressedMatrix& operator=(TriangularCompressedMatrix&&)
 		        noexcept(std::is_nothrow_move_assignable_v<std::vector<Scalar, Allocator>>) = default;
 		~TriangularCompressedMatrix() = default;
@@ -242,7 +260,18 @@ namespace Hoppy::Detail
 			        checkedPackedOffset(row, column, m_Dimension, Packing))] = std::move(storedValue);
 		}
 
+		template <typename Other>
+		void assignCoefficients(const Other& other)
+		{
+			for (Eigen::Index row = 0; row < m_Dimension; ++row)
+				for (Eigen::Index column = 0; column < m_Dimension; ++column)
+					if (!isStructuralZero(row, column))
+						writeLogical(row, column, static_cast<Scalar>(other.coeff(row, column)));
+		}
+
 		Eigen::Index m_Dimension;
 		Storage m_Storage;
 	};
 }  // namespace Hoppy::Detail
+
+#include <SecUtility/Hoppy/Detail/TriangularCompressedMap.hpp>
