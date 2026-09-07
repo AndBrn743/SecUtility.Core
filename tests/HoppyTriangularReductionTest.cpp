@@ -12,6 +12,7 @@
 #include <limits>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -20,6 +21,24 @@ namespace
 	struct has_max_coeff<T, std::void_t<decltype(std::declval<const T&>().maxCoeff())>> : std::true_type {};
 	static_assert(has_max_coeff<Hoppy::SymmetricMatrixXd>::value);
 	static_assert(!has_max_coeff<Hoppy::HermitianMatrixXcd>::value);
+
+	template <Hoppy::TrianglePacking Packing>
+	struct CountingExpression : Hoppy::TriangularCompressedMatrixExpr<CountingExpression<Packing>>
+	{
+		using Scalar = double;
+		using StructureTag = Hoppy::Detail::SymmetricTag;
+		static constexpr Hoppy::TrianglePacking PackingValue = Packing;
+		Eigen::Index dimension() const { return 3; }
+		Eigen::Index rows() const { return 3; }
+		Eigen::Index cols() const { return 3; }
+		Eigen::Index size() const { return 9; }
+		double coeff(Eigen::Index row, Eigen::Index column) const
+		{
+			visits.emplace_back(row, column);
+			return static_cast<double>(10 * row + column + 1);
+		}
+		mutable std::vector<std::pair<Eigen::Index, Eigen::Index>> visits;
+	};
 }
 
 TEST_CASE("reductions observe the represented dense matrix")
@@ -61,6 +80,34 @@ TEST_CASE("anti-family reflected terms and complex norms are counted logically")
 	REQUIRE(matrix.squaredNorm() == dense.squaredNorm());
 	REQUIRE(matrix.maxAbsCoeff() == 5);
 	REQUIRE(matrix.adjoint().squaredNorm() == dense.adjoint().squaredNorm());
+
+	Hoppy::AntiSymmetricMatrix<double, 2> m2;
+	m2(0, 1) = -10;
+	REQUIRE(m2.maxCoeff() == 10);
+}
+
+TEST_CASE("reductions visit independent coefficients once in packed order")
+{
+	CountingExpression<Hoppy::TrianglePacking::Lower> lower;
+	(void) lower.squaredNorm();
+	const std::vector<std::pair<Eigen::Index, Eigen::Index>> expectedLower{
+	        {0, 0}, {1, 0}, {1, 1}, {2, 0}, {2, 1}, {2, 2}};
+	REQUIRE(lower.visits == expectedLower);
+
+	CountingExpression<Hoppy::TrianglePacking::Upper> upper;
+	(void) upper.sum();
+	const std::vector<std::pair<Eigen::Index, Eigen::Index>> expectedUpper{
+	        {0, 0}, {0, 1}, {1, 1}, {0, 2}, {1, 2}, {2, 2}};
+	REQUIRE(upper.visits == expectedUpper);
+}
+
+TEST_CASE("triangular reductions include structural zeros without visiting them")
+{
+	auto matrix = Hoppy::UpperTriangularMatrix<double, 3, Hoppy::TrianglePacking::Lower>::Constant(-4);
+	REQUIRE(matrix.sum() == -24);
+	REQUIRE(matrix.maxCoeff() == 0);
+	REQUIRE(matrix.minCoeff() == -4);
+	REQUIRE(matrix.squaredNorm() == 96);
 }
 
 TEST_CASE("empty reductions have their specified identities")
