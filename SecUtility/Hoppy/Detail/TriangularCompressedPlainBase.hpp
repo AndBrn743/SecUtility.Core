@@ -12,6 +12,23 @@
 
 namespace Hoppy::Detail
 {
+	template <typename StructureTag, unsigned int Mode>
+	inline constexpr bool accepts_triangular_view_v =
+	        (std::is_same_v<StructureTag, UpperTriangularTag> && (Mode & Eigen::Upper) != 0)
+	        || (std::is_same_v<StructureTag, LowerTriangularTag> && (Mode & Eigen::Lower) != 0)
+	        || ((std::is_same_v<StructureTag, SymmetricTag>
+	             || std::is_same_v<StructureTag, HermitianTag>)
+	            && ((Mode & Eigen::Upper) != 0 || (Mode & Eigen::Lower) != 0))
+	        || ((std::is_same_v<StructureTag, AntiSymmetricTag>
+	             || std::is_same_v<StructureTag, AntiHermitianTag>)
+	            && (Mode & Eigen::UnitDiag) == 0
+	            && ((Mode & Eigen::Upper) != 0 || (Mode & Eigen::Lower) != 0));
+
+	template <typename Scalar, typename StructureTag>
+	inline constexpr bool accepts_self_adjoint_view_v =
+	        std::is_same_v<StructureTag, HermitianTag>
+	        || (std::is_same_v<StructureTag, SymmetricTag> && Eigen::NumTraits<Scalar>::IsComplex == 0);
+
 	template <typename Derived, typename Scalar, typename StructureTag,
 	          TrianglePacking Packing, int Dimension, bool Writable>
 	class TriangularCompressedPlainBase
@@ -98,6 +115,32 @@ namespace Hoppy::Detail
 
 		Scalar operator()(const Eigen::Index row, const Eigen::Index column) const { return coeff(row, column); }
 
+		using DensePlainObject = Eigen::Matrix<Scalar, Dimension, Dimension>;
+		DensePlainObject toDense() const
+		{
+			DensePlainObject result(rows(), cols());
+			evalTo(result);
+			return result;
+		}
+		template <typename Dense,
+		          typename = std::enable_if_t<std::is_base_of_v<Eigen::MatrixBase<Dense>, Dense>>>
+		/* IMPLICIT */ operator Dense() const
+		{
+			Dense result;
+			evalTo(result);
+			return result;
+		}
+
+		template <typename Destination>
+		void evalTo(Eigen::MatrixBase<Destination>& destination) const
+		{
+			DensePlainObject evaluated(rows(), cols());
+			for (Eigen::Index row = 0; row < rows(); ++row)
+				for (Eigen::Index column = 0; column < cols(); ++column)
+					evaluated.coeffRef(row, column) = coeff(row, column);
+			destination.derived() = evaluated;
+		}
+
 		template <bool Enabled = Writable, typename = std::enable_if_t<Enabled>>
 		CoeffProxy coeffRef(const Eigen::Index row, const Eigen::Index column)
 		{
@@ -153,8 +196,38 @@ namespace Hoppy::Detail
 		{
 			for (Eigen::Index row = 0; row < dimension(); ++row)
 				for (Eigen::Index column = 0; column < dimension(); ++column)
-					if (!CoefficientPolicy::isStructuralZero(row, column))
+					if (CoefficientPolicy::isAuthoritativeCoordinate(row, column))
 						writeLogical(row, column, static_cast<Scalar>(other.coeff(row, column)));
+		}
+
+		template <unsigned int Mode, typename MatrixType>
+		void assignFromTriangularView(const Eigen::TriangularView<MatrixType, Mode>& view)
+		{
+			const auto evaluated = view.nestedExpression().eval();
+			constexpr bool upper = (Mode & Eigen::Upper) != 0;
+			constexpr bool unit = (Mode & Eigen::UnitDiag) != 0;
+			constexpr bool zero = (Mode & Eigen::ZeroDiag) != 0;
+			for (Eigen::Index row = 0; row < dimension(); ++row)
+				for (Eigen::Index column = 0; column < dimension(); ++column)
+					if ((upper && row <= column) || (!upper && row >= column))
+					{
+						const Scalar value = row == column && unit ? Scalar(1)
+						                     : row == column && zero ? Scalar(0)
+						                     : static_cast<Scalar>(evaluated.coeff(row, column));
+						writeLogical(row, column, value);
+					}
+		}
+
+		template <unsigned int UpLo, typename MatrixType>
+		void assignFromSelfAdjointView(const Eigen::SelfAdjointView<MatrixType, UpLo>& view)
+		{
+			const auto evaluated = view.nestedExpression().eval();
+			constexpr bool upper = (UpLo & Eigen::Upper) != 0;
+			for (Eigen::Index row = 0; row < dimension(); ++row)
+				for (Eigen::Index column = 0; column < dimension(); ++column)
+					if ((upper && row <= column) || (!upper && row >= column))
+						writeLogical(row, column,
+						             static_cast<Scalar>(evaluated.coeff(row, column)));
 		}
 
 	private:

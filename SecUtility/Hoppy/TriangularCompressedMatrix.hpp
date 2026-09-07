@@ -89,6 +89,25 @@ namespace Hoppy::Detail
 		}
 		TriangularCompressedMatrix& operator=(TriangularCompressedMatrix&&)
 		        noexcept(std::is_nothrow_move_assignable_v<std::vector<Scalar, Allocator>>) = default;
+		template <typename MatrixType, unsigned int Mode,
+		          typename = std::enable_if_t<accepts_triangular_view_v<StructureTag, Mode>>>
+		TriangularCompressedMatrix& operator=(const Eigen::TriangularView<MatrixType, Mode>& view)
+		{
+			TriangularCompressedMatrix replacement(view.rows(), view.cols());
+			replacement.template assignFromTriangularView<Mode>(view);
+			swap(replacement);
+			return *this;
+		}
+		template <typename MatrixType, unsigned int UpLo,
+		          bool Enabled = accepts_self_adjoint_view_v<Scalar, StructureTag>,
+		          typename = std::enable_if_t<Enabled>>
+		TriangularCompressedMatrix& operator=(const Eigen::SelfAdjointView<MatrixType, UpLo>& view)
+		{
+			TriangularCompressedMatrix replacement(view.rows(), view.cols());
+			replacement.template assignFromSelfAdjointView<UpLo>(view);
+			swap(replacement);
+			return *this;
+		}
 		~TriangularCompressedMatrix() = default;
 
 		static Eigen::Index requiredStoredSize(const Eigen::Index dimension)

@@ -28,6 +28,13 @@ namespace Hoppy::Detail
 			return Packing == TrianglePacking::Lower ? row >= column : row <= column;
 		}
 
+		static bool isAuthoritativeCoordinate(const Eigen::Index row, const Eigen::Index column) noexcept
+		{
+			if constexpr (std::is_same_v<StructureTag, UpperTriangularTag>) return row <= column;
+			else if constexpr (std::is_same_v<StructureTag, LowerTriangularTag>) return row >= column;
+			else return isCanonicalSide(row, column);
+		}
+
 		static bool isStructuralZero(const Eigen::Index row, const Eigen::Index column) noexcept
 		{
 			if constexpr (std::is_same_v<StructureTag, UpperTriangularTag>) return row > column;

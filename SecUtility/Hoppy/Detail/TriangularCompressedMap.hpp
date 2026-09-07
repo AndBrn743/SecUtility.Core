@@ -133,6 +133,37 @@ namespace Eigen
 			return assignFrom(other);
 		}
 
+		template <typename MatrixType, unsigned int Mode,
+		          typename = std::enable_if_t<Hoppy::Detail::accepts_triangular_view_v<StructureTag, Mode>>>
+		Map& operator=(const TriangularView<MatrixType, Mode>& view)
+		{
+			if (view.rows() != m_Dimension || view.cols() != m_Dimension)
+			{
+				eigen_assert(false && "mapped assignment requires matching dimensions");
+				return *this;
+			}
+			Plain temporary(m_Dimension);
+			temporary = view;
+			this->assignCoefficientsFrom(temporary);
+			return *this;
+		}
+
+		template <typename MatrixType, unsigned int UpLo,
+		          bool Enabled = Hoppy::Detail::accepts_self_adjoint_view_v<Scalar, StructureTag>,
+		          typename = std::enable_if_t<Enabled>>
+		Map& operator=(const SelfAdjointView<MatrixType, UpLo>& view)
+		{
+			if (view.rows() != m_Dimension || view.cols() != m_Dimension)
+			{
+				eigen_assert(false && "mapped assignment requires matching dimensions");
+				return *this;
+			}
+			Plain temporary(m_Dimension);
+			temporary = view;
+			this->assignCoefficientsFrom(temporary);
+			return *this;
+		}
+
 	private:
 		friend PlainBase;
 		template <typename Other>
