@@ -9,6 +9,7 @@
 #include <Eigen/Core>
 
 #include <algorithm>
+#include <numeric>
 #include <type_traits>
 
 namespace Hoppy::Detail
@@ -35,7 +36,10 @@ namespace Hoppy::Detail
 	class TriangularCompressedPlainBase
 	    : public Hoppy::TriangularCompressedMatrixExpr<Derived>
 	{
+		using ExpressionBase = Hoppy::TriangularCompressedMatrixExpr<Derived>;
+
 	public:
+		using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
 		using CoeffProxy = TriangularCompressedCoeffProxy<Derived>;
 		using CoefficientPolicy = TriangularCompressedCoefficientPolicy<Scalar, StructureTag, Packing>;
 
@@ -116,6 +120,98 @@ namespace Hoppy::Detail
 		}
 
 		Scalar operator()(const Eigen::Index row, const Eigen::Index column) const { return coeff(row, column); }
+		bool hasNaN() const
+		{
+			if (storedSize() == 0) return false;
+			return std::any_of(data(), data() + storedSize(),
+			                   [](const auto& element) { return Eigen::numext::isnan(element); });
+		}
+		bool allFinite() const
+		{
+			if (storedSize() == 0) return true;
+			return std::all_of(data(), data() + storedSize(),
+			                   [](const auto& element) { return Eigen::numext::isfinite(element); });
+		}
+		Scalar sum() const
+		{
+			Scalar result(0);
+			forEachIndependentImpl([&](const Eigen::Index row, const Eigen::Index column, const Scalar& value) {
+				result += value;
+				if constexpr (isTwoSidedStructure())
+					if (row != column)
+						result += CoefficientPolicy::storedToLogical(value, column, row);
+			});
+			return result;
+		}
+		RealScalar squaredNorm() const
+		{
+			RealScalar result(0);
+			forEachIndependentImpl([&](const Eigen::Index row, const Eigen::Index column, const Scalar& value) {
+				const RealScalar magnitude = Eigen::numext::abs2(value);
+				result += isTwoSidedStructure() && row != column ? RealScalar(2) * magnitude : magnitude;
+			});
+			return result;
+		}
+		RealScalar norm() const { return Eigen::numext::sqrt(squaredNorm()); }
+		Scalar mean() const
+		{
+			if (size() == 0)
+			{
+				eigen_assert(false && "mean requires a nonempty expression");
+				return Scalar(0);
+			}
+			return sum() / Scalar(size());
+		}
+		RealScalar maxAbsCoeff() const
+		{
+			if (size() == 0)
+			{
+				eigen_assert(false && "maxAbsCoeff requires a nonempty expression");
+				return RealScalar(0);
+			}
+			return std::accumulate(data(), data() + storedSize(), RealScalar(0),
+			                       [](const RealScalar current, const Scalar& value) {
+				                       return std::max(current, Eigen::numext::abs(value));
+			                       });
+		}
+		template <typename S = Scalar,
+		          typename = std::enable_if_t<Eigen::NumTraits<S>::IsComplex == 0>>
+		Scalar maxCoeff() const
+		{
+			if (size() == 0)
+			{
+				eigen_assert(false && "maxCoeff requires a nonempty expression");
+				return Scalar(0);
+			}
+			Scalar result = hasStructuralZeros() ? Scalar(0) : data()[0];
+			forEachIndependentImpl([&](const Eigen::Index row, const Eigen::Index column, const Scalar& value) {
+				result = std::max(result, value);
+				if constexpr (isTwoSidedStructure())
+					if (row != column)
+						result = std::max(result,
+						                  CoefficientPolicy::storedToLogical(value, column, row));
+			});
+			return result;
+		}
+		template <typename S = Scalar,
+		          typename = std::enable_if_t<Eigen::NumTraits<S>::IsComplex == 0>>
+		Scalar minCoeff() const
+		{
+			if (size() == 0)
+			{
+				eigen_assert(false && "minCoeff requires a nonempty expression");
+				return Scalar(0);
+			}
+			Scalar result = hasStructuralZeros() ? Scalar(0) : data()[0];
+			forEachIndependentImpl([&](const Eigen::Index row, const Eigen::Index column, const Scalar& value) {
+				result = std::min(result, value);
+				if constexpr (isTwoSidedStructure())
+					if (row != column)
+						result = std::min(result,
+						                  CoefficientPolicy::storedToLogical(value, column, row));
+			});
+			return result;
+		}
 
 		using DensePlainObject = Eigen::Matrix<Scalar, Dimension, Dimension>;
 		DensePlainObject toDense() const
@@ -165,6 +261,7 @@ namespace Hoppy::Detail
 		CoeffProxy operator[](const Eigen::Index index) { return coeffRef(index, 0); }
 
 	protected:
+		friend ExpressionBase;
 		template <typename>
 		friend class TriangularCompressedCoeffProxy;
 
@@ -230,6 +327,39 @@ namespace Hoppy::Detail
 					if ((upper && row <= column) || (!upper && row >= column))
 						writeLogical(row, column,
 						             static_cast<Scalar>(evaluated.coeff(row, column)));
+		}
+
+		template <typename Function>
+		void forEachIndependentImpl(Function&& function) const
+		{
+			const Scalar* element = data();
+			for (Eigen::Index major = 0; major < dimension(); ++major)
+				for (Eigen::Index minor = 0; minor <= major; ++minor, ++element)
+				{
+					Eigen::Index row = Packing == TrianglePacking::Lower ? major : minor;
+					Eigen::Index column = Packing == TrianglePacking::Lower ? minor : major;
+					if constexpr (std::is_same_v<StructureTag, UpperTriangularTag>)
+					{
+						if (row > column) (std::swap)(row, column);
+					}
+					else if constexpr (std::is_same_v<StructureTag, LowerTriangularTag>)
+					{
+						if (row < column) (std::swap)(row, column);
+					}
+					function(row, column, *element);
+				}
+		}
+
+		static constexpr bool isTwoSidedStructure()
+		{
+			return !std::is_same_v<StructureTag, UpperTriangularTag>
+			       && !std::is_same_v<StructureTag, LowerTriangularTag>;
+		}
+		bool hasStructuralZeros() const
+		{
+			return dimension() > 1
+			       && (std::is_same_v<StructureTag, UpperTriangularTag>
+			           || std::is_same_v<StructureTag, LowerTriangularTag>);
 		}
 
 	private:

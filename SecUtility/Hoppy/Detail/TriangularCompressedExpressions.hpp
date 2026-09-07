@@ -52,6 +52,7 @@ namespace Hoppy::Detail
 		Eigen::Index dimension() const noexcept { return m_Operand.dimension(); }
 		Eigen::Index rows() const noexcept { return dimension(); }
 		Eigen::Index cols() const noexcept { return dimension(); }
+		Eigen::Index size() const noexcept { return dimension() * dimension(); }
 		Scalar coeff(Eigen::Index row, Eigen::Index column) const
 		{
 			if constexpr (std::is_same_v<Operation, TransposeOperation>)

@@ -101,6 +101,61 @@ TEST_CASE("reductions visit independent coefficients once in packed order")
 	REQUIRE(upper.visits == expectedUpper);
 }
 
+TEST_CASE("lazy transform expressions exercise the generic reduction implementation")
+{
+	Hoppy::SymmetricMatrix<double, 3> matrix;
+	matrix.setZero();
+	matrix(0, 0) = -2;
+	matrix(1, 1) = 4;
+	matrix(2, 2) = 6;
+	matrix(0, 1) = 3;
+	matrix(0, 2) = -5;
+	matrix(1, 2) = 2;
+	const auto expression = matrix.transpose();
+	const auto dense = matrix.toDense().transpose().eval();
+	REQUIRE(expression.sum() == dense.sum());
+	REQUIRE(expression.trace() == dense.trace());
+	REQUIRE(expression.squaredNorm() == dense.squaredNorm());
+	REQUIRE(expression.norm() == dense.norm());
+	REQUIRE(expression.mean() == dense.mean());
+	REQUIRE(expression.maxCoeff() == dense.maxCoeff());
+	REQUIRE(expression.minCoeff() == dense.minCoeff());
+	REQUIRE(expression.maxAbsCoeff() == 6);
+	REQUIRE(expression.allFinite());
+	REQUIRE_FALSE(expression.hasNaN());
+	REQUIRE(expression.isApprox(dense));
+	REQUIRE(expression.isApprox(dense, 0.0));
+
+	Eigen::MatrixXd different = dense;
+	different(0, 0) += 1;
+	REQUIRE_FALSE(expression.isApprox(different, 0.0));
+}
+
+TEST_CASE("generic expression predicates observe nonfinite independent coefficients")
+{
+	auto matrix = Hoppy::UpperTriangularMatrix<double, 2>::Zero();
+	matrix(0, 1) = (std::numeric_limits<double>::infinity)();
+	const auto infinite = matrix.transpose();
+	REQUIRE_FALSE(infinite.allFinite());
+	REQUIRE_FALSE(infinite.hasNaN());
+	matrix(0, 1) = (std::numeric_limits<double>::quiet_NaN)();
+	const auto nan = matrix.adjoint();
+	REQUIRE_FALSE(nan.allFinite());
+	REQUIRE(nan.hasNaN());
+}
+
+TEST_CASE("empty lazy expressions retain reduction identities")
+{
+	Hoppy::SymmetricMatrixXd matrix;
+	const auto expression = matrix.transpose();
+	REQUIRE(expression.sum() == 0);
+	REQUIRE(expression.trace() == 0);
+	REQUIRE(expression.squaredNorm() == 0);
+	REQUIRE(expression.norm() == 0);
+	REQUIRE(expression.allFinite());
+	REQUIRE_FALSE(expression.hasNaN());
+}
+
 TEST_CASE("triangular reductions include structural zeros without visiting them")
 {
 	auto matrix = Hoppy::UpperTriangularMatrix<double, 3, Hoppy::TrianglePacking::Lower>::Constant(-4);
@@ -132,12 +187,26 @@ TEST_CASE("undefined empty reductions assert")
 	Hoppy::SymmetricMatrixXd sized(2);
 	REQUIRE_THROWS_AS(sized.isApprox(empty), Hoppy::Test::EigenAssertionFailure);
 }
+
+TEST_CASE("undefined empty lazy-expression reductions assert")
+{
+	Hoppy::SymmetricMatrixXd matrix;
+	const auto expression = matrix.adjoint();
+	REQUIRE_THROWS_AS(expression.mean(), Hoppy::Test::EigenAssertionFailure);
+	REQUIRE_THROWS_AS(expression.maxCoeff(), Hoppy::Test::EigenAssertionFailure);
+	REQUIRE_THROWS_AS(expression.minCoeff(), Hoppy::Test::EigenAssertionFailure);
+	REQUIRE_THROWS_AS(expression.maxAbsCoeff(), Hoppy::Test::EigenAssertionFailure);
+	Hoppy::SymmetricMatrixXd sized(2);
+	REQUIRE_THROWS_AS(expression.isApprox(sized.transpose()),
+	                  Hoppy::Test::EigenAssertionFailure);
+}
 #else
 TEST_CASE("no-debug mismatched approximation returns false")
 {
 	Hoppy::SymmetricMatrixXd empty;
 	Hoppy::SymmetricMatrixXd sized(2);
 	REQUIRE_FALSE(sized.isApprox(empty));
+	REQUIRE_FALSE(sized.transpose().isApprox(empty.transpose()));
 }
 #endif
 
