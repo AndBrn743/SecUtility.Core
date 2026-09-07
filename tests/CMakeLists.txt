@@ -158,6 +158,22 @@ target_link_libraries(HoppyTriangularAssignmentNoDebugTest PRIVATE Catch2::Catch
 target_compile_definitions(HoppyTriangularAssignmentNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 add_test(NAME HoppyTriangularAssignmentNoDebugTest COMMAND HoppyTriangularAssignmentNoDebugTest)
 
+add_executable(HoppyTriangularExpressionTest HoppyTriangularExpressionTest.cpp)
+target_link_libraries(HoppyTriangularExpressionTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_options(HoppyTriangularExpressionTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+add_test(NAME HoppyTriangularExpressionTest COMMAND HoppyTriangularExpressionTest)
+
+add_executable(HoppyTriangularExpressionNoDebugTest HoppyTriangularExpressionTest.cpp)
+target_link_libraries(HoppyTriangularExpressionNoDebugTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_definitions(HoppyTriangularExpressionNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+add_test(NAME HoppyTriangularExpressionNoDebugTest COMMAND HoppyTriangularExpressionNoDebugTest)
+
+add_library(HoppyTriangularPhase6HeaderSelfContainment OBJECT
+	HoppyHeaderTriangularCompressedMatrixExpr.cpp)
+target_link_libraries(HoppyTriangularPhase6HeaderSelfContainment PRIVATE SecUtility::Core)
+
 add_secutility_test(HoppyFactoryTest HoppyFactoryTest.cpp)
 target_compile_options(HoppyFactoryTest PRIVATE
 	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>

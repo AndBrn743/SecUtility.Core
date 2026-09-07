@@ -39,6 +39,8 @@ namespace Hoppy
 
 	template <typename Derived>
 	class BlockVectorExpr;
+	template <typename Derived>
+	class TriangularCompressedMatrixExpr;
 
 	using BlockDiagonalMatrixXd = BlockDiagonalMatrix<double>;
 	using BlockDiagonalMatrixXf = BlockDiagonalMatrix<float>;

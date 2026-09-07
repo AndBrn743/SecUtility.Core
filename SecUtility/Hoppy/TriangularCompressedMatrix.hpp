@@ -56,6 +56,7 @@ namespace Hoppy::Detail
 		static constexpr TrianglePacking PackingValue = Packing;
 		static constexpr bool IsVectorAtCompileTime = Dimension == 1;
 		static constexpr bool IsTriangularCompressed = true;
+		static constexpr bool IsWritable = true;
 
 		TriangularCompressedMatrix() : TriangularCompressedMatrix(defaultDimension()) {}
 		explicit TriangularCompressedMatrix(const Eigen::Index dimension)
@@ -388,3 +389,5 @@ namespace Hoppy::Detail
 }  // namespace Hoppy::Detail
 
 #include <SecUtility/Hoppy/Detail/TriangularCompressedMap.hpp>
+#include <SecUtility/Hoppy/Detail/TriangularCompressedExpressions.hpp>
+#include <SecUtility/Hoppy/Detail/TriangularCompressedViews.hpp>

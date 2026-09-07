@@ -4,6 +4,7 @@
 
 #include <SecUtility/Hoppy/Detail/TriangularCompressedCoeffProxy.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedCoefficientPolicy.hpp>
+#include <SecUtility/Hoppy/TriangularCompressedMatrixExpr.hpp>
 
 #include <Eigen/Core>
 
@@ -32,6 +33,7 @@ namespace Hoppy::Detail
 	template <typename Derived, typename Scalar, typename StructureTag,
 	          TrianglePacking Packing, int Dimension, bool Writable>
 	class TriangularCompressedPlainBase
+	    : public Hoppy::TriangularCompressedMatrixExpr<Derived>
 	{
 	public:
 		using CoeffProxy = TriangularCompressedCoeffProxy<Derived>;

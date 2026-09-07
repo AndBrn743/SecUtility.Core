@@ -6,6 +6,7 @@
 #include <SecUtility/Hoppy/Detail/TriangularCompressedCheckedSize.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedPlainBase.hpp>
 #include <SecUtility/Hoppy/Detail/TriangularCompressedTags.hpp>
+#include <SecUtility/Hoppy/Detail/TriangularCompressedTraits.hpp>
 
 #include <Eigen/Core>
 
@@ -113,6 +114,7 @@ namespace Eigen
 		static constexpr int Flags = Eigen::NestByRefBit | Eigen::LvalueBit;
 		static constexpr Hoppy::TrianglePacking PackingValue = Packing;
 		static constexpr bool IsTriangularCompressed = true;
+		static constexpr bool IsWritable = true;
 
 		template <int D = Dimension, typename = std::enable_if_t<D != Dynamic>>
 		explicit Map(Scalar* data) : Map(data, Dimension) {}
@@ -215,6 +217,7 @@ namespace Eigen
 		static constexpr int Flags = Eigen::NestByRefBit;
 		static constexpr Hoppy::TrianglePacking PackingValue = Packing;
 		static constexpr bool IsTriangularCompressed = true;
+		static constexpr bool IsWritable = false;
 
 		template <int D = Dimension, typename = std::enable_if_t<D != Dynamic>>
 		explicit Map(const Scalar* data) : Map(data, Dimension) {}
@@ -234,3 +237,32 @@ namespace Eigen
 		Eigen::Index m_Dimension;
 	};
 }  // namespace Eigen
+
+namespace Eigen::internal
+{
+	template <typename Scalar, int Dimension, Hoppy::TrianglePacking Packing, int Options,
+	          typename StructureTag, int MapOptions, typename StrideType>
+	struct evaluator<Eigen::Map<Hoppy::Detail::TriangularCompressedMatrix<
+	        Scalar, Dimension, Packing, Options, StructureTag>, MapOptions, StrideType>>
+	    : triangular_compressed_evaluator<Eigen::Map<Hoppy::Detail::TriangularCompressedMatrix<
+	              Scalar, Dimension, Packing, Options, StructureTag>, MapOptions, StrideType>>
+	{
+		using Expression = Eigen::Map<Hoppy::Detail::TriangularCompressedMatrix<
+		        Scalar, Dimension, Packing, Options, StructureTag>, MapOptions, StrideType>;
+		using Base = triangular_compressed_evaluator<Expression>;
+		explicit evaluator(const Expression& expression) : Base(expression) {}
+	};
+
+	template <typename Scalar, int Dimension, Hoppy::TrianglePacking Packing, int Options,
+	          typename StructureTag, int MapOptions, typename StrideType>
+	struct evaluator<Eigen::Map<const Hoppy::Detail::TriangularCompressedMatrix<
+	        Scalar, Dimension, Packing, Options, StructureTag>, MapOptions, StrideType>>
+	    : triangular_compressed_evaluator<Eigen::Map<const Hoppy::Detail::TriangularCompressedMatrix<
+	              Scalar, Dimension, Packing, Options, StructureTag>, MapOptions, StrideType>>
+	{
+		using Expression = Eigen::Map<const Hoppy::Detail::TriangularCompressedMatrix<
+		        Scalar, Dimension, Packing, Options, StructureTag>, MapOptions, StrideType>;
+		using Base = triangular_compressed_evaluator<Expression>;
+		explicit evaluator(const Expression& expression) : Base(expression) {}
+	};
+}
