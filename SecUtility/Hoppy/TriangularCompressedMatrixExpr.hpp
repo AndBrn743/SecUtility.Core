@@ -72,6 +72,14 @@ namespace Hoppy
 		template <typename Divisor> auto operator/(Divisor&& divisor) &&;
 		template <typename NewScalar> auto cast() const&;
 		template <typename NewScalar> auto cast() &&;
+		template <typename D = Derived,
+		          typename = std::enable_if_t<std::is_floating_point_v<
+		                  typename Eigen::NumTraits<typename D::Scalar>::Real>>>
+		auto inverse() const&;
+		template <typename D = Derived,
+		          typename = std::enable_if_t<std::is_floating_point_v<
+		                  typename Eigen::NumTraits<typename D::Scalar>::Real>>>
+		auto inverse() &&;
 
 		auto diagonal() &;
 		auto diagonal() const&;
