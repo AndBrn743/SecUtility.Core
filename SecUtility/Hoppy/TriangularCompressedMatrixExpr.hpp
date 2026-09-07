@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <SecUtility/Hoppy/ForwardDeclarations.hpp>
+
 #include <Eigen/Core>
 
 #include <algorithm>
@@ -23,6 +25,20 @@ namespace Hoppy
 		auto conjugate() &&;
 		auto adjoint() const&;
 		auto adjoint() &&;
+		auto operator+() const&;
+		auto operator+() &&;
+		auto operator-() const&;
+		auto operator-() &&;
+		template <typename Other> auto operator+(Other&& other) const&;
+		template <typename Other> auto operator+(Other&& other) &&;
+		template <typename Other> auto operator-(Other&& other) const&;
+		template <typename Other> auto operator-(Other&& other) &&;
+		template <typename Factor> auto operator*(Factor&& factor) const&;
+		template <typename Factor> auto operator*(Factor&& factor) &&;
+		template <typename Divisor> auto operator/(Divisor&& divisor) const&;
+		template <typename Divisor> auto operator/(Divisor&& divisor) &&;
+		template <typename NewScalar> auto cast() const&;
+		template <typename NewScalar> auto cast() &&;
 
 		auto diagonal() &;
 		auto diagonal() const&;

@@ -260,6 +260,55 @@ namespace Hoppy::Detail
 		          typename = std::enable_if_t<D == 1 && Enabled>>
 		CoeffProxy operator[](const Eigen::Index index) { return coeffRef(index, 0); }
 
+		template <typename Other, bool Enabled = Writable,
+		          typename = std::enable_if_t<Enabled && Other::IsTriangularCompressed
+		                                      && std::is_same_v<StructureTag, typename Other::StructureTag>>>
+		Derived& operator+=(const Other& other)
+		{
+			if (other.dimension() != dimension())
+			{
+				eigen_assert(false && "compound assignment requires matching dimensions");
+				return derived();
+			}
+			auto evaluated = (derived() + other).eval();
+			assignCoefficientsFrom(evaluated);
+			return derived();
+		}
+		template <typename Other, bool Enabled = Writable,
+		          typename = std::enable_if_t<Enabled && Other::IsTriangularCompressed
+		                                      && std::is_same_v<StructureTag, typename Other::StructureTag>>>
+		Derived& operator-=(const Other& other)
+		{
+			if (other.dimension() != dimension())
+			{
+				eigen_assert(false && "compound assignment requires matching dimensions");
+				return derived();
+			}
+			auto evaluated = (derived() - other).eval();
+			assignCoefficientsFrom(evaluated);
+			return derived();
+		}
+		template <typename Factor, bool Enabled = Writable,
+		          typename = std::enable_if_t<Enabled
+		                                      && ((!std::is_same_v<StructureTag, HermitianTag>
+		                                           && !std::is_same_v<StructureTag, AntiHermitianTag>)
+		                                          || Eigen::NumTraits<Factor>::IsComplex == 0)>>
+		Derived& operator*=(const Factor& factor)
+		{
+			for (Eigen::Index index = 0; index < storedSize(); ++index) data()[index] *= factor;
+			return derived();
+		}
+		template <typename Divisor, bool Enabled = Writable,
+		          typename = std::enable_if_t<Enabled
+		                                      && ((!std::is_same_v<StructureTag, HermitianTag>
+		                                           && !std::is_same_v<StructureTag, AntiHermitianTag>)
+		                                          || Eigen::NumTraits<Divisor>::IsComplex == 0)>>
+		Derived& operator/=(const Divisor& divisor)
+		{
+			for (Eigen::Index index = 0; index < storedSize(); ++index) data()[index] /= divisor;
+			return derived();
+		}
+
 	protected:
 		friend ExpressionBase;
 		template <typename>
