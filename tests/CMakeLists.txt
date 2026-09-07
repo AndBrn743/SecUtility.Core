@@ -174,6 +174,18 @@ add_library(HoppyTriangularPhase6HeaderSelfContainment OBJECT
 	HoppyHeaderTriangularCompressedMatrixExpr.cpp)
 target_link_libraries(HoppyTriangularPhase6HeaderSelfContainment PRIVATE SecUtility::Core)
 
+add_executable(HoppyTriangularReductionTest HoppyTriangularReductionTest.cpp)
+target_link_libraries(HoppyTriangularReductionTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_options(HoppyTriangularReductionTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+add_test(NAME HoppyTriangularReductionTest COMMAND HoppyTriangularReductionTest)
+
+add_executable(HoppyTriangularReductionNoDebugTest HoppyTriangularReductionTest.cpp)
+target_link_libraries(HoppyTriangularReductionNoDebugTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_definitions(HoppyTriangularReductionNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+add_test(NAME HoppyTriangularReductionNoDebugTest COMMAND HoppyTriangularReductionNoDebugTest)
+
 add_secutility_test(HoppyFactoryTest HoppyFactoryTest.cpp)
 target_compile_options(HoppyFactoryTest PRIVATE
 	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
