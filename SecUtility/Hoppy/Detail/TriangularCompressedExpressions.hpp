@@ -300,10 +300,12 @@ namespace Hoppy
 		return std::move(expression.derived()) * std::forward<Factor>(factor);
 	}
 
-	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::operator+() const&
-	{ return derived().conjugate().conjugate(); }
-	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::operator+() &&
-	{ return std::move(derived()).conjugate().conjugate(); }
+	template <typename Derived>
+	decltype(auto) TriangularCompressedMatrixExpr<Derived>::operator+() const&
+	{ return derived(); }
+	template <typename Derived>
+	decltype(auto) TriangularCompressedMatrixExpr<Derived>::operator+() &&
+	{ return std::move(derived()); }
 	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::operator-() const&
 	{
 		return Detail::TriangularCompressedNegate<const Derived&, typename Derived::Scalar>(derived());

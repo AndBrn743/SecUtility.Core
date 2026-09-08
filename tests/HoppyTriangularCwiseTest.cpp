@@ -19,6 +19,10 @@ namespace
 	struct has_multiply_assign<T, Factor, std::void_t<decltype(std::declval<T&>() *= std::declval<Factor>())>>
 	    : std::true_type {};
 	using Complex = std::complex<double>;
+	using Plain = Hoppy::SymmetricMatrix<double, 2>;
+	static_assert(std::is_same_v<decltype(+std::declval<Plain&>()), const Plain&>);
+	static_assert(std::is_same_v<decltype(+std::declval<const Plain&>()), const Plain&>);
+	static_assert(std::is_same_v<decltype(+std::declval<Plain&&>()), Plain&&>);
 	static_assert(has_multiply_assign<Hoppy::HermitianMatrixXcd, double>::value);
 	static_assert(!has_multiply_assign<Hoppy::HermitianMatrixXcd, Complex>::value);
 	static_assert(has_multiply_assign<Hoppy::SymmetricMatrixXcd, Complex>::value);
@@ -45,7 +49,11 @@ TEST_CASE("unary and same-family binary expressions preserve structure")
 	right(0, 0) = 4; right(0, 1) = 5; right(1, 1) = 6;
 	const auto leftDense = left.toDense();
 	const auto rightDense = right.toDense();
+	const auto& identity = +left;
+	REQUIRE(&identity == &left);
 	Hoppy::Test::requireApprox((+left).toDense(), leftDense);
+	Hoppy::Test::requireApprox((+Hoppy::SymmetricMatrix<double, 2>::Ones()).transpose().toDense(),
+	                           Eigen::Matrix2d::Ones());
 	Hoppy::Test::requireApprox((-left).toDense(), -leftDense);
 	Hoppy::Test::requireApprox((left + right).toDense(), leftDense + rightDense);
 	Hoppy::Test::requireApprox((left - right).toDense(), leftDense - rightDense);

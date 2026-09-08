@@ -43,8 +43,8 @@ namespace Hoppy
 		auto conjugate() &&;
 		auto adjoint() const&;
 		auto adjoint() &&;
-		auto operator+() const&;
-		auto operator+() &&;
+		decltype(auto) operator+() const&;
+		decltype(auto) operator+() &&;
 		auto operator-() const&;
 		auto operator-() &&;
 		template <typename Other> auto operator+(Other&& other) const&;
