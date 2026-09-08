@@ -28,6 +28,7 @@ namespace
 		using Scalar = double;
 		using StructureTag = Hoppy::Detail::SymmetricTag;
 		static constexpr Hoppy::TrianglePacking PackingValue = Packing;
+		static constexpr bool IsTriangularCompressed = true;
 		Eigen::Index dimension() const { return 3; }
 		Eigen::Index rows() const { return 3; }
 		Eigen::Index cols() const { return 3; }
@@ -99,6 +100,20 @@ TEST_CASE("reductions visit independent coefficients once in packed order")
 	const std::vector<std::pair<Eigen::Index, Eigen::Index>> expectedUpper{
 	        {0, 0}, {0, 1}, {1, 1}, {0, 2}, {1, 2}, {2, 2}};
 	REQUIRE(upper.visits == expectedUpper);
+}
+
+TEST_CASE("structured approximation and assignment scale with packed storage")
+{
+	CountingExpression<Hoppy::TrianglePacking::Lower> left;
+	CountingExpression<Hoppy::TrianglePacking::Upper> right;
+	REQUIRE(left.isApprox(right, 0.0));
+	REQUIRE(left.visits.size() == 6);
+	REQUIRE(right.visits.size() == 6);
+
+	left.visits.clear();
+	Hoppy::SymmetricMatrix<double, 3, Hoppy::TrianglePacking::Upper> assigned(left);
+	REQUIRE(left.visits.size() == static_cast<std::size_t>(assigned.storedSize()));
+	REQUIRE(assigned.isApprox(left, 0.0));
 }
 
 TEST_CASE("lazy transform expressions exercise the generic reduction implementation")

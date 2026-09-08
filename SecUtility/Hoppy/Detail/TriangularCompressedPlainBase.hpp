@@ -89,25 +89,22 @@ namespace Hoppy::Detail
 		                                      && !std::is_same_v<StructureTag, AntiHermitianTag>>>
 		Derived& setIdentity()
 		{
-			for (Eigen::Index row = 0; row < dimension(); ++row)
-				for (Eigen::Index column = 0; column < dimension(); ++column)
-					if (CoefficientPolicy::isCanonicalSide(row, column))
-						data()[CoefficientPolicy::offset(dimension(), row, column)]
-						        = row == column ? Scalar(1) : Scalar(0);
+			forEachStoredCoordinate([&](const Eigen::Index row, const Eigen::Index column,
+			                            const Eigen::Index offset) {
+				data()[offset] = row == column ? Scalar(1) : Scalar(0);
+			});
 			return derived();
 		}
 
 		template <bool Enabled = Writable, typename = std::enable_if_t<Enabled>>
 		Derived& setRandom()
 		{
-			for (Eigen::Index row = 0; row < dimension(); ++row)
-				for (Eigen::Index column = 0; column < dimension(); ++column)
-					if (CoefficientPolicy::isCanonicalSide(row, column))
-					{
-						Scalar value = Eigen::internal::random<Scalar>();
-						if (row == column) value = CoefficientPolicy::canonicalizeDiagonal(value);
-						data()[CoefficientPolicy::offset(dimension(), row, column)] = value;
-					}
+			forEachStoredCoordinate([&](const Eigen::Index row, const Eigen::Index column,
+			                            const Eigen::Index offset) {
+				Scalar value = Eigen::internal::random<Scalar>();
+				if (row == column) value = CoefficientPolicy::canonicalizeDiagonal(value);
+				data()[offset] = value;
+			});
 			return derived();
 		}
 
@@ -342,10 +339,10 @@ namespace Hoppy::Detail
 		template <typename Other>
 		void assignCoefficientsFrom(const Other& other)
 		{
-			for (Eigen::Index row = 0; row < dimension(); ++row)
-				for (Eigen::Index column = 0; column < dimension(); ++column)
-					if (CoefficientPolicy::isAuthoritativeCoordinate(row, column))
-						writeLogical(row, column, static_cast<Scalar>(other.coeff(row, column)));
+			forEachStoredCoordinate([&](const Eigen::Index row, const Eigen::Index column,
+			                            const Eigen::Index) {
+				writeLogical(row, column, static_cast<Scalar>(other.coeff(row, column)));
+			});
 		}
 
 		template <unsigned int Mode, typename MatrixType>
@@ -376,6 +373,27 @@ namespace Hoppy::Detail
 					if ((upper && row <= column) || (!upper && row >= column))
 						writeLogical(row, column,
 						             static_cast<Scalar>(evaluated.coeff(row, column)));
+		}
+
+		template <typename Function>
+		void forEachStoredCoordinate(Function&& function)
+		{
+			Eigen::Index offset = 0;
+			for (Eigen::Index major = 0; major < dimension(); ++major)
+				for (Eigen::Index minor = 0; minor <= major; ++minor, ++offset)
+				{
+					Eigen::Index row = Packing == TrianglePacking::Lower ? major : minor;
+					Eigen::Index column = Packing == TrianglePacking::Lower ? minor : major;
+					if constexpr (std::is_same_v<StructureTag, UpperTriangularTag>)
+					{
+						if (row > column) (std::swap)(row, column);
+					}
+					else if constexpr (std::is_same_v<StructureTag, LowerTriangularTag>)
+					{
+						if (row < column) (std::swap)(row, column);
+					}
+					function(row, column, offset);
+				}
 		}
 
 		template <typename Function>

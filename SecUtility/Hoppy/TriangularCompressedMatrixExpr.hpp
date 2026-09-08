@@ -23,6 +23,11 @@ namespace Hoppy
 		        !is_triangular_expression<std::remove_cv_t<std::remove_reference_t<T>>>::value
 		        && !std::is_base_of_v<Eigen::EigenBase<std::remove_cv_t<std::remove_reference_t<T>>>,
 		                              std::remove_cv_t<std::remove_reference_t<T>>>;
+		template <typename Left, typename Right, typename Precision>
+		bool coefficientsAreApprox(const Left& left, const Right& right, const Precision& precision)
+		{
+			return Eigen::internal::isApprox(left, right, precision);
+		}
 	}
 
 	template <typename Derived>
@@ -191,7 +196,34 @@ namespace Hoppy
 			});
 			return result;
 		}
-		template <typename Other, typename Precision>
+		template <typename Other, typename Precision,
+		          std::enable_if_t<Detail::is_triangular_expression<
+		                  std::remove_cv_t<std::remove_reference_t<Other>>>::value, int> = 0>
+		bool isApprox(const Other& other, const Precision& precision) const
+		{
+			if (derived().rows() != other.rows() || derived().cols() != other.cols())
+			{
+				eigen_assert(false && "isApprox requires matching dimensions");
+				return false;
+			}
+			using OtherType = std::remove_cv_t<std::remove_reference_t<Other>>;
+			constexpr bool SameStructure =
+			        std::is_same_v<typename Derived::StructureTag, typename OtherType::StructureTag>;
+			bool result = true;
+			forEachIndependent([&](const Eigen::Index row, const Eigen::Index column, const auto& value) {
+				if (!Detail::coefficientsAreApprox(value, other.coeff(row, column), precision))
+					result = false;
+				if constexpr (!SameStructure)
+					if (row != column
+					    && !Detail::coefficientsAreApprox(derived().coeff(column, row),
+					                                       other.coeff(column, row), precision))
+						result = false;
+			});
+			return result;
+		}
+		template <typename Other, typename Precision,
+		          std::enable_if_t<!Detail::is_triangular_expression<
+		                  std::remove_cv_t<std::remove_reference_t<Other>>>::value, int> = 0>
 		bool isApprox(const Other& other, const Precision& precision) const
 		{
 			if (derived().rows() != other.rows() || derived().cols() != other.cols())
@@ -201,8 +233,8 @@ namespace Hoppy
 			}
 			for (Eigen::Index row = 0; row < derived().rows(); ++row)
 				for (Eigen::Index column = 0; column < derived().cols(); ++column)
-					if (!Eigen::internal::isApprox(derived().coeff(row, column),
-					                               other.coeff(row, column), precision)) return false;
+					if (!Detail::coefficientsAreApprox(derived().coeff(row, column),
+					                                   other.coeff(row, column), precision)) return false;
 			return true;
 		}
 		template <typename Other>
