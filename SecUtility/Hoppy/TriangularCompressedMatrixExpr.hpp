@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <SecUtility/Hoppy/ForwardDeclarations.hpp>
+    #include <SecUtility/Hoppy/ForwardDeclarations.hpp>
 
 #include <Eigen/Core>
 
@@ -88,26 +88,28 @@ namespace Hoppy
 
 		auto diagonal() &;
 		auto diagonal() const&;
-		auto diagonal() && = delete;
+		auto diagonal() &&;
 		template <unsigned int Mode> auto triangularView() &;
 		template <unsigned int Mode> auto triangularView() const&;
-		template <unsigned int Mode> auto triangularView() && = delete;
+		template <unsigned int Mode> auto triangularView() &&;
 		auto block(Eigen::Index row, Eigen::Index column, Eigen::Index rows, Eigen::Index columns) &;
 		auto block(Eigen::Index row, Eigen::Index column, Eigen::Index rows, Eigen::Index columns) const&;
 		template <int Rows, int Columns> auto block(Eigen::Index row, Eigen::Index column) &;
 		template <int Rows, int Columns> auto block(Eigen::Index row, Eigen::Index column) const&;
-		auto block(Eigen::Index, Eigen::Index, Eigen::Index, Eigen::Index) && = delete;
+		template <int Rows, int Columns> auto block(Eigen::Index row, Eigen::Index column) &&;
+		auto block(Eigen::Index row, Eigen::Index column, Eigen::Index rows, Eigen::Index columns) &&;
 		auto topLeftCorner(Eigen::Index rows, Eigen::Index columns) &;
 		auto topLeftCorner(Eigen::Index rows, Eigen::Index columns) const&;
 		template <int Rows, int Columns> auto topLeftCorner() &;
 		template <int Rows, int Columns> auto topLeftCorner() const&;
-		auto topLeftCorner(Eigen::Index, Eigen::Index) && = delete;
+		template <int Rows, int Columns> auto topLeftCorner() &&;
+		auto topLeftCorner(Eigen::Index rows, Eigen::Index columns) &&;
 		auto row(Eigen::Index index) &;
 		auto row(Eigen::Index index) const&;
-		auto row(Eigen::Index) && = delete;
+		auto row(Eigen::Index index) &&;
 		auto col(Eigen::Index index) &;
 		auto col(Eigen::Index index) const&;
-		auto col(Eigen::Index) && = delete;
+		auto col(Eigen::Index index) &&;
 
 		auto sum() const
 		{

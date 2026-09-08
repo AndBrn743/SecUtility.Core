@@ -7,6 +7,7 @@
 #include <Eigen/Core>
 
 #include <type_traits>
+#include <utility>
 
 namespace Hoppy::Detail
 {
@@ -118,6 +119,11 @@ namespace Hoppy
 	}
 	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::diagonal() const&
 	{ return Detail::TriangularCompressedDiagonalView<const Derived>(derived()); }
+	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::diagonal() &&
+	{
+		using Parent = std::conditional_t<Derived::IsWritable, Derived, const Derived>;
+		return Detail::TriangularCompressedDiagonalView<Parent>(derived());
+	}
 	template <typename Derived> template <unsigned int Mode>
 	auto TriangularCompressedMatrixExpr<Derived>::triangularView() &
 	{
@@ -127,6 +133,13 @@ namespace Hoppy
 	template <typename Derived> template <unsigned int Mode>
 	auto TriangularCompressedMatrixExpr<Derived>::triangularView() const&
 	{ return Detail::TriangularCompressedLogicalView<const Derived, Mode>(derived(), 0, 0, derived().rows(), derived().cols()); }
+	template <typename Derived> template <unsigned int Mode>
+	auto TriangularCompressedMatrixExpr<Derived>::triangularView() &&
+	{
+		using Parent = std::conditional_t<Derived::IsWritable, Derived, const Derived>;
+		return Detail::TriangularCompressedLogicalView<Parent, Mode>(derived(), 0, 0,
+		                                                         derived().rows(), derived().cols());
+	}
 	template <typename Derived>
 	auto TriangularCompressedMatrixExpr<Derived>::block(Eigen::Index row, Eigen::Index column,
 	                                                    Eigen::Index rows, Eigen::Index columns) &
@@ -140,27 +153,48 @@ namespace Hoppy
 	template <typename Derived> template <int Rows, int Columns>
 	auto TriangularCompressedMatrixExpr<Derived>::block(const Eigen::Index row, const Eigen::Index column) const&
 	{ return block(row, column, Rows, Columns); }
+	template <typename Derived> template <int Rows, int Columns>
+	auto TriangularCompressedMatrixExpr<Derived>::block(const Eigen::Index row,
+	                                                    const Eigen::Index column) &&
+	{ return std::move(*this).block(row, column, Rows, Columns); }
 	template <typename Derived>
 	auto TriangularCompressedMatrixExpr<Derived>::block(Eigen::Index row, Eigen::Index column,
 	                                                    Eigen::Index rows, Eigen::Index columns) const&
 	{ return Detail::TriangularCompressedLogicalView<const Derived>(derived(), row, column, rows, columns); }
+	template <typename Derived>
+	auto TriangularCompressedMatrixExpr<Derived>::block(Eigen::Index row, Eigen::Index column,
+	                                                    Eigen::Index rows, Eigen::Index columns) &&
+	{
+		using Parent = std::conditional_t<Derived::IsWritable, Derived, const Derived>;
+		return Detail::TriangularCompressedLogicalView<Parent>(derived(), row, column, rows, columns);
+	}
 	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::topLeftCorner(const Eigen::Index rows, const Eigen::Index columns) &
 	{ return block(0, 0, rows, columns); }
 	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::topLeftCorner(const Eigen::Index rows,
 	                                                            const Eigen::Index columns) const&
 	{ return block(0, 0, rows, columns); }
+	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::topLeftCorner(
+	        const Eigen::Index rows, const Eigen::Index columns) &&
+	{ return std::move(*this).block(0, 0, rows, columns); }
 	template <typename Derived> template <int Rows, int Columns>
 	auto TriangularCompressedMatrixExpr<Derived>::topLeftCorner() &
 	{ return block(0, 0, Rows, Columns); }
 	template <typename Derived> template <int Rows, int Columns>
 	auto TriangularCompressedMatrixExpr<Derived>::topLeftCorner() const&
 	{ return block(0, 0, Rows, Columns); }
+	template <typename Derived> template <int Rows, int Columns>
+	auto TriangularCompressedMatrixExpr<Derived>::topLeftCorner() &&
+	{ return std::move(*this).block(0, 0, Rows, Columns); }
 	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::row(const Eigen::Index index) &
 	{ return block(index, 0, 1, derived().cols()); }
 	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::row(const Eigen::Index index) const&
 	{ return block(index, 0, 1, derived().cols()); }
+	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::row(const Eigen::Index index) &&
+	{ return std::move(*this).block(index, 0, 1, derived().cols()); }
 	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::col(const Eigen::Index index) &
 	{ return block(0, index, derived().rows(), 1); }
 	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::col(const Eigen::Index index) const&
 	{ return block(0, index, derived().rows(), 1); }
+	template <typename Derived> auto TriangularCompressedMatrixExpr<Derived>::col(const Eigen::Index index) &&
+	{ return std::move(*this).block(0, index, derived().rows(), 1); }
 }

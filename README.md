@@ -69,6 +69,10 @@ component-wise algebra, products, reductions, and lazy `inverse()` are available
 roots, custom-stride maps, congruence transforms, and serialization are intentionally not part of
 the v1 API.
 
+Views are non-owning, including views formed from rvalues. As with equivalent Eigen views, consume
+an rvalue view within the same full expression; storing it beyond its parent expression's lifetime
+leaves it dangling.
+
 Prototype migration names:
 
 | Prototype spelling | v1 spelling |
