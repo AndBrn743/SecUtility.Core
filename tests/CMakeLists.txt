@@ -222,6 +222,30 @@ target_link_libraries(HoppyTriangularInverseNoDebugTest PRIVATE Catch2::Catch2Wi
 target_compile_definitions(HoppyTriangularInverseNoDebugTest PRIVATE EIGEN_NO_DEBUG)
 add_test(NAME HoppyTriangularInverseNoDebugTest COMMAND HoppyTriangularInverseNoDebugTest)
 
+add_executable(HoppyTriangularContractTest HoppyTriangularContractTest.cpp)
+target_link_libraries(HoppyTriangularContractTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_options(HoppyTriangularContractTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+add_test(NAME HoppyTriangularContractTest COMMAND HoppyTriangularContractTest)
+
+add_executable(HoppyTriangularContractNoDebugTest HoppyTriangularContractTest.cpp)
+target_link_libraries(HoppyTriangularContractNoDebugTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_definitions(HoppyTriangularContractNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+add_test(NAME HoppyTriangularContractNoDebugTest COMMAND HoppyTriangularContractNoDebugTest)
+
+add_executable(HoppyTriangularPropertyTest HoppyTriangularPropertyTest.cpp)
+target_link_libraries(HoppyTriangularPropertyTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_options(HoppyTriangularPropertyTest PRIVATE
+	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>
+	$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>)
+add_test(NAME HoppyTriangularPropertyTest COMMAND HoppyTriangularPropertyTest)
+
+add_executable(HoppyTriangularPropertyNoDebugTest HoppyTriangularPropertyTest.cpp)
+target_link_libraries(HoppyTriangularPropertyNoDebugTest PRIVATE Catch2::Catch2WithMain SecUtility::Core)
+target_compile_definitions(HoppyTriangularPropertyNoDebugTest PRIVATE EIGEN_NO_DEBUG)
+add_test(NAME HoppyTriangularPropertyNoDebugTest COMMAND HoppyTriangularPropertyNoDebugTest)
+
 add_secutility_test(HoppyFactoryTest HoppyFactoryTest.cpp)
 target_compile_options(HoppyFactoryTest PRIVATE
 	$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-include${CMAKE_CURRENT_SOURCE_DIR}/HoppyEigenAssert.hpp>

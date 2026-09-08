@@ -53,6 +53,31 @@ automatically via CMake's `FetchContent` and (where needed) patched from
 | [gcem](https://github.com/kthohr/gcem)              | 1.18.0  | `constexpr` math. Auto-patched via `patches/gcem/`.                              |
 | [Catch2](https://github.com/catchorg/Catch2)        | 3.15.1  | Tests only. See [Building the tests](#building-the-tests).                       |
 
+## Triangular-compressed matrices
+
+`<SecUtility/Hoppy/TriangularCompressedMatrix.hpp>` provides packed upper-triangular,
+lower-triangular, symmetric, anti-symmetric, Hermitian, and anti-Hermitian square matrices. Both
+lower and upper packed storage are supported, as are fixed/dynamic dimensions and contiguous
+mutable or const `Eigen::Map` objects. Include `<SecUtility/Hoppy/Hoppy.hpp>` to use this API with
+the rest of Hoppy.
+
+The logical matrix is accessed with `operator()(row, column)` while `data()` exposes exactly
+`storedSize()` packed coefficients. It is not a dense strided buffer. Structural writes are
+checked with `eigen_assert`; use `FromUpper`, `FromLower`, `FromUncheckedDense`, or
+`FromModifiedDense` to state how a dense input should be interpreted. Structure-preserving views,
+component-wise algebra, products, reductions, and lazy `inverse()` are available. Packed square
+roots, custom-stride maps, congruence transforms, and serialization are intentionally not part of
+the v1 API.
+
+Prototype migration names:
+
+| Prototype spelling | v1 spelling |
+|--------------------|-------------|
+| `Dimension()` | `dimension()` |
+| `BufferSize()` / `RequiredBufferSizeOf(n)` | `storedSize()` / `requiredStoredSize(n)` |
+| `FillWithZero`, `FillWithOne`, `FillWithConstant`, `FillWithRandom`, `FillWithIdentity` | `setZero`, `setOnes`, `setConstant`, `setRandom`, `setIdentity` |
+| prototype enable macros | public family aliases and ordinary SFINAE availability |
+
 If your top-level project already defines `Eigen3::Eigen`, `range-v3::range-v3`,
 or `gcem::gcem` before pulling in SecUtility.Core, those existing targets are
 reused as-is and no patch is applied, you take responsibility for the version.
