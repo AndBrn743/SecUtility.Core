@@ -6,7 +6,6 @@
 
 #include <Eigen/LU>
 
-#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -17,11 +16,10 @@ namespace Hoppy::Detail
 	    : public Hoppy::TriangularCompressedMatrixExpr<TriangularCompressedInverse<Operand>>
 	{
 		using Source = std::remove_cv_t<std::remove_reference_t<Operand>>;
-		using DenseObject = Eigen::Matrix<typename Source::Scalar,
-		                                  Source::RowsAtCompileTime, Source::ColsAtCompileTime>;
-
 	public:
 		using Scalar = typename Source::Scalar;
+		using DenseObject = Eigen::Matrix<Scalar, Source::RowsAtCompileTime,
+		                                  Source::ColsAtCompileTime>;
 		using StructureTag = typename Source::StructureTag;
 		static constexpr int RowsAtCompileTime = Source::RowsAtCompileTime;
 		static constexpr int ColsAtCompileTime = Source::ColsAtCompileTime;
@@ -38,24 +36,18 @@ namespace Hoppy::Detail
 		Eigen::Index cols() const noexcept { return dimension(); }
 		Eigen::Index size() const noexcept { return dimension() * dimension(); }
 		Scalar coeff(Eigen::Index row, Eigen::Index column) const
-		{ return evaluated().coeff(row, column); }
-		const DenseObject& toDense() const { return evaluated(); }
+		{ return toDense().coeff(row, column); }
+		DenseObject toDense() const { return m_Operand.toDense().inverse().eval(); }
 		template <typename Destination>
 		void evalTo(Eigen::MatrixBase<Destination>& destination) const
-		{ destination.derived() = evaluated(); }
-		PlainObject eval() const { return PlainObject::FromUncheckedDense(evaluated()); }
+		{ destination.derived() = toDense(); }
+		PlainObject eval() const { return PlainObject::FromUncheckedDense(toDense()); }
 		template <typename Dense,
 		          typename = std::enable_if_t<std::is_base_of_v<Eigen::MatrixBase<Dense>, Dense>>>
-		operator Dense() const { return evaluated(); }
+		operator Dense() const { return toDense(); }
 
 	private:
-		const DenseObject& evaluated() const
-		{
-			if (!m_Evaluated) m_Evaluated.emplace(m_Operand.toDense().inverse().eval());
-			return *m_Evaluated;
-		}
 		Operand m_Operand;
-		mutable std::optional<DenseObject> m_Evaluated;
 	};
 }
 
@@ -76,10 +68,14 @@ namespace Eigen::internal
 	    : triangular_node_traits<Hoppy::Detail::TriangularCompressedInverse<Operand>> {};
 	template <typename Operand>
 	struct evaluator<Hoppy::Detail::TriangularCompressedInverse<Operand>>
-	    : triangular_compressed_evaluator<Hoppy::Detail::TriangularCompressedInverse<Operand>>
+	    : evaluator_base<Hoppy::Detail::TriangularCompressedInverse<Operand>>
 	{
 		using Expression = Hoppy::Detail::TriangularCompressedInverse<Operand>;
-		using Base = triangular_compressed_evaluator<Expression>;
-		explicit evaluator(const Expression& expression) : Base(expression) {}
+		using Scalar = typename Expression::Scalar;
+		enum { CoeffReadCost = NumTraits<Scalar>::ReadCost, Flags = 0, Alignment = 0 };
+		explicit evaluator(const Expression& expression) : m_Evaluated(expression.toDense()) {}
+		Scalar coeff(Eigen::Index row, Eigen::Index column) const
+		{ return m_Evaluated.coeff(row, column); }
+		typename Expression::DenseObject m_Evaluated;
 	};
 }

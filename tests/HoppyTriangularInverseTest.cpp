@@ -32,10 +32,29 @@ namespace
 
 	using Fixed = Hoppy::UpperTriangularMatrix<double, 3, Hoppy::TrianglePacking::Upper>;
 	using Inverse = decltype(std::declval<const Fixed&>().inverse());
+	static_assert(std::is_same_v<decltype(std::declval<const Inverse&>().toDense()), Eigen::Matrix3d>);
 	static_assert(Inverse::RowsAtCompileTime == 3);
 	static_assert(Inverse::PackingValue == Hoppy::TrianglePacking::Upper);
 	static_assert(std::is_same_v<typename Inverse::StructureTag, Hoppy::Detail::UpperTriangularTag>);
 	static_assert(std::is_same_v<typename Inverse::PlainObject, Fixed>);
+}
+
+TEST_CASE("inverse expressions re-evaluate referenced lvalue operands")
+{
+	Hoppy::UpperTriangularMatrix<double, 2> matrix;
+	matrix.setIdentity();
+	const auto inverse = matrix.inverse();
+	Hoppy::Test::requireApprox(inverse.toDense(), Eigen::Matrix2d::Identity());
+
+	matrix(0, 0) = 2.0;
+	matrix(0, 1) = 3.0;
+	matrix(1, 1) = 4.0;
+	const Eigen::Matrix2d expected = matrix.toDense().inverse();
+	Hoppy::Test::requireApprox(inverse.toDense(), expected);
+
+	Eigen::Matrix2d assigned = inverse;
+	Hoppy::Test::requireApprox(assigned, expected);
+	Hoppy::Test::requireApprox(inverse.eval().toDense(), expected);
 }
 
 TEST_CASE("triangular and symmetric inverses retain their packed family")
