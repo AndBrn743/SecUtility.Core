@@ -127,7 +127,7 @@ TEST_CASE("mixed real-complex products use Eigen product scalar traits")
 	Hoppy::Test::requireApprox(product.eval(), matrix.toDense() * rhs);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("dense products enforce inner dimensions")
 {
 	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};

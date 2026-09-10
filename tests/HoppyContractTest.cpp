@@ -166,7 +166,7 @@ TEST_CASE("blocking-taking fills commit only after the replacement is complete")
 	ThrowingScalar::AssignmentsRemaining = -1;
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("remaining public precondition sites use the Eigen assertion hook")
 {
 	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};

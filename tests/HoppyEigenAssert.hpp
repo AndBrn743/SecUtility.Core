@@ -2,6 +2,8 @@
 
 #pragma once
 
+#define HOPPY_TEST_EIGEN_ASSERT_THROWS 1
+
 #include <stdexcept>
 #include <string>
 

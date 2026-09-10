@@ -187,7 +187,7 @@ TEST_CASE("dimension conversion accepts exact signed and unsigned boundaries")
 	        std::numeric_limits<std::uint64_t>::max(), converted));
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("checked dimensions reject invalid values and every independent overflow")
 {
 	const auto maximum = std::numeric_limits<Eigen::Index>::max();
@@ -293,7 +293,7 @@ TEST_CASE("FromBlocks and SingleBlock infer blocking and convert scalar values")
 	REQUIRE(vector.asDense().isApprox((Eigen::Vector3d() << 4.0, 5.0, 5.0).finished()));
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("reblocking and extraction failures leave the old object untouched")
 {
 	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};

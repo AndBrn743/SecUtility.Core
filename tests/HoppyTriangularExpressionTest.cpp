@@ -234,7 +234,7 @@ TEST_CASE("maps expose the same transform and logical view surface")
 	REQUIRE(evaluator.coeff(2, 0) == Complex(2, -5));
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("view bounds and structural constraints assert")
 {
 	Hoppy::AntiSymmetricMatrix<double, 3> anti;

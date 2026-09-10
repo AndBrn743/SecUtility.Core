@@ -92,7 +92,7 @@ TEST_CASE("setters are shared by owning matrices and mutable maps")
 	REQUIRE(map.coeff(2, 0) == 0.0);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("invalid constant is transactional")
 {
 	using Complex = std::complex<double>;

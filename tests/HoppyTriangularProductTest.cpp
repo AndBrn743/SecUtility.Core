@@ -162,7 +162,7 @@ TEST_CASE("dense-left products use Eigen nesting for triangular operands")
 	Hoppy::Test::requireApprox(retainedLvalue.eval(), dense);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("product dimension mismatch asserts")
 {
 	auto matrix = Hoppy::SymmetricMatrixXd::Ones(2);

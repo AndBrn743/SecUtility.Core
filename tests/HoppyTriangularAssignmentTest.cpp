@@ -126,7 +126,7 @@ TEST_CASE("maps accept self-adjoint views and reject dimension mismatches before
 
 	const auto before = map.toDense();
 	Dense wrongSize = Dense::Constant(2, 2, 9.0);
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 	REQUIRE_THROWS_AS(map = wrongSize.selfadjointView<Eigen::Lower>(),
 	                  Hoppy::Test::EigenAssertionFailure);
 #else

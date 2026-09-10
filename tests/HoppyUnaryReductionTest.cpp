@@ -81,7 +81,7 @@ TEST_CASE("reductions match represented dense values and define empty identities
 	static_assert(!has_max_coeff<Hoppy::BlockDiagonalMatrix<std::complex<double>>>::value);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("empty ordered reductions assert")
 {
 	const Hoppy::BlockVector<double> empty;

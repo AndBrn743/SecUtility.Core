@@ -121,7 +121,7 @@ TEST_CASE("dense interop handles empty matrices and Eigen scalar promotion")
 	static_assert(!has_sum<InvalidDense, InvalidBlock>::value);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("dense interop enforces dimensions and destination storage separation")
 {
 	Hoppy::BlockDiagonalMatrix<double> block{1, 2};

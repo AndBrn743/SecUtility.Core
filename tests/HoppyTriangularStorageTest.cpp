@@ -408,7 +408,7 @@ TEST_CASE("failed conservative resize leaves the original object unchanged")
 	REQUIRE(matrix.coeff(1, 1).value == 3);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("invalid coefficient and diagonal writes assert before changing storage")
 {
 	using FixedSymmetric = Hoppy::SymmetricMatrix<double, 3>;

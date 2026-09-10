@@ -191,7 +191,7 @@ TEST_CASE("empty reductions have their specified identities")
 	REQUIRE_FALSE(empty.hasNaN());
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("undefined empty reductions assert")
 {
 	Hoppy::SymmetricMatrixXd empty;

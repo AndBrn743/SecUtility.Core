@@ -509,7 +509,7 @@ TEST_CASE("Eigen ref_selector safely owns temporary expression nodes")
 	Hoppy::Test::requireApprox(evaluateWithEigen(nested), values);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("forced Eigen assertion hook throws at a non-noexcept assertion site")
 {
 	Eigen::MatrixXd lhs(2, 2);

@@ -165,7 +165,7 @@ TEST_CASE("singular and nonfinite blocks add no library rank checks")
 	REQUIRE_NOTHROW((void)matrix.solve(rhs));
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("solve enforces rhs dimensions and blockings")
 {
 	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};

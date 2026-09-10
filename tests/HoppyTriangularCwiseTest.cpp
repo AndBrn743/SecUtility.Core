@@ -186,7 +186,7 @@ TEST_CASE("mapped compound operations are alias safe")
 	REQUIRE(map.coeff(1, 0) == 2);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("compound dimension mismatch asserts before mutation")
 {
 	auto destination = Hoppy::SymmetricMatrixXd::Ones(2);

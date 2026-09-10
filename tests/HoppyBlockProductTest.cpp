@@ -129,7 +129,7 @@ TEST_CASE("asDiagonal retains Eigen diagonal blocks in products")
 	                           matrix.toDense() * diagonal.asDense().asDiagonal().toDenseMatrix());
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("products and product compounds require equal blocking")
 {
 	Hoppy::BlockDiagonalMatrix<double> lhs{1, 2};

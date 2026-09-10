@@ -181,7 +181,7 @@ TEST_CASE("valid dimension and byte-count queries")
 	REQUIRE(Hoppy::SymmetricMatrixXd::requiredStoredSize(0) == 0);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("invalid dimensions and independently constructed arithmetic overflows assert")
 {
 	using namespace Hoppy::Detail;

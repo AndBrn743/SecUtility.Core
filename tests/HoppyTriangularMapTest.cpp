@@ -136,7 +136,7 @@ TEST_CASE("owning and mapped structured copies support opposite packing and over
 	REQUIRE(lower.coeff(2, 1) == 5.0);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("invalid map construction and writes assert")
 {
 	double buffer[6]{};

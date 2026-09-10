@@ -148,7 +148,7 @@ TEST_CASE("unsupported kind and orientation combinations are absent")
 	static_assert(!has_right_multiply<ColumnVector, UnsupportedScalar>::value);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("cwise and compound operations reject mismatched blocking")
 {
 	Hoppy::BlockDiagonalMatrix<double> matrixA{1, 2};

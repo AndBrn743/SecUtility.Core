@@ -124,7 +124,7 @@ TEST_CASE("oriented BV expressions evaluate and resize dense destinations")
 	REQUIRE(columnDestination.isApprox(column.asDense()));
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("evalTo rejects destination overlap and fixed-size shape mismatch")
 {
 	Hoppy::BlockVector<double> vector{1, 2};

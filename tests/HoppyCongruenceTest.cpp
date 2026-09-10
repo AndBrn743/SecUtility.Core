@@ -119,7 +119,7 @@ TEST_CASE("non-block-diagonal transforms are absent")
 	static_assert(!has_transformed_by<Matrix, Eigen::MatrixXd>::value);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("congruence transforms enforce identical blocking")
 {
 	Hoppy::BlockDiagonalMatrix<double> matrix{1, 2};

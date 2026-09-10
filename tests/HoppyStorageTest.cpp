@@ -189,7 +189,7 @@ TEST_CASE("copy, move, copy self-assignment, and ADL swap preserve container sem
 	REQUIRE(vector.blockingInfo() == std::vector<Eigen::Index>{1});
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("block and offset access reject negative, terminal, and empty indices")
 {
 	Matrix matrix{1, 2};

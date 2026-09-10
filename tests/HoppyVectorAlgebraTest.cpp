@@ -156,7 +156,7 @@ TEST_CASE("normalization availability is restricted to supported scalars and pla
 	static_assert(!has_rvalue_normalize<RealVector>::value);
 }
 
-#ifndef EIGEN_NO_DEBUG
+#ifdef HOPPY_TEST_EIGEN_ASSERT_THROWS
 TEST_CASE("dot enforces equal logical dimensions")
 {
 	const Hoppy::BlockVector<double> lhs{1, 2};
