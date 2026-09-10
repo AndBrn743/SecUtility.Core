@@ -17,11 +17,11 @@ namespace Hoppy::Detail
 	class DenseBlockDiagonalDifference;
 }
 
-template <typename Dense, typename Block, bool DenseFirst>
-struct Eigen::internal::traits<Hoppy::Detail::DenseBlockDiagonalSum<Dense, Block, DenseFirst>>
+template <typename TDense, typename TBlock, bool DenseFirst>
+struct Eigen::internal::traits<Hoppy::Detail::DenseBlockDiagonalSum<TDense, TBlock, DenseFirst>>
 {
-	using DenseScalar = typename traits<Dense>::Scalar;
-	using BlockScalar = typename traits<Block>::Scalar;
+	using DenseScalar = typename traits<TDense>::Scalar;
+	using BlockScalar = typename traits<TBlock>::Scalar;
 	using Operation = std::conditional_t<DenseFirst, scalar_sum_op<DenseScalar, BlockScalar>,
 	                                     scalar_sum_op<BlockScalar, DenseScalar>>;
 	using Scalar = typename std::conditional_t<
@@ -30,11 +30,11 @@ struct Eigen::internal::traits<Hoppy::Detail::DenseBlockDiagonalSum<Dense, Block
 	using ReturnType = Eigen::MatrixX<Scalar>;
 };
 
-template <typename Dense, typename Block, bool DenseFirst>
-struct Eigen::internal::traits<Hoppy::Detail::DenseBlockDiagonalDifference<Dense, Block, DenseFirst>>
+template <typename TDense, typename TBlock, bool DenseFirst>
+struct Eigen::internal::traits<Hoppy::Detail::DenseBlockDiagonalDifference<TDense, TBlock, DenseFirst>>
 {
-	using DenseScalar = typename traits<Dense>::Scalar;
-	using BlockScalar = typename traits<Block>::Scalar;
+	using DenseScalar = typename traits<TDense>::Scalar;
+	using BlockScalar = typename traits<TBlock>::Scalar;
 	using Operation = std::conditional_t<DenseFirst, scalar_difference_op<DenseScalar, BlockScalar>,
 	                                     scalar_difference_op<BlockScalar, DenseScalar>>;
 	using Scalar = typename std::conditional_t<

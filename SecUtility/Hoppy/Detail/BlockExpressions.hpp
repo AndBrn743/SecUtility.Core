@@ -262,11 +262,11 @@ struct Eigen::internal::traits<Hoppy::Detail::BinaryBlockExpression<Lhs, Rhs, Op
 	static constexpr int MaxColsAtCompileTime = ColsAtCompileTime;
 };
 
-template <typename Matrix, typename Transform, bool Back>
-struct Eigen::internal::traits<Hoppy::Detail::CongruenceExpression<Matrix, Transform, Back>>
+template <typename TMatrix, typename TTransform, bool Back>
+struct Eigen::internal::traits<Hoppy::Detail::CongruenceExpression<TMatrix, TTransform, Back>>
 {
 	using Scalar = typename Hoppy::Detail::congruence_result_scalar<
-	        typename traits<Matrix>::Scalar, typename traits<Transform>::Scalar>::type;
+	        typename traits<TMatrix>::Scalar, typename traits<TTransform>::Scalar>::type;
 	using StorageKind = Hoppy::Detail::BlockDiagonalStorage;
 	using XprKind = MatrixXpr;
 	using StorageIndex = Eigen::Index;
