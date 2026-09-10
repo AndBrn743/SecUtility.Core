@@ -91,23 +91,28 @@ namespace Hoppy::Detail
 		template <typename Destination>
 		void evalTo(Destination& destination) const
 		{
+			ReturnType evaluated(rows(), cols());
+			evalToFresh(evaluated);
+			destination = evaluated;
+		}
+		template <typename Destination>
+		void evalToFresh(Destination& destination) const
+		{
 			decltype(auto) left = coefficientOperand(m_Left);
 			decltype(auto) right = coefficientOperand(m_Right);
-			ReturnType evaluated(rows(), cols());
 			for (Eigen::Index row = 0; row < rows(); ++row)
 				for (Eigen::Index column = 0; column < cols(); ++column)
 				{
 					Scalar result(0);
 					for (Eigen::Index index = 0; index < m_Left.cols(); ++index)
 						result += left.coeff(row, index) * right.coeff(index, column);
-					evaluated.coeffRef(row, column) = result;
+					destination.coeffRef(row, column) = result;
 				}
-			destination = evaluated;
 		}
 		ReturnType toDense() const
 		{
 			ReturnType result(rows(), cols());
-			evalTo(result);
+			evalToFresh(result);
 			return result;
 		}
 	private: Left m_Left; Right m_Right;

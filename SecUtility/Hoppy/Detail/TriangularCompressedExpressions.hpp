@@ -308,19 +308,24 @@ namespace Hoppy::Detail
 		template <typename Destination>
 		void evalTo(Destination& destination) const
 		{
+			ReturnType evaluated(rows(), cols());
+			evalToFresh(evaluated);
+			destination = evaluated;
+		}
+		template <typename Destination>
+		void evalToFresh(Destination& destination) const
+		{
 			decltype(auto) left = coefficientOperand(m_Left);
 			decltype(auto) right = coefficientOperand(m_Right);
-			ReturnType evaluated(rows(), cols());
 			for (Eigen::Index row = 0; row < rows(); ++row)
 				for (Eigen::Index column = 0; column < cols(); ++column)
-					evaluated.coeffRef(row, column) = applyBinary<Operation>(
+					destination.coeffRef(row, column) = applyBinary<Operation>(
 					        left.coeff(row, column), right.coeff(row, column));
-			destination = evaluated;
 		}
 		ReturnType toDense() const
 		{
 			ReturnType result(rows(), cols());
-			evalTo(result);
+			evalToFresh(result);
 			return result;
 		}
 	private: Left m_Left; Right m_Right;
@@ -346,16 +351,21 @@ namespace Hoppy::Detail
 		void evalTo(Destination& destination) const
 		{
 			ReturnType evaluated(rows(), cols());
+			evalToFresh(evaluated);
+			destination = evaluated;
+		}
+		template <typename Destination>
+		void evalToFresh(Destination& destination) const
+		{
 			for (Eigen::Index row = 0; row < rows(); ++row)
 				for (Eigen::Index column = 0; column < cols(); ++column)
-					evaluated.coeffRef(row, column) =
+					destination.coeffRef(row, column) =
 					        applyBinary<Operation>(m_Operand.coeff(row, column), m_Factor);
-			destination = evaluated;
 		}
 		ReturnType toDense() const
 		{
 			ReturnType result(rows(), cols());
-			evalTo(result);
+			evalToFresh(result);
 			return result;
 		}
 	private: Operand m_Operand; Factor m_Factor;
@@ -563,7 +573,7 @@ namespace Eigen::internal
 		    : m_Result(expression.rows(), expression.cols())
 		{
 			Eigen::internal::construct_at<Base>(this, m_Result);
-			expression.evalTo(m_Result);
+			expression.evalToFresh(m_Result);
 		}
 	protected:
 		ReturnType m_Result;
