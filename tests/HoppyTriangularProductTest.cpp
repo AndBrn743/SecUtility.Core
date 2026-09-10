@@ -142,6 +142,24 @@ TEST_CASE("nested product and transform chains retain temporary operands")
 	                           expected.transpose());
 }
 
+TEST_CASE("dense-left products use Eigen nesting for triangular operands")
+{
+	Hoppy::SymmetricMatrix<double, 2> matrix;
+	matrix.setZero();
+	matrix(0, 0) = 2.0;
+	matrix(0, 1) = 1.0;
+	matrix(1, 1) = 3.0;
+	const Eigen::Matrix2d dense = (Eigen::Matrix2d() << 1.0, 2.0, 3.0, 4.0).finished();
+
+	const auto retainedTemporary = dense * (matrix + matrix);
+	Hoppy::Test::requireApprox(retainedTemporary.eval(),
+	                           dense * (matrix.toDense() + matrix.toDense()));
+
+	const auto retainedLvalue = dense * matrix;
+	matrix.setIdentity();
+	Hoppy::Test::requireApprox(retainedLvalue.eval(), dense);
+}
+
 #ifndef EIGEN_NO_DEBUG
 TEST_CASE("product dimension mismatch asserts")
 {

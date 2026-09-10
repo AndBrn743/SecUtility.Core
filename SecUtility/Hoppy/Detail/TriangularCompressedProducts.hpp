@@ -157,7 +157,8 @@ namespace Hoppy
 	auto operator*(Dense&& dense, const TriangularCompressedMatrixExpr<Derived>& expression)
 	{
 		using StoredLeft = Detail::nested_operand_t<Dense&&>;
-		return Detail::DenseProduct<StoredLeft, const Derived&>(std::forward<Dense>(dense), expression.derived());
+		using StoredRight = typename Eigen::internal::ref_selector<Derived>::type;
+		return Detail::DenseProduct<StoredLeft, StoredRight>(std::forward<Dense>(dense), expression.derived());
 	}
 }
 
