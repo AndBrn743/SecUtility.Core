@@ -12,7 +12,33 @@ namespace Hoppy::Detail
 	        typename std::remove_cv_t<std::remove_reference_t<Right>>::Scalar,
 	        Eigen::internal::scalar_product_op<
 	                typename std::remove_cv_t<std::remove_reference_t<Left>>::Scalar,
-	                typename std::remove_cv_t<std::remove_reference_t<Right>>::Scalar>>::ReturnType;
+		                typename std::remove_cv_t<std::remove_reference_t<Right>>::Scalar>>::ReturnType;
+	template <typename Left, typename Right>
+	class DenseProduct;
+}
+
+namespace Eigen::internal
+{
+	template <typename Left, typename Right>
+	struct traits<Hoppy::Detail::DenseProduct<Left, Right>>
+	{
+		using Lhs = std::remove_cv_t<std::remove_reference_t<Left>>;
+		using Rhs = std::remove_cv_t<std::remove_reference_t<Right>>;
+		using Scalar = Hoppy::Detail::product_scalar_t<Left, Right>;
+		using ReturnType = Eigen::Matrix<Scalar, Lhs::RowsAtCompileTime, Rhs::ColsAtCompileTime>;
+		using StorageKind = Dense;
+		using XprKind = MatrixXpr;
+		using StorageIndex = Eigen::Index;
+		static constexpr int Flags = EvalBeforeNestingBit;
+		static constexpr int RowsAtCompileTime = Lhs::RowsAtCompileTime;
+		static constexpr int ColsAtCompileTime = Rhs::ColsAtCompileTime;
+		static constexpr int MaxRowsAtCompileTime = Lhs::RowsAtCompileTime;
+		static constexpr int MaxColsAtCompileTime = Rhs::ColsAtCompileTime;
+	};
+}
+
+namespace Hoppy::Detail
+{
 
 	template <typename Left, typename Right>
 	class TriangularCompressedProduct
@@ -48,26 +74,42 @@ namespace Hoppy::Detail
 	};
 
 	template <typename Left, typename Right>
-	class DenseProduct
+	class DenseProduct : public Eigen::MatrixBase<DenseProduct<Left, Right>>
 	{
 	public:
-		using Scalar = product_scalar_t<Left, Right>;
+		using This = DenseProduct;
+		using Base = Eigen::MatrixBase<This>;
+		EIGEN_DENSE_PUBLIC_INTERFACE(This)
+		using ReturnType = typename Eigen::internal::traits<DenseProduct>::ReturnType;
 		static constexpr bool IsTriangularCompressed = false;
+		static constexpr bool IsDensePromoted = true;
 		DenseProduct(Left left, Right right)
 			: m_Left(std::forward<Left>(left)), m_Right(std::forward<Right>(right))
 		{ eigen_assert(m_Left.cols() == m_Right.rows()); }
 		Eigen::Index rows() const { return m_Left.rows(); }
 		Eigen::Index cols() const { return m_Right.cols(); }
-		Scalar coeff(Eigen::Index row, Eigen::Index column) const
+		template <typename Destination>
+		void evalTo(Destination& destination) const
 		{
-			Scalar result(0);
-			for (Eigen::Index index = 0; index < m_Left.cols(); ++index)
-				result += m_Left.coeff(row, index) * m_Right.coeff(index, column);
+			decltype(auto) left = coefficientOperand(m_Left);
+			decltype(auto) right = coefficientOperand(m_Right);
+			ReturnType evaluated(rows(), cols());
+			for (Eigen::Index row = 0; row < rows(); ++row)
+				for (Eigen::Index column = 0; column < cols(); ++column)
+				{
+					Scalar result(0);
+					for (Eigen::Index index = 0; index < m_Left.cols(); ++index)
+						result += left.coeff(row, index) * right.coeff(index, column);
+					evaluated.coeffRef(row, column) = result;
+				}
+			destination = evaluated;
+		}
+		ReturnType toDense() const
+		{
+			ReturnType result(rows(), cols());
+			evalTo(result);
 			return result;
 		}
-		auto toDense() const { return evalDense(*this); }
-		template <typename Dense, typename = std::enable_if_t<std::is_base_of_v<Eigen::MatrixBase<Dense>, Dense>>>
-		/* IMPLICIT */ operator Dense() const { return toDense(); }
 	private: Left m_Left; Right m_Right;
 	};
 
@@ -111,9 +153,7 @@ namespace Hoppy
 	}
 
 	template <typename Dense, typename Derived,
-	          typename = std::enable_if_t<std::is_base_of_v<Eigen::EigenBase<
-	                  std::remove_cv_t<std::remove_reference_t<Dense>>>,
-	                  std::remove_cv_t<std::remove_reference_t<Dense>>>>, typename = void>
+	          typename = std::enable_if_t<Detail::is_dense_matrix_operand_v<Dense>>, typename = void>
 	auto operator*(Dense&& dense, const TriangularCompressedMatrixExpr<Derived>& expression)
 	{
 		using StoredLeft = Detail::nested_operand_t<Dense&&>;
@@ -123,6 +163,14 @@ namespace Hoppy
 
 namespace Eigen::internal
 {
+	template <typename Left, typename Right>
+	struct evaluator<Hoppy::Detail::DenseProduct<Left, Right>>
+	    : triangular_dense_evaluator<Hoppy::Detail::DenseProduct<Left, Right>>
+	{
+		using Expression = Hoppy::Detail::DenseProduct<Left, Right>;
+		using Base = triangular_dense_evaluator<Expression>;
+		explicit evaluator(const Expression& expression) : Base(expression) {}
+	};
 	template <typename Left, typename Right>
 	struct traits<Hoppy::Detail::TriangularCompressedProduct<Left, Right>>
 	    : triangular_node_traits<Hoppy::Detail::TriangularCompressedProduct<Left, Right>> {};

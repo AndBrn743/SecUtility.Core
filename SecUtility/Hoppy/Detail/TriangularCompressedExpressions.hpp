@@ -44,6 +44,15 @@ namespace Hoppy::Detail
 		else return left / right;
 	}
 	template <typename Expression> auto evalDense(const Expression& expression);
+	template <typename Operand>
+	decltype(auto) coefficientOperand(const Operand& operand)
+	{
+		if constexpr (is_return_by_value_operand_v<Operand>
+		              || is_dense_promoted_expression<
+		                      std::remove_cv_t<std::remove_reference_t<Operand>>>::value)
+			return operand.eval();
+		else return (operand);
+	}
 
 	template <typename Source, typename Factor>
 	inline constexpr bool preserves_scaled_structure_v =
@@ -208,6 +217,8 @@ namespace Hoppy::Detail
 
 	template <typename Operand, typename Factor, typename Operation, bool Structured>
 	class TriangularCompressedScaled;
+	template <typename Left, typename Right, typename Operation>
+	class DenseCwiseBinary;
 	template <typename Operand, typename Factor, typename Operation>
 	class TriangularCompressedScaled<Operand, Factor, Operation, true>
 	    : public Hoppy::TriangularCompressedMatrixExpr<TriangularCompressedScaled<Operand, Factor, Operation, true>>
@@ -235,42 +246,118 @@ namespace Hoppy::Detail
 	private: Operand m_Operand; Factor m_Factor;
 	};
 
+
+}
+
+namespace Eigen::internal
+{
+	template <typename Left, typename Right, typename Operation>
+	struct traits<Hoppy::Detail::DenseCwiseBinary<Left, Right, Operation>>
+	{
+		using Lhs = std::remove_cv_t<std::remove_reference_t<Left>>;
+		using Rhs = std::remove_cv_t<std::remove_reference_t<Right>>;
+		using Scalar = Hoppy::Detail::binary_scalar_t<Operation, typename Lhs::Scalar,
+		                                                typename Rhs::Scalar>;
+		using ReturnType = Eigen::Matrix<Scalar, Lhs::RowsAtCompileTime, Lhs::ColsAtCompileTime>;
+		using StorageKind = Dense;
+		using XprKind = MatrixXpr;
+		using StorageIndex = Eigen::Index;
+		static constexpr int Flags = EvalBeforeNestingBit;
+		static constexpr int RowsAtCompileTime = Lhs::RowsAtCompileTime;
+		static constexpr int ColsAtCompileTime = Lhs::ColsAtCompileTime;
+		static constexpr int MaxRowsAtCompileTime = Lhs::RowsAtCompileTime;
+		static constexpr int MaxColsAtCompileTime = Lhs::ColsAtCompileTime;
+	};
+	template <typename Operand, typename Factor, typename Operation>
+	struct traits<Hoppy::Detail::TriangularCompressedScaled<Operand, Factor, Operation, false>>
+	{
+		using Source = std::remove_cv_t<std::remove_reference_t<Operand>>;
+		using Scalar = Hoppy::Detail::binary_scalar_t<
+		        Operation, typename Source::Scalar, std::remove_cv_t<std::remove_reference_t<Factor>>>;
+		using ReturnType = Eigen::Matrix<Scalar, Source::RowsAtCompileTime, Source::ColsAtCompileTime>;
+		using StorageKind = Dense;
+		using XprKind = MatrixXpr;
+		using StorageIndex = Eigen::Index;
+		static constexpr int Flags = EvalBeforeNestingBit;
+		static constexpr int RowsAtCompileTime = Source::RowsAtCompileTime;
+		static constexpr int ColsAtCompileTime = Source::ColsAtCompileTime;
+		static constexpr int MaxRowsAtCompileTime = Source::RowsAtCompileTime;
+		static constexpr int MaxColsAtCompileTime = Source::ColsAtCompileTime;
+	};
+}
+
+namespace Hoppy::Detail
+{
 	template <typename Left, typename Right, typename Operation>
 	class DenseCwiseBinary
+	    : public Eigen::MatrixBase<DenseCwiseBinary<Left, Right, Operation>>
 	{
 		using Lhs = std::remove_cv_t<std::remove_reference_t<Left>>;
 		using Rhs = std::remove_cv_t<std::remove_reference_t<Right>>;
 	public:
-		using Scalar = binary_scalar_t<Operation, typename Lhs::Scalar, typename Rhs::Scalar>;
+		using This = DenseCwiseBinary;
+		using Base = Eigen::MatrixBase<This>;
+		EIGEN_DENSE_PUBLIC_INTERFACE(This)
+		using ReturnType = typename Eigen::internal::traits<DenseCwiseBinary>::ReturnType;
 		static constexpr bool IsTriangularCompressed = false;
+		static constexpr bool IsDensePromoted = true;
 		DenseCwiseBinary(Left left, Right right) : m_Left(std::forward<Left>(left)), m_Right(std::forward<Right>(right))
 		{ eigen_assert(m_Left.rows() == m_Right.rows() && m_Left.cols() == m_Right.cols()); }
 		Eigen::Index rows() const { return m_Left.rows(); }
 		Eigen::Index cols() const { return m_Left.cols(); }
-		Scalar coeff(Eigen::Index row, Eigen::Index column) const
-		{ return applyBinary<Operation>(m_Left.coeff(row, column), m_Right.coeff(row, column)); }
-		auto toDense() const { return evalDense(*this); }
-		template <typename Dense, typename = std::enable_if_t<std::is_base_of_v<Eigen::MatrixBase<Dense>, Dense>>>
-		operator Dense() const { return toDense(); }
+		template <typename Destination>
+		void evalTo(Destination& destination) const
+		{
+			decltype(auto) left = coefficientOperand(m_Left);
+			decltype(auto) right = coefficientOperand(m_Right);
+			ReturnType evaluated(rows(), cols());
+			for (Eigen::Index row = 0; row < rows(); ++row)
+				for (Eigen::Index column = 0; column < cols(); ++column)
+					evaluated.coeffRef(row, column) = applyBinary<Operation>(
+					        left.coeff(row, column), right.coeff(row, column));
+			destination = evaluated;
+		}
+		ReturnType toDense() const
+		{
+			ReturnType result(rows(), cols());
+			evalTo(result);
+			return result;
+		}
 	private: Left m_Left; Right m_Right;
 	};
 
 	template <typename Operand, typename Factor, typename Operation>
 	class TriangularCompressedScaled<Operand, Factor, Operation, false>
+	    : public Eigen::MatrixBase<TriangularCompressedScaled<Operand, Factor, Operation, false>>
 	{
 		using Source = std::remove_cv_t<std::remove_reference_t<Operand>>;
 	public:
-		using Scalar = binary_scalar_t<Operation, typename Source::Scalar, std::remove_cv_t<std::remove_reference_t<Factor>>>;
+		using This = TriangularCompressedScaled;
+		using Base = Eigen::MatrixBase<This>;
+		EIGEN_DENSE_PUBLIC_INTERFACE(This)
+		using ReturnType = typename Eigen::internal::traits<TriangularCompressedScaled>::ReturnType;
 		static constexpr bool IsTriangularCompressed = false;
+		static constexpr bool IsDensePromoted = true;
 		TriangularCompressedScaled(Operand operand, Factor factor)
 			: m_Operand(std::forward<Operand>(operand)), m_Factor(std::forward<Factor>(factor)) {}
 		Eigen::Index rows() const { return m_Operand.rows(); }
 		Eigen::Index cols() const { return m_Operand.cols(); }
-		Scalar coeff(Eigen::Index row, Eigen::Index column) const
-		{ return applyBinary<Operation>(m_Operand.coeff(row, column), m_Factor); }
-		auto toDense() const { return evalDense(*this); }
-		template <typename Dense, typename = std::enable_if_t<std::is_base_of_v<Eigen::MatrixBase<Dense>, Dense>>>
-		operator Dense() const { return toDense(); }
+		template <typename Destination>
+		void evalTo(Destination& destination) const
+		{
+			ReturnType evaluated(rows(), cols());
+			for (Eigen::Index row = 0; row < rows(); ++row)
+				for (Eigen::Index column = 0; column < cols(); ++column)
+					evaluated.coeffRef(row, column) =
+					        applyBinary<Operation>(m_Operand.coeff(row, column), m_Factor);
+			destination = evaluated;
+		}
+		ReturnType toDense() const
+		{
+			ReturnType result(rows(), cols());
+			evalTo(result);
+			return result;
+		}
 	private: Operand m_Operand; Factor m_Factor;
 	};
 
@@ -314,7 +401,7 @@ namespace Hoppy
 	{
 		return Detail::TriangularCompressedNegate<Derived, typename Derived::Scalar>(std::move(derived()));
 	}
-	template <typename Derived> template <typename Other>
+	template <typename Derived> template <typename Other, typename>
 	auto TriangularCompressedMatrixExpr<Derived>::operator+(Other&& other) const&
 	{
 		using Rhs = std::remove_cv_t<std::remove_reference_t<Other>>;
@@ -323,7 +410,7 @@ namespace Hoppy
 			return Detail::TriangularCompressedBinary<const Derived&, StoredRight, Detail::SumOperation>(derived(), std::forward<Other>(other));
 		else return Detail::DenseCwiseBinary<const Derived&, StoredRight, Detail::SumOperation>(derived(), std::forward<Other>(other));
 	}
-	template <typename Derived> template <typename Other>
+	template <typename Derived> template <typename Other, typename>
 	auto TriangularCompressedMatrixExpr<Derived>::operator+(Other&& other) &&
 	{
 		using Rhs = std::remove_cv_t<std::remove_reference_t<Other>>;
@@ -332,7 +419,7 @@ namespace Hoppy
 			return Detail::TriangularCompressedBinary<Derived, StoredRight, Detail::SumOperation>(std::move(derived()), std::forward<Other>(other));
 		else return Detail::DenseCwiseBinary<Derived, StoredRight, Detail::SumOperation>(std::move(derived()), std::forward<Other>(other));
 	}
-	template <typename Derived> template <typename Other>
+	template <typename Derived> template <typename Other, typename>
 	auto TriangularCompressedMatrixExpr<Derived>::operator-(Other&& other) const&
 	{
 		using Rhs = std::remove_cv_t<std::remove_reference_t<Other>>;
@@ -341,7 +428,7 @@ namespace Hoppy
 			return Detail::TriangularCompressedBinary<const Derived&, StoredRight, Detail::DifferenceOperation>(derived(), std::forward<Other>(other));
 		else return Detail::DenseCwiseBinary<const Derived&, StoredRight, Detail::DifferenceOperation>(derived(), std::forward<Other>(other));
 	}
-	template <typename Derived> template <typename Other>
+	template <typename Derived> template <typename Other, typename>
 	auto TriangularCompressedMatrixExpr<Derived>::operator-(Other&& other) &&
 	{
 		using Rhs = std::remove_cv_t<std::remove_reference_t<Other>>;
@@ -385,6 +472,53 @@ namespace Hoppy
 	auto TriangularCompressedMatrixExpr<Derived>::cast() &&
 	{ return Detail::TriangularCompressedCast<Derived, NewScalar>(std::move(derived())); }
 
+	template <typename Left, typename Dense,
+	          typename = std::enable_if_t<Detail::is_triangular_expression<
+	                  std::remove_cv_t<std::remove_reference_t<Left>>>::value
+	                                      && Detail::is_dense_matrix_operand_v<Dense>>>
+	auto operator+(Left&& left, Dense&& dense)
+	{
+		using StoredLeft = Detail::nested_operand_t<Left&&>;
+		using StoredRight = Detail::nested_operand_t<Dense&&>;
+		return Detail::DenseCwiseBinary<StoredLeft, StoredRight, Detail::SumOperation>(
+		        std::forward<Left>(left), std::forward<Dense>(dense));
+	}
+	template <typename Dense, typename Right,
+	          typename = std::enable_if_t<Detail::is_dense_matrix_operand_v<Dense>
+	                                      && Detail::is_triangular_expression<
+	                                              std::remove_cv_t<std::remove_reference_t<Right>>>::value>,
+	          typename = void>
+	auto operator+(Dense&& dense, Right&& right)
+	{
+		using StoredLeft = Detail::nested_operand_t<Dense&&>;
+		using StoredRight = Detail::nested_operand_t<Right&&>;
+		return Detail::DenseCwiseBinary<StoredLeft, StoredRight, Detail::SumOperation>(
+		        std::forward<Dense>(dense), std::forward<Right>(right));
+	}
+	template <typename Left, typename Dense,
+	          typename = std::enable_if_t<Detail::is_triangular_expression<
+	                  std::remove_cv_t<std::remove_reference_t<Left>>>::value
+	                                      && Detail::is_dense_matrix_operand_v<Dense>>>
+	auto operator-(Left&& left, Dense&& dense)
+	{
+		using StoredLeft = Detail::nested_operand_t<Left&&>;
+		using StoredRight = Detail::nested_operand_t<Dense&&>;
+		return Detail::DenseCwiseBinary<StoredLeft, StoredRight, Detail::DifferenceOperation>(
+		        std::forward<Left>(left), std::forward<Dense>(dense));
+	}
+	template <typename Dense, typename Right,
+	          typename = std::enable_if_t<Detail::is_dense_matrix_operand_v<Dense>
+	                                      && Detail::is_triangular_expression<
+	                                              std::remove_cv_t<std::remove_reference_t<Right>>>::value>,
+	          typename = void>
+	auto operator-(Dense&& dense, Right&& right)
+	{
+		using StoredLeft = Detail::nested_operand_t<Dense&&>;
+		using StoredRight = Detail::nested_operand_t<Right&&>;
+		return Detail::DenseCwiseBinary<StoredLeft, StoredRight, Detail::DifferenceOperation>(
+		        std::forward<Dense>(dense), std::forward<Right>(right));
+	}
+
 	template <typename Derived>
 	auto TriangularCompressedMatrixExpr<Derived>::transpose() const&
 	{
@@ -419,6 +553,40 @@ namespace Hoppy
 
 namespace Eigen::internal
 {
+	template <typename Expression>
+	struct triangular_dense_evaluator
+	    : evaluator<typename traits<Expression>::ReturnType>
+	{
+		using ReturnType = typename traits<Expression>::ReturnType;
+		using Base = evaluator<ReturnType>;
+		explicit triangular_dense_evaluator(const Expression& expression)
+		    : m_Result(expression.rows(), expression.cols())
+		{
+			Eigen::internal::construct_at<Base>(this, m_Result);
+			expression.evalTo(m_Result);
+		}
+	protected:
+		ReturnType m_Result;
+	};
+
+	template <typename Left, typename Right, typename Operation>
+	struct evaluator<Hoppy::Detail::DenseCwiseBinary<Left, Right, Operation>>
+	    : triangular_dense_evaluator<Hoppy::Detail::DenseCwiseBinary<Left, Right, Operation>>
+	{
+		using Expression = Hoppy::Detail::DenseCwiseBinary<Left, Right, Operation>;
+		using Base = triangular_dense_evaluator<Expression>;
+		explicit evaluator(const Expression& expression) : Base(expression) {}
+	};
+	template <typename Operand, typename Factor, typename Operation>
+	struct evaluator<Hoppy::Detail::TriangularCompressedScaled<Operand, Factor, Operation, false>>
+	    : triangular_dense_evaluator<
+	              Hoppy::Detail::TriangularCompressedScaled<Operand, Factor, Operation, false>>
+	{
+		using Expression = Hoppy::Detail::TriangularCompressedScaled<Operand, Factor, Operation, false>;
+		using Base = triangular_dense_evaluator<Expression>;
+		explicit evaluator(const Expression& expression) : Base(expression) {}
+	};
+
 	template <typename Expression>
 	struct triangular_node_traits
 	{

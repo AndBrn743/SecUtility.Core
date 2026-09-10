@@ -19,8 +19,22 @@ namespace Hoppy
 		struct is_triangular_expression<T, std::void_t<decltype(T::IsTriangularCompressed)>>
 		    : std::bool_constant<T::IsTriangularCompressed> {};
 		template <typename T>
+		inline constexpr bool is_return_by_value_operand_v =
+		        std::is_base_of_v<Eigen::ReturnByValue<std::remove_cv_t<std::remove_reference_t<T>>>,
+		                          std::remove_cv_t<std::remove_reference_t<T>>>;
+		template <typename T, typename = void> struct is_dense_promoted_expression : std::false_type {};
+		template <typename T>
+		struct is_dense_promoted_expression<T, std::void_t<decltype(T::IsDensePromoted)>>
+		    : std::bool_constant<T::IsDensePromoted> {};
+		template <typename T>
+		inline constexpr bool is_dense_matrix_operand_v =
+		        std::is_base_of_v<Eigen::MatrixBase<std::remove_cv_t<std::remove_reference_t<T>>>,
+		                          std::remove_cv_t<std::remove_reference_t<T>>>
+		        || is_return_by_value_operand_v<T>;
+		template <typename T>
 		inline constexpr bool is_scalar_operand_v =
 		        !is_triangular_expression<std::remove_cv_t<std::remove_reference_t<T>>>::value
+		        && !is_dense_matrix_operand_v<T>
 		        && !std::is_base_of_v<Eigen::EigenBase<std::remove_cv_t<std::remove_reference_t<T>>>,
 		                              std::remove_cv_t<std::remove_reference_t<T>>>;
 		template <typename Left, typename Right, typename Precision>
@@ -47,10 +61,18 @@ namespace Hoppy
 		decltype(auto) operator+() &&;
 		auto operator-() const&;
 		auto operator-() &&;
-		template <typename Other> auto operator+(Other&& other) const&;
-		template <typename Other> auto operator+(Other&& other) &&;
-		template <typename Other> auto operator-(Other&& other) const&;
-		template <typename Other> auto operator-(Other&& other) &&;
+		template <typename Other, typename = std::enable_if_t<Detail::is_triangular_expression<
+		                  std::remove_cv_t<std::remove_reference_t<Other>>>::value>>
+		auto operator+(Other&& other) const&;
+		template <typename Other, typename = std::enable_if_t<Detail::is_triangular_expression<
+		                  std::remove_cv_t<std::remove_reference_t<Other>>>::value>>
+		auto operator+(Other&& other) &&;
+		template <typename Other, typename = std::enable_if_t<Detail::is_triangular_expression<
+		                  std::remove_cv_t<std::remove_reference_t<Other>>>::value>>
+		auto operator-(Other&& other) const&;
+		template <typename Other, typename = std::enable_if_t<Detail::is_triangular_expression<
+		                  std::remove_cv_t<std::remove_reference_t<Other>>>::value>>
+		auto operator-(Other&& other) &&;
 		template <typename Factor, typename = std::enable_if_t<Detail::is_scalar_operand_v<Factor>>>
 		auto operator*(Factor&& factor) const&;
 		template <typename Factor, typename = std::enable_if_t<Detail::is_scalar_operand_v<Factor>>>
@@ -64,14 +86,12 @@ namespace Hoppy
 		                  std::remove_cv_t<std::remove_reference_t<Other>>>::value>, typename = void>
 		auto operator*(Other&& other) &&;
 		template <typename Dense,
-		          typename = std::enable_if_t<std::is_base_of_v<Eigen::EigenBase<
-		                  std::remove_cv_t<std::remove_reference_t<Dense>>>,
-		                  std::remove_cv_t<std::remove_reference_t<Dense>>>>, typename = void, typename = void>
+		          typename = std::enable_if_t<Detail::is_dense_matrix_operand_v<Dense>>,
+		          typename = void, typename = void>
 		auto operator*(Dense&& other) const&;
 		template <typename Dense,
-		          typename = std::enable_if_t<std::is_base_of_v<Eigen::EigenBase<
-		                  std::remove_cv_t<std::remove_reference_t<Dense>>>,
-		                  std::remove_cv_t<std::remove_reference_t<Dense>>>>, typename = void, typename = void>
+		          typename = std::enable_if_t<Detail::is_dense_matrix_operand_v<Dense>>,
+		          typename = void, typename = void>
 		auto operator*(Dense&& other) &&;
 		template <typename Divisor> auto operator/(Divisor&& divisor) const&;
 		template <typename Divisor> auto operator/(Divisor&& divisor) &&;

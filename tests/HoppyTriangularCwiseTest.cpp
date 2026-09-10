@@ -35,9 +35,31 @@ namespace
 	using HermitianComplexScale = decltype(std::declval<const Hoppy::HermitianMatrixXcd&>() * Complex(2, 1));
 	static_assert(SymSum::IsTriangularCompressed);
 	static_assert(!MixedSum::IsTriangularCompressed);
+	static_assert(std::is_base_of_v<Eigen::MatrixBase<MixedSum>, MixedSum>);
 	static_assert(HermitianRealScale::IsTriangularCompressed);
 	static_assert(!HermitianComplexScale::IsTriangularCompressed);
 	static_assert((Eigen::internal::traits<SymSum>::Flags & Eigen::DirectAccessBit) == 0);
+
+	template <typename Tag>
+	struct CountingExpression : Hoppy::TriangularCompressedMatrixExpr<CountingExpression<Tag>>
+	{
+		using Scalar = double;
+		using StructureTag = Tag;
+		static constexpr int RowsAtCompileTime = 2;
+		static constexpr int ColsAtCompileTime = 2;
+		static constexpr Hoppy::TrianglePacking PackingValue = Hoppy::TrianglePacking::Lower;
+		static constexpr bool IsTriangularCompressed = true;
+		static constexpr bool IsWritable = false;
+		Eigen::Index dimension() const { return 2; }
+		Eigen::Index rows() const { return 2; }
+		Eigen::Index cols() const { return 2; }
+		double coeff(Eigen::Index row, Eigen::Index column) const
+		{
+			++Calls;
+			return row == column ? 2.0 : 1.0;
+		}
+		mutable int Calls = 0;
+	};
 }
 
 TEST_CASE("unary and same-family binary expressions preserve structure")
@@ -74,14 +96,61 @@ TEST_CASE("mixed families and complex Hermitian scaling promote to dense results
 	auto promoted = symmetric + anti;
 	static_assert(!decltype(promoted)::IsTriangularCompressed);
 	Hoppy::Test::requireApprox(promoted.toDense(), symmetric.toDense() + anti.toDense());
+	REQUIRE(promoted.norm() == Catch::Approx((symmetric.toDense() + anti.toDense()).norm()));
+	Hoppy::Test::requireApprox(promoted.transpose().eval(),
+	                           (symmetric.toDense() + anti.toDense()).transpose());
+	Hoppy::Test::requireApprox((promoted.array() + 2.0).matrix().eval(),
+	                           (symmetric.toDense() + anti.toDense()).array() + 2.0);
+	Hoppy::Test::requireApprox((symmetric + (symmetric + anti)).eval(),
+	                           symmetric.toDense() + symmetric.toDense() + anti.toDense());
+
+	Eigen::Matrix2d dense;
+	dense << 10, 20, 30, 40;
+	Hoppy::Test::requireApprox((symmetric + dense).eval(), symmetric.toDense() + dense);
+	Hoppy::Test::requireApprox((dense + symmetric).eval(), dense + symmetric.toDense());
+	Hoppy::Test::requireApprox((symmetric - dense).eval(), symmetric.toDense() - dense);
+	Hoppy::Test::requireApprox((dense - symmetric).eval(), dense - symmetric.toDense());
+	Eigen::Matrix<double, 2, 2, Eigen::RowMajor> rowMajor = promoted;
+	Hoppy::Test::requireApprox(rowMajor, symmetric.toDense() + anti.toDense());
+	Hoppy::Test::requireApprox((Hoppy::SymmetricMatrix<double, 2>::Ones()
+	                           + Eigen::Matrix2d::Constant(3.0)).eval(),
+	                           Eigen::Matrix2d::Constant(4.0));
 
 	Hoppy::HermitianMatrix<Complex, 2> hermitian;
 	hermitian.setZero();
 	hermitian(0, 1) = Complex(2, 3);
 	Hoppy::Test::requireApprox((hermitian * Complex(1, 2)).toDense(),
 	                           hermitian.toDense() * Complex(1, 2));
+	REQUIRE((hermitian * Complex(1, 2)).norm()
+	        == Catch::Approx((hermitian.toDense() * Complex(1, 2)).norm()));
 	Hoppy::Test::requireApprox((hermitian * 2.0).toDense(), hermitian.toDense() * 2.0);
 	Hoppy::Test::requireApprox((2.0 * hermitian).toDense(), 2.0 * hermitian.toDense());
+}
+
+TEST_CASE("dense promoted component-wise expressions are alias safe")
+{
+	Hoppy::SymmetricMatrix<double, 2> packed;
+	packed.setZero(); packed(0, 0) = 1; packed(0, 1) = 2; packed(1, 1) = 3;
+	Eigen::Matrix2d dense;
+	dense << 4, 5, 6, 7;
+	const Eigen::Matrix2d original = dense;
+	dense = packed + dense;
+	Hoppy::Test::requireApprox(dense, packed.toDense() + original);
+	dense = dense - packed;
+	Hoppy::Test::requireApprox(dense, original);
+}
+
+TEST_CASE("dense promoted component-wise construction is lazy and evaluates once")
+{
+	CountingExpression<Hoppy::Detail::SymmetricTag> symmetric;
+	CountingExpression<Hoppy::Detail::AntiSymmetricTag> anti;
+	const auto expression = symmetric + anti;
+	REQUIRE(symmetric.Calls == 0);
+	REQUIRE(anti.Calls == 0);
+	const Eigen::Matrix2d evaluated = expression;
+	REQUIRE(symmetric.Calls == 4);
+	REQUIRE(anti.Calls == 4);
+	REQUIRE(evaluated.allFinite());
 }
 
 TEST_CASE("scalar compounds casts and rvalue chains preserve valid invariants")

@@ -21,6 +21,28 @@ namespace
 	static_assert(UpperProduct::IsTriangularCompressed);
 	static_assert(LowerProduct::IsTriangularCompressed);
 	static_assert(!SymmetricProduct::IsTriangularCompressed);
+	static_assert(std::is_base_of_v<Eigen::MatrixBase<SymmetricProduct>, SymmetricProduct>);
+
+	template <typename Tag>
+	struct CountingExpression : Hoppy::TriangularCompressedMatrixExpr<CountingExpression<Tag>>
+	{
+		using Scalar = double;
+		using StructureTag = Tag;
+		static constexpr int RowsAtCompileTime = 2;
+		static constexpr int ColsAtCompileTime = 2;
+		static constexpr Hoppy::TrianglePacking PackingValue = Hoppy::TrianglePacking::Lower;
+		static constexpr bool IsTriangularCompressed = true;
+		static constexpr bool IsWritable = false;
+		Eigen::Index dimension() const { return 2; }
+		Eigen::Index rows() const { return 2; }
+		Eigen::Index cols() const { return 2; }
+		double coeff(Eigen::Index row, Eigen::Index column) const
+		{
+			++Calls;
+			return row == column ? 2.0 : 1.0;
+		}
+		mutable int Calls = 0;
+	};
 }
 
 TEST_CASE("upper and lower products preserve triangular structure")
@@ -52,6 +74,13 @@ TEST_CASE("general packed products promote to logical dense results")
 	Hoppy::Test::requireApprox(product.toDense(), left.toDense() * right.toDense());
 	Eigen::MatrixXd assigned = product;
 	Hoppy::Test::requireApprox(assigned, left.toDense() * right.toDense());
+	REQUIRE(product.norm() == Catch::Approx((left.toDense() * right.toDense()).norm()));
+	Hoppy::Test::requireApprox(product.transpose().eval(),
+	                           (left.toDense() * right.toDense()).transpose());
+	Hoppy::Test::requireApprox((product * Eigen::Matrix2d::Constant(2.0)).eval(),
+	                           left.toDense() * right.toDense() * Eigen::Matrix2d::Constant(2.0));
+	Hoppy::Test::requireApprox((left * (left * right)).eval(),
+	                           left.toDense() * left.toDense() * right.toDense());
 }
 
 TEST_CASE("packed dense and dense packed products support rectangular operands")
@@ -62,10 +91,46 @@ TEST_CASE("packed dense and dense packed products support rectangular operands")
 	right << 1, 2, 3, 4, 5, 6;
 	Eigen::Matrix<double, 2, 3> left;
 	left << 1, 2, 3, 4, 5, 6;
+	using RectangularProduct = decltype(matrix * right);
+	using RectangularReturn = typename Eigen::internal::traits<RectangularProduct>::ReturnType;
+	static_assert(RectangularReturn::RowsAtCompileTime == 3);
+	static_assert(RectangularReturn::ColsAtCompileTime == 2);
 	Hoppy::Test::requireApprox((matrix * right).toDense(), matrix.toDense() * right);
 	Hoppy::Test::requireApprox((left * matrix).toDense(), left * matrix.toDense());
 	Eigen::Vector3d vector(1, 2, 3);
 	Hoppy::Test::requireApprox((matrix * vector).toDense(), matrix.toDense() * vector);
+	Hoppy::Test::requireApprox((matrix * right).transpose().eval(),
+	                           (matrix.toDense() * right).transpose());
+	Hoppy::Test::requireApprox(((matrix * right) * Eigen::Matrix2d::Constant(2.0)).eval(),
+	                           matrix.toDense() * right * Eigen::Matrix2d::Constant(2.0));
+	Eigen::Matrix<double, 3, 2, Eigen::RowMajor> rowMajor = matrix * right;
+	Hoppy::Test::requireApprox(rowMajor, matrix.toDense() * right);
+}
+
+TEST_CASE("dense promoted products are alias safe")
+{
+	Hoppy::SymmetricMatrix<double, 2> packed;
+	packed.setZero(); packed(0, 0) = 2; packed(0, 1) = 1; packed(1, 1) = 3;
+	Eigen::Matrix2d dense;
+	dense << 1, 2, 3, 4;
+	const Eigen::Matrix2d original = dense;
+	dense = packed * dense;
+	Hoppy::Test::requireApprox(dense, packed.toDense() * original);
+	dense = dense * packed;
+	Hoppy::Test::requireApprox(dense, packed.toDense() * original * packed.toDense());
+}
+
+TEST_CASE("dense promoted product construction is lazy and nested evaluation materializes once")
+{
+	CountingExpression<Hoppy::Detail::SymmetricTag> left;
+	CountingExpression<Hoppy::Detail::AntiSymmetricTag> right;
+	const auto expression = (left * right) * Eigen::Matrix2d::Identity();
+	REQUIRE(left.Calls == 0);
+	REQUIRE(right.Calls == 0);
+	const Eigen::Matrix2d evaluated = expression;
+	REQUIRE(left.Calls == 8);
+	REQUIRE(right.Calls == 8);
+	REQUIRE(evaluated.allFinite());
 }
 
 TEST_CASE("nested product and transform chains retain temporary operands")
