@@ -154,6 +154,8 @@ TEST_CASE("dense-left products use Eigen nesting for triangular operands")
 	const auto retainedTemporary = dense * (matrix + matrix);
 	Hoppy::Test::requireApprox(retainedTemporary.eval(),
 	                           dense * (matrix.toDense() + matrix.toDense()));
+	const auto retainedTransform = dense * matrix.transpose();
+	Hoppy::Test::requireApprox(retainedTransform.eval(), dense * matrix.toDense().transpose());
 
 	const auto retainedLvalue = dense * matrix;
 	matrix.setIdentity();

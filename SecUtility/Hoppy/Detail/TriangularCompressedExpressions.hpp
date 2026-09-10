@@ -85,7 +85,7 @@ namespace Hoppy::Detail
 		static constexpr TrianglePacking PackingValue =
 		        std::is_same_v<Operation, ConjugateOperation> ? Source::PackingValue
 		                                                  : flipped_packing_v<Source::PackingValue>;
-		static constexpr int Flags = Eigen::NestByRefBit;
+		static constexpr int Flags = 0;
 		static constexpr bool IsTriangularCompressed = true;
 		static constexpr bool IsWritable = false;
 		using PlainObject = TriangularCompressedMatrix<Scalar, RowsAtCompileTime, PackingValue, 0,
@@ -655,7 +655,7 @@ namespace Eigen::internal
 		using StorageKind = Hoppy::Detail::TriangularCompressedStorage;
 		using XprKind = MatrixXpr;
 		using StorageIndex = Eigen::Index;
-		static constexpr int Flags = NestByRefBit;
+		static constexpr int Flags = 0;
 		static constexpr int RowsAtCompileTime = Expression::RowsAtCompileTime;
 		static constexpr int ColsAtCompileTime = Expression::ColsAtCompileTime;
 		static constexpr int MaxRowsAtCompileTime = RowsAtCompileTime;
