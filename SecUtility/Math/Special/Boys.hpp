@@ -4,9 +4,10 @@
 #pragma once
 
 #include <SecUtility/Collection/IndexAccessor.hpp>
+#include <SecUtility/Macro/Likelihood.hpp>
+#include <SecUtility/Math/EstrinPolynomial.hpp>
 #include <SecUtility/Math/HornerPolynomial.hpp>
 #include <SecUtility/Math/Special/Gamma.hpp>
-#include <SecUtility/Macro/Likelihood.hpp>
 #include <array>
 #include <cassert>
 #include <vector>
@@ -317,7 +318,7 @@ namespace SecUtility::Math
 		{
 			constexpr auto HornerTermCount = 8;
 
-			if (n + HornerTermCount - 1 >= Detail::Boys::MaxTabulatedBoyOrder)
+			if (SEC_UNLIKELY(n + HornerTermCount - 1 >= Detail::Boys::MaxTabulatedBoyOrder))
 			{
 				return Detail::Boys::HighPrecisionBoys(n, a, 1e-10);
 			}
@@ -376,10 +377,6 @@ namespace SecUtility::Math
 			return;
 		}
 
-#if defined(__GNUC__) || defined(__clang__)
-#define SEC_LIKELY(EXPR) __builtin_expect((EXPR), true)
-#endif
-
 		if (SEC_LIKELY(x < Detail::Boys::MaxTabulatedBoyArg
 		               && static_cast<std::size_t>(std::distance(begin, end)) + HornerTermCount - 1
 		                          <= Detail::Boys::MaxTabulatedBoyOrder))
@@ -401,9 +398,6 @@ namespace SecUtility::Math
 			}
 			return;
 		}
-#if defined(__GNUC__) || defined(__clang__)
-#undef SEC_LIKELY
-#endif
 
 		if (x > 10)
 		{
