@@ -394,6 +394,35 @@ namespace SecUtility::Math
 
 
 		template <typename RealScalar>
+		void UpdateInteriorRitzConvergence(
+		        InteriorRitzSelection<RealScalar>& ref_selection,
+		        const Eigen::VectorX<RealScalar>& currentEigenvalues,
+		        const std::vector<RitzVectorMatch<RealScalar>>& matches,
+		        const Eigen::VectorX<RealScalar>& previousEigenvalues)
+		{
+			ref_selection.MaximumMatchedEigenvalueChange = std::numeric_limits<RealScalar>::infinity();
+			ref_selection.HasUnmatchedIntervalRitzVector = false;
+			RealScalar maximumChange{};
+			for (const Eigen::Index currentIndex : ref_selection.IntervalRitzIndices)
+			{
+				const auto& match = matches[static_cast<std::size_t>(currentIndex)];
+				if (!match.IsMatched() || match.PreviousIndex >= previousEigenvalues.size() || match.IsWeakMatch)
+				{
+					ref_selection.HasUnmatchedIntervalRitzVector = true;
+					continue;
+				}
+				maximumChange = Max(
+				        maximumChange,
+				        Abs(currentEigenvalues[currentIndex] - previousEigenvalues[match.PreviousIndex]));
+			}
+			if (!ref_selection.IntervalRitzIndices.empty() && !ref_selection.HasUnmatchedIntervalRitzVector)
+			{
+				ref_selection.MaximumMatchedEigenvalueChange = maximumChange;
+			}
+		}
+
+
+		template <typename RealScalar>
 		InteriorRitzSelection<RealScalar> SelectInteriorRitzVectors(
 		        const Eigen::VectorX<RealScalar>& currentEigenvalues,
 		        const std::vector<RitzVectorMatch<RealScalar>>& matches,
@@ -418,23 +447,7 @@ namespace SecUtility::Math
 			        static_cast<Eigen::Index>(selection.IntervalRitzIndices.size()) > maximumEigenpairCount;
 
 			// Compare each target with its previous identity match. A new or weakly matched target prevents convergence.
-			RealScalar maximumChange{};
-			for (const Eigen::Index currentIndex : selection.IntervalRitzIndices)
-			{
-				const auto& match = matches[static_cast<std::size_t>(currentIndex)];
-				if (!match.IsMatched() || match.PreviousIndex >= previousEigenvalues.size() || match.IsWeakMatch)
-				{
-					selection.HasUnmatchedIntervalRitzVector = true;
-					continue;
-				}
-				maximumChange = Max(
-				        maximumChange,
-				        Abs(currentEigenvalues[currentIndex] - previousEigenvalues[match.PreviousIndex]));
-			}
-			if (!selection.IntervalRitzIndices.empty() && !selection.HasUnmatchedIntervalRitzVector)
-			{
-				selection.MaximumMatchedEigenvalueChange = maximumChange;
-			}
+			UpdateInteriorRitzConvergence(selection, currentEigenvalues, matches, previousEigenvalues);
 
 			// Retain complete near-degenerate clusters straddling either interval boundary.
 			std::vector<bool> isBoundaryContinuation(static_cast<std::size_t>(currentEigenvalues.size()), false);
@@ -597,6 +610,39 @@ namespace SecUtility::Math
 		}
 
 
+		template <typename RealScalar>
+		void DemoteUnvalidatedExcessIntervalRitzVectors(
+		        InteriorRitzSelection<RealScalar>& ref_selection,
+		        const Eigen::VectorX<RealScalar>& residualNorms,
+		        const Eigen::Index maximumEigenpairCount,
+		        const RealScalar residualNormTolerance)
+		{
+			if (!ref_selection.IsMaximumEigenpairCountExceeded)
+			{
+				return;
+			}
+			const bool areAllIntervalCandidatesValidated = std::ranges::all_of(
+			        ref_selection.IntervalRitzIndices,
+			        [&residualNorms, residualNormTolerance](const Eigen::Index index)
+			        { return residualNorms[index] <= residualNormTolerance; });
+			if (areAllIntervalCandidatesValidated)
+			{
+				return;
+			}
+
+			std::stable_sort(ref_selection.IntervalRitzIndices.begin(),
+			                 ref_selection.IntervalRitzIndices.end(),
+			                 [&residualNorms](const Eigen::Index lhs, const Eigen::Index rhs)
+			                 { return residualNorms[lhs] < residualNorms[rhs]; });
+			ref_selection.AdditionalRitzIndices.insert(
+			        ref_selection.AdditionalRitzIndices.begin(),
+			        ref_selection.IntervalRitzIndices.begin() + maximumEigenpairCount,
+			        ref_selection.IntervalRitzIndices.end());
+			ref_selection.IntervalRitzIndices.resize(static_cast<std::size_t>(maximumEigenpairCount));
+			ref_selection.IsMaximumEigenpairCountExceeded = false;
+		}
+
+
 		template <SelfAdjointLinearOperator Operator>
 		Eigen::MatrixX<LinearOperatorScalar<Operator>> ApplyOperator(
 		        const Operator& linearOperator,
@@ -727,6 +773,39 @@ namespace SecUtility::Math
 		                                                 const Eigen::MatrixX<Scalar>& coefficients)
 		{
 			return {source.Vectors * coefficients, source.Images * coefficients};
+		}
+
+
+		template <typename Scalar>
+		Eigen::ComputationInfo SymmetricallyOrthonormalizeVectorImagePair(
+		        VectorImagePair<Scalar>& ref_vectorImagePair)
+		{
+			const Eigen::MatrixX<Scalar> gramMatrix =
+			        ref_vectorImagePair.Vectors.adjoint() * ref_vectorImagePair.Vectors;
+			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> gramEigenSolver(
+			        gramMatrix, Eigen::EigenvaluesOnly);
+			if (gramEigenSolver.info() != Eigen::Success)
+			{
+				return gramEigenSolver.info();
+			}
+			const auto& gramEigenvalues = gramEigenSolver.eigenvalues();
+			const auto minimumAcceptableGramEigenvalue =
+			        std::numeric_limits<typename Eigen::NumTraits<Scalar>::Real>::epsilon()
+			        * static_cast<typename Eigen::NumTraits<Scalar>::Real>(gramMatrix.rows())
+			        * gramEigenvalues.cend()[-1];
+			if (gramEigenvalues[0] <= minimumAcceptableGramEigenvalue)
+			{
+				return Eigen::NumericalIssue;
+			}
+			const Eigen::LLT<Eigen::MatrixX<Scalar>> choleskyDecomposition(gramMatrix);
+			if (choleskyDecomposition.info() != Eigen::Success)
+			{
+				return choleskyDecomposition.info();
+			}
+			const Eigen::MatrixX<Scalar> inverseUpperFactor = choleskyDecomposition.matrixU().solve(
+			        Eigen::MatrixX<Scalar>::Identity(gramMatrix.rows(), gramMatrix.cols()));
+			ref_vectorImagePair = TransformVectorImagePair(ref_vectorImagePair, inverseUpperFactor);
+			return Eigen::Success;
 		}
 
 
@@ -1040,14 +1119,20 @@ namespace SecUtility::Math
 			        TransformVectorImagePair(expansionSpace, reducedEigenvectors);
 			const Eigen::VectorX<RealScalar> allResidualNorms =
 			        CalculateColumnNorms(CalculateResiduals(allRitzPairs, currentEigenvalues));
+			DemoteUnvalidatedExcessIntervalRitzVectors(selection,
+			                                               allResidualNorms,
+			                                               options.MaximumEigenpairCount,
+			                                               options.ResidualNormTolerance);
+			UpdateInteriorRitzConvergence(
+			        selection, currentEigenvalues, matches, previousRetainedEigenvalues);
 			const std::vector<bool> isCurrentRitzVectorFrozen = options.IsFreezingEnabled
 			                                                              ? DetermineFrozenRitzVectors(
 			                                                                        reducedEigenvectors,
 			                                                                        allResidualNorms,
-			                                                                        selection.IntervalRitzIndices,
-			                                                                        previousPrimaryVectorCount,
-			                                                                        options.FreezingCoefficientTolerance,
-			                                                                        options.FreezingResidualNormTolerance)
+				                                                                        selection.IntervalRitzIndices,
+				                                                                        previousPrimaryVectorCount,
+				                                                                        options.FreezingCoefficientTolerance,
+				                                                                        options.FreezingResidualNormTolerance)
 			                                                              : std::vector<bool>(
 			                                                                        static_cast<std::size_t>(
 			                                                                                currentEigenvalues.size()),
@@ -1096,6 +1181,12 @@ namespace SecUtility::Math
 				m_Statistics.RecycledVectorCount += recyclingCoefficients.cols();
 			}
 			VectorImagePair<Scalar> retainedSpace = TransformVectorImagePair(expansionSpace, collapseCoefficients);
+			if (isGeneralizedSolve
+			    && SymmetricallyOrthonormalizeVectorImagePair(retainedSpace) != Eigen::Success)
+			{
+				m_Status = InteriorEigenSolverStatus::NumericalFailure;
+				return;
+			}
 			if (areExplicitImagesRequired)
 			{
 				RecalculateImages(linearOperator, retainedSpace, m_Statistics);
@@ -1118,17 +1209,19 @@ namespace SecUtility::Math
 				m_ResidualNorms.resize(0);
 			}
 
-			if (selection.IsMaximumEigenpairCountExceeded)
-			{
-				m_Status = InteriorEigenSolverStatus::MaximumEigenpairCountExceeded;
-				return;
-			}
 			const bool hasResidualConverged = intervalEigenpairCount > 0
 			                                  && m_ResidualNorms.maxCoeff() <= options.ResidualNormTolerance;
 			const bool hasEigenvalueConverged =
 			        (iterationIndex == 0 && hasResidualConverged)
 			        || (iterationIndex > 0 && !selection.HasUnmatchedIntervalRitzVector
 			            && selection.MaximumMatchedEigenvalueChange <= options.EigenvalueChangeTolerance);
+			// An unconverged Ritz value may drift through an interval temporarily. Treat the
+			// capacity as exceeded only after residuals validate the entire candidate set.
+			if (selection.IsMaximumEigenpairCountExceeded && hasResidualConverged)
+			{
+				m_Status = InteriorEigenSolverStatus::MaximumEigenpairCountExceeded;
+				return;
+			}
 			if (hasResidualConverged && hasEigenvalueConverged)
 			{
 				m_Status = InteriorEigenSolverStatus::Converged;

@@ -107,6 +107,95 @@ namespace
 	};
 
 
+	template <typename T>
+	struct TridiagonalSelfAdjointLinearOperator
+	{
+		using Scalar = T;
+		using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+
+		Eigen::VectorX<RealScalar> DiagonalElements;
+		Scalar UpperDiagonalElement;
+
+		[[nodiscard]] Eigen::Index rows() const noexcept { return DiagonalElements.size(); }
+		[[nodiscard]] Eigen::Index cols() const noexcept { return DiagonalElements.size(); }
+		[[nodiscard]] const Eigen::VectorX<RealScalar>& Diagonal() const noexcept { return DiagonalElements; }
+
+		template <typename Derived>
+		[[nodiscard]] Eigen::MatrixX<Scalar> ApplyOn(const Eigen::MatrixBase<Derived>& vectors) const
+		{
+			Eigen::MatrixX<Scalar> images = DiagonalElements.template cast<Scalar>().asDiagonal() * vectors;
+			for (Eigen::Index rowIndex = 0; rowIndex + 1 < rows(); rowIndex++)
+			{
+				images.row(rowIndex) += UpperDiagonalElement * vectors.row(rowIndex + 1);
+				images.row(rowIndex + 1) += SecUtility::Math::Conj(UpperDiagonalElement) * vectors.row(rowIndex);
+			}
+			return images;
+		}
+	};
+
+
+	template <typename Scalar>
+	Eigen::MatrixX<Scalar> FormDenseMatrix(const TridiagonalSelfAdjointLinearOperator<Scalar>& linearOperator)
+	{
+		Eigen::MatrixX<Scalar> matrix = linearOperator.DiagonalElements.template cast<Scalar>().asDiagonal();
+		for (Eigen::Index index = 0; index + 1 < linearOperator.rows(); index++)
+		{
+			matrix(index, index + 1) = linearOperator.UpperDiagonalElement;
+			matrix(index + 1, index) = SecUtility::Math::Conj(linearOperator.UpperDiagonalElement);
+		}
+		return matrix;
+	}
+
+
+	struct HubAndBandSelfAdjointLinearOperator
+	{
+		using Scalar = double;
+		static constexpr Eigen::Index HubSize = 11;
+
+		Eigen::Index Dimension;
+
+		[[nodiscard]] Eigen::Index rows() const noexcept { return Dimension; }
+		[[nodiscard]] Eigen::Index cols() const noexcept { return Dimension; }
+		[[nodiscard]] Eigen::VectorXd Diagonal() const
+		{
+			Eigen::VectorXd diagonal(Dimension);
+			for (Eigen::Index index = 0; index < Dimension; index++)
+			{
+				diagonal[index] = std::sqrt(static_cast<double>(index));
+			}
+			return diagonal;
+		}
+
+		template <typename Derived>
+		[[nodiscard]] Eigen::MatrixXd ApplyOn(const Eigen::MatrixBase<Derived>& vectors) const
+		{
+			Eigen::MatrixXd images = Diagonal().asDiagonal() * vectors;
+			const auto allRowSum = vectors.colwise().sum().eval();
+			const auto hubRowSum = vectors.topRows(HubSize).colwise().sum().eval();
+			for (Eigen::Index rowIndex = 0; rowIndex < Dimension; rowIndex++)
+			{
+				if (rowIndex < HubSize)
+				{
+					images.row(rowIndex) -= allRowSum - vectors.row(rowIndex);
+					continue;
+				}
+
+				images.row(rowIndex) -= hubRowSum;
+				const Eigen::Index firstBandColumn = SecUtility::Math::Max(HubSize, rowIndex - 2);
+				const Eigen::Index lastBandColumn = SecUtility::Math::Min(Dimension - 1, rowIndex + 2);
+				for (Eigen::Index columnIndex = firstBandColumn; columnIndex <= lastBandColumn; columnIndex++)
+				{
+					if (columnIndex != rowIndex)
+					{
+						images.row(rowIndex) -= vectors.row(columnIndex);
+					}
+				}
+			}
+			return images;
+		}
+	};
+
+
 	struct OperatorWithoutDiagonal
 	{
 		using Scalar = double;
@@ -395,6 +484,38 @@ TEMPLATE_TEST_CASE("iVI vector and image transformations remain aligned", "[Math
 	const auto reducedMatrix = FormReducedMatrix(transformed);
 	CHECK(reducedMatrix.isApprox(reducedMatrix.adjoint()));
 	CHECK(reducedMatrix.isApprox(transformed.Vectors.adjoint() * matrix * transformed.Vectors));
+}
+
+
+TEMPLATE_TEST_CASE("iVI restores retained vector orthonormality without losing image alignment",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(3, 3);
+	matrix.diagonal() << TestType{1}, TestType{2}, TestType{4};
+	Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Zero(3, 2);
+	vectors(0, 0) = TestType{2};
+	vectors(1, 0) = TestType{1};
+	vectors(1, 1) = TestType{3};
+	vectors(2, 1) = TestType{1};
+	VectorImagePair<TestType> vectorImagePair{vectors, matrix * vectors};
+
+	REQUIRE(SymmetricallyOrthonormalizeVectorImagePair(vectorImagePair) == Eigen::Success);
+	CHECK((vectorImagePair.Vectors.adjoint() * vectorImagePair.Vectors)
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(2, 2), 1e-12));
+	CHECK(vectorImagePair.Images.isApprox(matrix * vectorImagePair.Vectors, 1e-12));
+}
+
+
+TEST_CASE("iVI rejects a rank-deficient retained vector-image pair", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixXd vectors(2, 2);
+	vectors << 1, 1, 0, 0;
+	VectorImagePair<double> vectorImagePair{vectors, vectors};
+	CHECK(SymmetricallyOrthonormalizeVectorImagePair(vectorImagePair) != Eigen::Success);
 }
 
 
@@ -736,6 +857,37 @@ TEST_CASE("iVI interval selection reports new roots and capacity exhaustion", "[
 	CHECK(emptySelection.IntervalRitzIndices.empty());
 	CHECK(emptySelection.AdditionalRitzIndices == std::vector<Eigen::Index>{2});
 	CHECK(std::isinf(emptySelection.MaximumMatchedEigenvalueChange));
+}
+
+
+TEST_CASE("iVI demotes unvalidated transient interval overflow", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	InteriorRitzSelection<double> selection;
+	selection.IntervalRitzIndices = {0, 1, 2};
+	selection.AdditionalRitzIndices = {3};
+	selection.IsMaximumEigenpairCountExceeded = true;
+	const Eigen::VectorXd residualNorms{{1e-3, 1e-9, 1e-8, 2e-2}};
+
+	DemoteUnvalidatedExcessIntervalRitzVectors(selection, residualNorms, 2, 1e-7);
+	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{1, 2});
+	CHECK(selection.AdditionalRitzIndices == std::vector<Eigen::Index>{0, 3});
+	CHECK_FALSE(selection.IsMaximumEigenpairCountExceeded);
+}
+
+
+TEST_CASE("iVI preserves residual-validated interval overflow", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	InteriorRitzSelection<double> selection;
+	selection.IntervalRitzIndices = {0, 1, 2};
+	selection.IsMaximumEigenpairCountExceeded = true;
+	const Eigen::VectorXd residualNorms{{1e-9, 2e-9, 3e-9}};
+
+	DemoteUnvalidatedExcessIntervalRitzVectors(selection, residualNorms, 2, 1e-7);
+	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{0, 1, 2});
+	CHECK(selection.AdditionalRitzIndices.empty());
+	CHECK(selection.IsMaximumEigenpairCountExceeded);
 }
 
 
@@ -1116,4 +1268,129 @@ TEMPLATE_TEST_CASE("iVI can use a generalized reduced solve on every iteration",
 	solver.Compute(linearOperator, EigenvalueInterval<RealScalar>{lowerBound, upperBound}, options);
 	CHECK(solver.Statistics().CompletedIterationCount == 2);
 	CHECK(solver.Statistics().GeneralizedSolveCount == solver.Statistics().CompletedIterationCount);
+}
+
+
+TEMPLATE_TEST_CASE("iVI finds a complete interior set for a large matrix-free Hermitian operator",
+	               "[Math][iVI][Validation]",
+	               double,
+	               (std::complex<double>))
+{
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	constexpr Eigen::Index dimension = 256;
+	Eigen::VectorX<RealScalar> diagonal(dimension);
+	for (Eigen::Index index = 0; index < dimension; index++)
+	{
+		diagonal[index] = RealScalar{0.1} * static_cast<RealScalar>(index - dimension / 2);
+	}
+	const TestType coupling = []
+	{
+		if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+		{
+			return TestType{0.025, 0.01};
+		}
+		else
+		{
+			return TestType{0.025};
+		}
+	}();
+	const TridiagonalSelfAdjointLinearOperator<TestType> linearOperator{std::move(diagonal), coupling};
+	const Eigen::MatrixX<TestType> referenceMatrix = FormDenseMatrix(linearOperator);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> referenceSolver(referenceMatrix);
+	REQUIRE(referenceSolver.info() == Eigen::Success);
+	const Eigen::Index firstExpectedIndex = dimension / 2 - 2;
+	constexpr Eigen::Index expectedEigenpairCount = 3;
+	const RealScalar lowerBound =
+	        (referenceSolver.eigenvalues()[firstExpectedIndex - 1]
+	         + referenceSolver.eigenvalues()[firstExpectedIndex])
+	        / 2;
+	const RealScalar upperBound =
+	        (referenceSolver.eigenvalues()[firstExpectedIndex + expectedEigenpairCount - 1]
+	         + referenceSolver.eigenvalues()[firstExpectedIndex + expectedEigenpairCount])
+	        / 2;
+
+	InteriorEigenSolverOptions<RealScalar> options;
+	options.MaximumEigenpairCount = expectedEigenpairCount;
+	options.MaximumIterationCount = 100;
+	options.EigenvalueChangeTolerance = RealScalar{1e-8};
+	options.ResidualNormTolerance = RealScalar{1e-8};
+	options.FreezingResidualNormTolerance = options.ResidualNormTolerance;
+	// The rank threshold applies to squared correction magnitudes. Keep it below the
+	// requested residual scale without admitting roundoff-only correction directions.
+	options.LinearDependenceTolerance = RealScalar{1e-14};
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<RealScalar>{lowerBound, upperBound}, options);
+
+	INFO("iterations: " << solver.Statistics().CompletedIterationCount);
+	INFO("maximum expansion size: " << solver.Statistics().MaximumExpansionSpaceSize);
+	INFO("current frozen vectors: " << solver.Statistics().CurrentFrozenVectorCount);
+	INFO("maximum frozen vectors: " << solver.Statistics().MaximumFrozenVectorCount);
+	INFO("eigenvalues: " << solver.Eigenvalues().transpose());
+	INFO("residual norms: " << solver.ResidualNorms().transpose());
+	REQUIRE(solver.Status() == InteriorEigenSolverStatus::Converged);
+	REQUIRE(solver.Eigenvalues().size() == expectedEigenpairCount);
+	Eigen::VectorX<RealScalar> actualEigenvalues = solver.Eigenvalues();
+	std::sort(actualEigenvalues.begin(), actualEigenvalues.end());
+	CHECK(actualEigenvalues.isApprox(
+	        referenceSolver.eigenvalues().segment(firstExpectedIndex, expectedEigenpairCount), RealScalar{1e-8}));
+	CHECK(solver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+	CHECK((solver.Eigenvectors().adjoint() * solver.Eigenvectors())
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(expectedEigenpairCount, expectedEigenpairCount),
+	                        RealScalar{1e-9}));
+	CHECK(solver.Statistics().MaximumExpansionSpaceSize < dimension / 4);
+}
+
+
+TEST_CASE("iVI finds the complete interval set for a matrix-free hub-and-band operator",
+	      "[Math][iVI][Validation]")
+{
+	constexpr Eigen::Index dimension = 512;
+	const HubAndBandSelfAdjointLinearOperator linearOperator{dimension};
+	const Eigen::MatrixXd referenceMatrix =
+	        linearOperator.ApplyOn(Eigen::MatrixXd::Identity(dimension, dimension));
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> referenceSolver(referenceMatrix);
+	REQUIRE(referenceSolver.info() == Eigen::Success);
+	const EigenvalueInterval<double> interval{15, 16};
+	std::vector<double> expectedEigenvalues;
+	for (const double eigenvalue : referenceSolver.eigenvalues())
+	{
+		if (interval.IsContaining(eigenvalue))
+		{
+			expectedEigenvalues.push_back(eigenvalue);
+		}
+	}
+	REQUIRE_FALSE(expectedEigenvalues.empty());
+
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = static_cast<Eigen::Index>(expectedEigenvalues.size());
+	options.MaximumIterationCount = 200;
+	// BDF terminates this problem using eigenvalue movement and then applies a much
+	// looser residual-quality filter. This remains strict enough to validate each pair.
+	options.ResidualNormTolerance = 1e-3;
+	IterativeVectorInteractionSelfAdjointEigenSolver<HubAndBandSelfAdjointLinearOperator> solver;
+	solver.Compute(linearOperator, interval, options);
+
+	INFO("expected eigenpair count: " << expectedEigenvalues.size());
+	INFO("iterations: " << solver.Statistics().CompletedIterationCount);
+	INFO("maximum expansion size: " << solver.Statistics().MaximumExpansionSpaceSize);
+	INFO("current frozen vectors: " << solver.Statistics().CurrentFrozenVectorCount);
+	INFO("maximum frozen vectors: " << solver.Statistics().MaximumFrozenVectorCount);
+	INFO("returned eigenvalues: " << solver.Eigenvalues().transpose());
+	INFO("residual norms: " << solver.ResidualNorms().transpose());
+	REQUIRE(solver.Status() == InteriorEigenSolverStatus::Converged);
+	REQUIRE(solver.Eigenvalues().size() == static_cast<Eigen::Index>(expectedEigenvalues.size()));
+	Eigen::VectorXd actualEigenvalues = solver.Eigenvalues();
+	std::ranges::sort(actualEigenvalues);
+	CHECK(std::equal(actualEigenvalues.begin(),
+	                 actualEigenvalues.end(),
+	                 expectedEigenvalues.begin(),
+	                 [](const double actual, const double expected)
+	                 { return actual == Catch::Approx(expected).margin(1e-7); }));
+	CHECK(solver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+	CHECK((solver.Eigenvectors().adjoint() * solver.Eigenvectors())
+	              .isApprox(Eigen::MatrixXd::Identity(
+	                                static_cast<Eigen::Index>(expectedEigenvalues.size()),
+	                                static_cast<Eigen::Index>(expectedEigenvalues.size())),
+	                        1e-8));
+	CHECK(solver.Statistics().MaximumExpansionSpaceSize < dimension);
 }
