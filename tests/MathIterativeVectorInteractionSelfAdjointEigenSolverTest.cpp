@@ -372,6 +372,82 @@ TEMPLATE_TEST_CASE("iVI vector and image transformations remain aligned", "[Math
 }
 
 
+TEMPLATE_TEST_CASE("iVI solves standard and generalized reduced eigenproblems",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	const TestType phase = []
+	{
+		if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+		{
+			return std::polar(RealScalar{1}, RealScalar{0.41});
+		}
+		else
+		{
+			return TestType{1};
+		}
+	}();
+	const Eigen::MatrixX<TestType> matrix =
+	        Eigen::VectorX<RealScalar>{{RealScalar{1}, RealScalar{3}, RealScalar{7}}}.template cast<TestType>().asDiagonal();
+	Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Zero(3, 2);
+	vectors(0, 0) = phase;
+	vectors(1, 1) = TestType{2};
+	const VectorImagePair<TestType> vectorImagePair{vectors, matrix * vectors};
+
+	Eigen::VectorX<RealScalar> generalizedEigenvalues;
+	Eigen::MatrixX<TestType> generalizedEigenvectors;
+	REQUIRE(SolveReducedSelfAdjointEigenproblem(
+	                vectorImagePair, true, generalizedEigenvalues, generalizedEigenvectors)
+	        == Eigen::Success);
+	CHECK(generalizedEigenvalues.isApprox(Eigen::VectorX<RealScalar>{{RealScalar{1}, RealScalar{3}}}));
+	CHECK((generalizedEigenvectors.adjoint() * vectors.adjoint() * vectors * generalizedEigenvectors)
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(2, 2)));
+
+	Eigen::VectorX<RealScalar> standardEigenvalues;
+	Eigen::MatrixX<TestType> standardEigenvectors;
+	REQUIRE(SolveReducedSelfAdjointEigenproblem(
+	                vectorImagePair, false, standardEigenvalues, standardEigenvectors)
+	        == Eigen::Success);
+	CHECK(standardEigenvalues.isApprox(Eigen::VectorX<RealScalar>{{RealScalar{1}, RealScalar{12}}}));
+}
+
+
+TEST_CASE("iVI reports a singular generalized reduced problem", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixXd vectors(2, 2);
+	vectors << 1, 1, 0, 0;
+	const VectorImagePair<double> vectorImagePair{vectors, vectors};
+	Eigen::VectorXd eigenvalues;
+	Eigen::MatrixXd eigenvectors;
+	CHECK(SolveReducedSelfAdjointEigenproblem(vectorImagePair, true, eigenvalues, eigenvectors)
+	      != Eigen::Success);
+}
+
+
+TEMPLATE_TEST_CASE("iVI rejects a numerically rank-deficient generalized reduced problem",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	const RealScalar scale = RealScalar{1e4};
+	Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Zero(2, 2);
+	vectors(0, 0) = static_cast<TestType>(scale);
+	vectors(1, 1) = static_cast<TestType>(scale * std::sqrt(std::numeric_limits<RealScalar>::epsilon()));
+	const VectorImagePair<TestType> vectorImagePair{vectors, vectors};
+	Eigen::VectorX<RealScalar> eigenvalues;
+	Eigen::MatrixX<TestType> eigenvectors;
+
+	CHECK(SolveReducedSelfAdjointEigenproblem(vectorImagePair, true, eigenvalues, eigenvectors)
+	      == Eigen::NumericalIssue);
+}
+
+
 TEMPLATE_TEST_CASE("iVI residual and absolute preconditioner kernels", "[Math][iVI]", double, (std::complex<double>))
 {
 	using namespace Detail::IterativeVectorInteraction;
@@ -748,6 +824,8 @@ TEMPLATE_TEST_CASE("iVI expands and restarts for an interior eigenpair", "[Math]
 	CHECK(solver.Eigenvalues()[0] == Catch::Approx(referenceSolver.eigenvalues()[5]).margin(1e-10));
 	CHECK(solver.ResidualNorms()[0] < 1e-10);
 	CHECK(solver.Statistics().CompletedIterationCount > 1);
+	CHECK(solver.Statistics().GeneralizedSolveCount
+	      == 1 + (solver.Statistics().CompletedIterationCount - 1) / options.GeneralizedSolveInterval);
 	CHECK(solver.Statistics().MultipliedVectorCount < matrix.rows() * solver.Statistics().CompletedIterationCount);
 }
 
@@ -936,4 +1014,30 @@ TEST_CASE("iVI skips corrections for frozen Ritz vectors", "[Math][iVI]")
 	solver.Compute(linearOperator, EigenvalueInterval<double>{lowerBound, upperBound}, options);
 	CHECK(solver.Statistics().CurrentFrozenVectorCount == 1);
 	CHECK(solver.Statistics().MaximumFrozenVectorCount == 1);
+}
+
+
+TEMPLATE_TEST_CASE("iVI can use a generalized reduced solve on every iteration",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	const Eigen::MatrixX<TestType> matrix = CoupledHermitianMatrix<TestType>(10);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> referenceSolver(matrix);
+	const RealScalar lowerBound = (referenceSolver.eigenvalues()[4] + referenceSolver.eigenvalues()[5]) / 2;
+	const RealScalar upperBound = (referenceSolver.eigenvalues()[5] + referenceSolver.eigenvalues()[6]) / 2;
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	InteriorEigenSolverOptions<RealScalar> options;
+	options.MaximumEigenpairCount = 1;
+	options.MaximumIterationCount = 2;
+	options.GeneralizedSolveInterval = 1;
+	options.EigenvalueChangeTolerance = RealScalar{1e-15};
+	options.ResidualNormTolerance = RealScalar{1e-15};
+	options.IsFreezingEnabled = false;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<RealScalar>{lowerBound, upperBound}, options);
+	CHECK(solver.Statistics().CompletedIterationCount == 2);
+	CHECK(solver.Statistics().GeneralizedSolveCount == solver.Statistics().CompletedIterationCount);
 }

@@ -725,6 +725,53 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
+		Eigen::ComputationInfo SolveReducedSelfAdjointEigenproblem(
+		        const VectorImagePair<Scalar>& vectorImagePair,
+		        const bool isGeneralizedSolve,
+		        Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& out_eigenvalues,
+		        Eigen::MatrixX<Scalar>& out_eigenvectors)
+		{
+			const Eigen::MatrixX<Scalar> reducedMatrix = FormReducedMatrix(vectorImagePair);
+			if (isGeneralizedSolve)
+			{
+				const Eigen::MatrixX<Scalar> overlapMatrix =
+				        vectorImagePair.Vectors.adjoint() * vectorImagePair.Vectors;
+				const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> overlapEigenSolver(
+				        overlapMatrix, Eigen::EigenvaluesOnly);
+				if (overlapEigenSolver.info() != Eigen::Success)
+				{
+					return overlapEigenSolver.info();
+				}
+				const auto& overlapEigenvalues = overlapEigenSolver.eigenvalues();
+				const auto minimumAcceptableOverlapEigenvalue =
+				        std::numeric_limits<typename Eigen::NumTraits<Scalar>::Real>::epsilon()
+				        * static_cast<Eigen::NumTraits<Scalar>::Real>(overlapMatrix.rows())
+				        * overlapEigenvalues.cend()[-1];
+				if (overlapEigenvalues[0] <= minimumAcceptableOverlapEigenvalue)
+				{
+					return Eigen::NumericalIssue;
+				}
+				const Eigen::GeneralizedSelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> eigenSolver(
+				        reducedMatrix, overlapMatrix);
+				if (eigenSolver.info() == Eigen::Success)
+				{
+					out_eigenvalues = eigenSolver.eigenvalues();
+					out_eigenvectors = eigenSolver.eigenvectors();
+				}
+				return eigenSolver.info();
+			}
+
+			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> eigenSolver(reducedMatrix);
+			if (eigenSolver.info() == Eigen::Success)
+			{
+				out_eigenvalues = eigenSolver.eigenvalues();
+				out_eigenvectors = eigenSolver.eigenvectors();
+			}
+			return eigenSolver.info();
+		}
+
+
+		template <typename Scalar>
 		Eigen::MatrixX<Scalar> CalculateResiduals(
 		        const VectorImagePair<Scalar>& vectorImagePair,
 		        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& eigenvalues)
@@ -927,16 +974,17 @@ namespace SecUtility::Math
 			        Max(m_Statistics.MaximumExpansionSpaceSize, expansionSpace.Vectors.cols());
 
 			// Solve in the current expansion space and match its Ritz vectors to the preceding collapsed space.
-			const Eigen::MatrixX<Scalar> reducedMatrix = FormReducedMatrix(expansionSpace);
-			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> reducedSolver(reducedMatrix);
-			if (reducedSolver.info() != Eigen::Success)
+			const bool isGeneralizedSolve = iterationIndex % options.GeneralizedSolveInterval == 0;
+			Eigen::VectorX<RealScalar> currentEigenvalues;
+			Eigen::MatrixX<Scalar> reducedEigenvectors;
+			if (SolveReducedSelfAdjointEigenproblem(
+			            expansionSpace, isGeneralizedSolve, currentEigenvalues, reducedEigenvectors)
+			    != Eigen::Success)
 			{
 				m_Status = InteriorEigenSolverStatus::NumericalFailure;
 				return;
 			}
-
-			const Eigen::VectorX<RealScalar> currentEigenvalues = reducedSolver.eigenvalues();
-			const Eigen::MatrixX<Scalar> reducedEigenvectors = reducedSolver.eigenvectors();
+			m_Statistics.GeneralizedSolveCount += static_cast<Eigen::Index>(isGeneralizedSolve);
 			const Eigen::MatrixX<RealScalar> populations =
 			        FormRitzPopulationMatrix(reducedEigenvectors, previousRetainedVectorCount);
 			const auto matches = MatchRitzVectors(
