@@ -52,6 +52,41 @@ namespace
 	}
 
 
+	template <typename Scalar>
+	Eigen::MatrixX<Scalar> CoupledHermitianMatrix(const Eigen::Index dimension)
+	{
+		Eigen::MatrixX<Scalar> matrix = Eigen::MatrixX<Scalar>::Zero(dimension, dimension);
+		for (Eigen::Index index = 0; index < dimension; index++)
+		{
+			matrix(index, index) = static_cast<double>(index);
+		}
+		for (Eigen::Index index = 0; index + 1 < dimension; index++)
+		{
+			const Scalar coupling = []
+			{
+				if constexpr (Eigen::NumTraits<Scalar>::IsComplex)
+				{
+					return Scalar{0.18, 0.07};
+				}
+				else
+				{
+					return Scalar{0.18};
+				}
+			}();
+			matrix(index, index + 1) = coupling;
+			if constexpr (Eigen::NumTraits<Scalar>::IsComplex)
+			{
+				matrix(index + 1, index) = std::conj(coupling);
+			}
+			else
+			{
+				matrix(index + 1, index) = coupling;
+			}
+		}
+		return matrix;
+	}
+
+
 	template <typename T>
 	struct VectorOnlySelfAdjointLinearOperator
 	{
@@ -600,4 +635,143 @@ TEMPLATE_TEST_CASE("iVI selected Ritz pairs are permuted to the front", "[Math][
 	CHECK(permuted.Eigenvalues.isApprox(Eigen::VectorX<RealScalar>{{0, 1, -1, -2}}));
 	CHECK(permuted.Eigenvectors.col(0).isApprox(eigenvectors.col(2)));
 	CHECK(permuted.Eigenvectors.col(3).isApprox(eigenvectors.col(0)));
+}
+
+
+TEMPLATE_TEST_CASE("iVI solves all diagonal eigenpairs in an inclusive interval", "[Math][iVI]", double, (std::complex<double>))
+{
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(8, 8);
+	for (Eigen::Index index = 0; index < 8; index++)
+	{
+		matrix(index, index) = static_cast<RealScalar>(index - 3);
+	}
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	InteriorEigenSolverOptions<RealScalar> options;
+	options.MaximumEigenpairCount = 3;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<RealScalar>{-1, 1}, options);
+	CHECK(solver.Status() == InteriorEigenSolverStatus::Converged);
+	CHECK(solver.Eigenvalues().isApprox(Eigen::VectorX<RealScalar>{{-1, 0, 1}}));
+	CHECK(solver.ResidualNorms().isZero());
+	CHECK((solver.Eigenvectors().adjoint() * solver.Eigenvectors()
+	       - Eigen::MatrixX<TestType>::Identity(3, 3))
+	              .norm()
+	      < 1e-12);
+}
+
+
+TEST_CASE("iVI reports when the interval exceeds the configured eigenpair capacity", "[Math][iVI]")
+{
+	Eigen::MatrixXd matrix = Eigen::MatrixXd::Zero(8, 8);
+	matrix.diagonal() << -3, -2, -1, 0, 1, 2, 3, 4;
+	const DenseSelfAdjointLinearOperator<double> linearOperator{matrix};
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 2;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{-1, 1}, options);
+	CHECK(solver.Status() == InteriorEigenSolverStatus::MaximumEigenpairCountExceeded);
+	CHECK(solver.Eigenvalues().isApprox(Eigen::Vector3d{-1, 0, 1}));
+}
+
+
+TEST_CASE("iVI reports an empty interval when exact retained vectors cannot expand", "[Math][iVI]")
+{
+	Eigen::MatrixXd matrix = Eigen::MatrixXd::Zero(8, 8);
+	matrix.diagonal() << -3, -2, -1, 0, 1, 2, 3, 4;
+	const DenseSelfAdjointLinearOperator<double> linearOperator{matrix};
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 2;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{10, 11}, options);
+	CHECK(solver.Status() == InteriorEigenSolverStatus::NoEigenpairsFound);
+	CHECK(solver.Eigenvalues().size() == 0);
+	CHECK(solver.Eigenvectors().cols() == 0);
+	CHECK(solver.ResidualNorms().size() == 0);
+}
+
+
+TEST_CASE("iVI solves a dense complex Hermitian problem", "[Math][iVI]")
+{
+	using Scalar = std::complex<double>;
+	Eigen::MatrixXcd matrix = Eigen::MatrixXcd::Zero(4, 4);
+	matrix.diagonal() << Scalar{-2}, Scalar{-0.5}, Scalar{1}, Scalar{3};
+	matrix(0, 1) = Scalar{0.2, 0.1};
+	matrix(1, 0) = std::conj(matrix(0, 1));
+	matrix(2, 3) = Scalar{-0.15, 0.3};
+	matrix(3, 2) = std::conj(matrix(2, 3));
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXcd> referenceSolver(matrix);
+	const DenseSelfAdjointLinearOperator<Scalar> linearOperator{matrix};
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 4;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{-10, 10}, options);
+	CHECK(solver.Status() == InteriorEigenSolverStatus::Converged);
+	CHECK(solver.Eigenvalues().isApprox(referenceSolver.eigenvalues(), 1e-12));
+	CHECK(solver.ResidualNorms().maxCoeff() < 1e-12);
+}
+
+
+TEMPLATE_TEST_CASE("iVI expands and restarts for an interior eigenpair", "[Math][iVI]", double, (std::complex<double>))
+{
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	const Eigen::MatrixX<TestType> matrix = CoupledHermitianMatrix<TestType>(10);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> referenceSolver(matrix);
+	const RealScalar lowerBound = (referenceSolver.eigenvalues()[4] + referenceSolver.eigenvalues()[5]) / 2;
+	const RealScalar upperBound = (referenceSolver.eigenvalues()[5] + referenceSolver.eigenvalues()[6]) / 2;
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	InteriorEigenSolverOptions<RealScalar> options;
+	options.MaximumEigenpairCount = 1;
+	options.MaximumIterationCount = 50;
+	options.EigenvalueChangeTolerance = 1e-10;
+	options.ResidualNormTolerance = 1e-10;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<RealScalar>{lowerBound, upperBound}, options);
+	REQUIRE(solver.Status() == InteriorEigenSolverStatus::Converged);
+	REQUIRE(solver.Eigenvalues().size() == 1);
+	CHECK(solver.Eigenvalues()[0] == Catch::Approx(referenceSolver.eigenvalues()[5]).margin(1e-10));
+	CHECK(solver.ResidualNorms()[0] < 1e-10);
+	CHECK(solver.Statistics().CompletedIterationCount > 1);
+	CHECK(solver.Statistics().MultipliedVectorCount < matrix.rows() * solver.Statistics().CompletedIterationCount);
+}
+
+
+TEST_CASE("iVI exposes a partial result at the iteration limit", "[Math][iVI]")
+{
+	const Eigen::MatrixXd matrix = CoupledHermitianMatrix<double>(10);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> referenceSolver(matrix);
+	const double lowerBound = (referenceSolver.eigenvalues()[4] + referenceSolver.eigenvalues()[5]) / 2;
+	const double upperBound = (referenceSolver.eigenvalues()[5] + referenceSolver.eigenvalues()[6]) / 2;
+	const DenseSelfAdjointLinearOperator<double> linearOperator{matrix};
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 1;
+	options.MaximumIterationCount = 1;
+	options.ResidualNormTolerance = 1e-14;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{lowerBound, upperBound}, options);
+	CHECK(solver.Status() == InteriorEigenSolverStatus::IterationLimitReached);
+	CHECK(solver.Eigenvalues().size() == 1);
+	CHECK(solver.ResidualNorms().size() == 1);
+}
+
+
+TEST_CASE("iVI uses the column-wise operator fallback in an end-to-end solve", "[Math][iVI]")
+{
+	const Eigen::MatrixXd matrix = Eigen::VectorXd{{-2, -1, 0, 1, 2}}.asDiagonal();
+	const VectorOnlySelfAdjointLinearOperator<double> linearOperator{matrix};
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 1;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{0, 0}, options);
+	CHECK(solver.Status() == InteriorEigenSolverStatus::Converged);
+	CHECK(solver.Eigenvalues().isApprox(Eigen::VectorXd::Zero(1)));
+	CHECK(solver.Statistics().OperatorApplicationCount == matrix.rows());
+	CHECK(solver.Statistics().MultipliedVectorCount == matrix.rows());
 }

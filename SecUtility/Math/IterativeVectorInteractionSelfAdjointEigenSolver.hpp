@@ -23,6 +23,7 @@
 #include <numeric>
 #include <ranges>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 
@@ -797,6 +798,162 @@ namespace SecUtility::Math
 		    || options.LinearDependenceTolerance <= 0)
 		{
 			throw InvalidArgumentException("All numerical tolerances must be positive");
+		}
+	}
+
+
+	template <SelfAdjointLinearOperator Operator>
+	void IterativeVectorInteractionSelfAdjointEigenSolver<Operator>::Compute(
+	        const Operator& linearOperator,
+	        const EigenvalueInterval<RealScalar>& interval,
+	        const InteriorEigenSolverOptions<RealScalar>& options)
+	{
+		using namespace Detail::IterativeVectorInteraction;
+		ValidateInteriorEigenSolverInput(linearOperator, interval, options);
+
+		m_Status = InteriorEigenSolverStatus::NotComputed;
+		m_Eigenvalues.resize(0);
+		m_Eigenvectors.resize(linearOperator.rows(), 0);
+		m_ResidualNorms.resize(0);
+		m_Statistics = {};
+
+		const Eigen::VectorX<RealScalar> diagonal = linearOperator.Diagonal();
+
+		// Start from coordinate vectors whose diagonal estimates are closest to the requested interval.
+		const RealScalar intervalCenter = (interval.LowerBound + interval.UpperBound) / RealScalar{2};
+		std::vector<Eigen::Index> coordinateIndices(static_cast<std::size_t>(linearOperator.rows()));
+		std::iota(coordinateIndices.begin(), coordinateIndices.end(), Eigen::Index{0});
+		std::ranges::stable_sort(
+		        coordinateIndices,
+		        {},
+		        [&diagonal, intervalCenter](const Eigen::Index index)
+		        { return Abs(diagonal[index] - intervalCenter); });
+
+		const Eigen::Index initialVectorCount = Min(
+		        linearOperator.rows(), Max(Eigen::Index{6}, Eigen::Index{3} * options.MaximumEigenpairCount));
+		Eigen::MatrixX<Scalar> initialVectors = Eigen::MatrixX<Scalar>::Zero(linearOperator.rows(), initialVectorCount);
+		for (Eigen::Index columnIndex = 0; columnIndex < initialVectorCount; columnIndex++)
+		{
+			initialVectors(coordinateIndices[static_cast<std::size_t>(columnIndex)], columnIndex) = Scalar{1};
+		}
+		VectorImagePair<Scalar> expansionSpace{
+		        initialVectors, ApplyOperator(linearOperator, initialVectors, m_Statistics)};
+
+		Eigen::VectorX<RealScalar> previousRetainedEigenvalues;
+		Eigen::Index previousPrimaryVectorCount = 0;
+		Eigen::Index previousRetainedVectorCount = 0;
+		for (Eigen::Index iterationIndex = 0; iterationIndex < options.MaximumIterationCount; iterationIndex++)
+		{
+			m_Statistics.CompletedIterationCount = iterationIndex + 1;
+			m_Statistics.MaximumExpansionSpaceSize =
+			        Max(m_Statistics.MaximumExpansionSpaceSize, expansionSpace.Vectors.cols());
+
+			// Solve in the current expansion space and match its Ritz vectors to the preceding collapsed space.
+			const Eigen::MatrixX<Scalar> reducedMatrix = FormReducedMatrix(expansionSpace);
+			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> reducedSolver(reducedMatrix);
+			if (reducedSolver.info() != Eigen::Success)
+			{
+				m_Status = InteriorEigenSolverStatus::NumericalFailure;
+				return;
+			}
+
+			const Eigen::VectorX<RealScalar> currentEigenvalues = reducedSolver.eigenvalues();
+			const Eigen::MatrixX<Scalar> reducedEigenvectors = reducedSolver.eigenvectors();
+			const Eigen::MatrixX<RealScalar> populations =
+			        FormRitzPopulationMatrix(reducedEigenvectors, previousRetainedVectorCount);
+			const auto matches = MatchRitzVectors(
+			        populations, previousPrimaryVectorCount, previousRetainedVectorCount);
+			const Eigen::Index requestedAdditionalCount = options.AdditionalRitzVectorCount == 0
+			                                                          ? Max(Eigen::Index{6},
+			                                                                Eigen::Index{3}
+			                                                                        * options.MaximumEigenpairCount)
+			                                                          : options.AdditionalRitzVectorCount;
+			// Select exact interval results and nearby directions that keep the next cycle productive.
+			const auto selection = SelectInteriorRitzVectors(currentEigenvalues,
+			                                                       matches,
+			                                                       previousRetainedEigenvalues,
+			                                                       interval,
+			                                                       options.MaximumEigenpairCount,
+			                                                       requestedAdditionalCount);
+			const auto orderedRitzPairs =
+			        PermuteSelectedRitzPairsToTheFront(currentEigenvalues, reducedEigenvectors, selection);
+			const auto intervalEigenpairCount = static_cast<Eigen::Index>(selection.IntervalRitzIndices.size());
+			const Eigen::Index retainedVectorCount = intervalEigenpairCount
+			                                               + static_cast<Eigen::Index>(selection.AdditionalRitzIndices.size());
+			const Eigen::Index primaryVectorCount = CalculatePrimaryRitzVectorCount(
+			        intervalEigenpairCount, 0, retainedVectorCount);
+			const Eigen::MatrixX<Scalar> retainedCoefficients = orderedRitzPairs.Eigenvectors.leftCols(retainedVectorCount);
+			VectorImagePair<Scalar> retainedSpace = TransformVectorImagePair(expansionSpace, retainedCoefficients);
+
+			// Materialize inspectable results before evaluating any terminal condition.
+			if (intervalEigenpairCount > 0)
+			{
+				const VectorImagePair<Scalar> intervalPairs{
+				        retainedSpace.Vectors.leftCols(intervalEigenpairCount),
+				        retainedSpace.Images.leftCols(intervalEigenpairCount)};
+				m_Eigenvalues = orderedRitzPairs.Eigenvalues.head(intervalEigenpairCount);
+				m_Eigenvectors = intervalPairs.Vectors;
+				m_ResidualNorms = CalculateColumnNorms(CalculateResiduals(intervalPairs, m_Eigenvalues));
+			}
+			else
+			{
+				m_Eigenvalues.resize(0);
+				m_Eigenvectors.resize(linearOperator.rows(), 0);
+				m_ResidualNorms.resize(0);
+			}
+
+			if (selection.IsMaximumEigenpairCountExceeded)
+			{
+				m_Status = InteriorEigenSolverStatus::MaximumEigenpairCountExceeded;
+				return;
+			}
+			const bool hasResidualConverged = intervalEigenpairCount > 0
+			                                  && m_ResidualNorms.maxCoeff() <= options.ResidualNormTolerance;
+			const bool hasEigenvalueConverged =
+			        (iterationIndex == 0 && hasResidualConverged)
+			        || (iterationIndex > 0 && !selection.HasUnmatchedIntervalRitzVector
+			            && selection.MaximumMatchedEigenvalueChange <= options.EigenvalueChangeTolerance);
+			if (hasResidualConverged && hasEigenvalueConverged)
+			{
+				m_Status = InteriorEigenSolverStatus::Converged;
+				return;
+			}
+			if (iterationIndex + 1 == options.MaximumIterationCount)
+			{
+				m_Status = intervalEigenpairCount == 0 ? InteriorEigenSolverStatus::NoEigenpairsFound
+				                                             : InteriorEigenSolverStatus::IterationLimitReached;
+				return;
+			}
+
+			// Collapse vectors and images together; only genuinely new corrections require operator applications.
+			previousRetainedEigenvalues = orderedRitzPairs.Eigenvalues.head(retainedVectorCount);
+			previousPrimaryVectorCount = primaryVectorCount;
+			previousRetainedVectorCount = retainedVectorCount;
+			expansionSpace = std::move(retainedSpace);
+
+			const VectorImagePair<Scalar> primaryPairs{
+			        expansionSpace.Vectors.leftCols(primaryVectorCount),
+			        expansionSpace.Images.leftCols(primaryVectorCount)};
+			const Eigen::VectorX<RealScalar> primaryEigenvalues =
+			        previousRetainedEigenvalues.head(primaryVectorCount);
+			const Eigen::MatrixX<Scalar> residuals = CalculateResiduals(primaryPairs, primaryEigenvalues);
+			const Eigen::MatrixX<Scalar> unorthogonalizedCorrections = ApplyAbsoluteDiagonalPreconditioner(
+			        residuals, primaryEigenvalues, diagonal, options.PreconditionerDenominatorFloor);
+			const Eigen::MatrixX<Scalar> corrections = OrthogonalizeAndRemoveLinearDependence(
+			        expansionSpace.Vectors, unorthogonalizedCorrections, options.LinearDependenceTolerance);
+			if (corrections.cols() == 0)
+			{
+				m_Status = intervalEigenpairCount == 0 ? InteriorEigenSolverStatus::NoEigenpairsFound
+				                                             : InteriorEigenSolverStatus::ExpansionSpaceExhausted;
+				return;
+			}
+
+			const Eigen::MatrixX<Scalar> correctionImages = ApplyOperator(linearOperator, corrections, m_Statistics);
+			const Eigen::Index oldExpansionSize = expansionSpace.Vectors.cols();
+			expansionSpace.Vectors.conservativeResize(Eigen::NoChange, oldExpansionSize + corrections.cols());
+			expansionSpace.Images.conservativeResize(Eigen::NoChange, oldExpansionSize + corrections.cols());
+			expansionSpace.Vectors.rightCols(corrections.cols()) = corrections;
+			expansionSpace.Images.rightCols(corrections.cols()) = correctionImages;
 		}
 	}
 }  // namespace SecUtility::Math
