@@ -172,6 +172,7 @@ TEMPLATE_TEST_CASE("iVI public result contract", "[Math][iVI]", double, (std::co
 	CHECK(solver.Statistics().MaximumExpansionSpaceSize == 0);
 	CHECK(solver.Statistics().ExplicitImageRecalculationCount == 0);
 	CHECK(solver.Statistics().GeneralizedSolveCount == 0);
+	CHECK(solver.Statistics().RecycledVectorCount == 0);
 }
 
 
@@ -774,4 +775,73 @@ TEST_CASE("iVI uses the column-wise operator fallback in an end-to-end solve", "
 	CHECK(solver.Eigenvalues().isApprox(Eigen::VectorXd::Zero(1)));
 	CHECK(solver.Statistics().OperatorApplicationCount == matrix.rows());
 	CHECK(solver.Statistics().MultipliedVectorCount == matrix.rows());
+}
+
+
+TEMPLATE_TEST_CASE("iVI recovers discarded previous Ritz directions in coefficient space",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	const RealScalar inverseSquareRootOfTwo = RealScalar{1} / std::sqrt(RealScalar{2});
+	Eigen::MatrixX<TestType> selectedCoefficients = Eigen::MatrixX<TestType>::Zero(3, 1);
+	selectedCoefficients(0, 0) = inverseSquareRootOfTwo;
+	selectedCoefficients(1, 0) = inverseSquareRootOfTwo;
+
+	const auto recyclingCoefficients =
+	        FormPreviousRitzVectorRecyclingCoefficients(selectedCoefficients, 2, RealScalar{1e-10}, RealScalar{1e-2});
+	REQUIRE(recyclingCoefficients.rows() == 3);
+	REQUIRE(recyclingCoefficients.cols() == 1);
+	CHECK((selectedCoefficients.adjoint() * recyclingCoefficients).norm() < 1e-12);
+	CHECK((recyclingCoefficients.adjoint() * recyclingCoefficients - Eigen::MatrixX<TestType>::Identity(1, 1)).norm()
+	      < 1e-12);
+
+	const Eigen::MatrixX<TestType> fullPreviousSpace = Eigen::MatrixX<TestType>::Identity(3, 2);
+	CHECK((fullPreviousSpace * recyclingCoefficients.topRows(2) - recyclingCoefficients).norm() < 1e-12);
+}
+
+
+TEST_CASE("iVI recycling discards directions already retained by Ritz selection", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const Eigen::MatrixXd selectedCoefficients = Eigen::MatrixXd::Identity(3, 2);
+	const auto recyclingCoefficients =
+	        FormPreviousRitzVectorRecyclingCoefficients(selectedCoefficients, 2, 1e-10, 1e-2);
+	CHECK(recyclingCoefficients.cols() == 0);
+}
+
+
+TEST_CASE("iVI recycling activation follows interior convergence progress", "[Math][iVI]")
+{
+	using Detail::IterativeVectorInteraction::IsPreviousRitzVectorRecyclingActiveFor;
+	CHECK_FALSE(IsPreviousRitzVectorRecyclingActiveFor(true, 0.2));
+	CHECK_FALSE(IsPreviousRitzVectorRecyclingActiveFor(true, 1e-6));
+	CHECK(IsPreviousRitzVectorRecyclingActiveFor(false, 0.005));
+	CHECK(IsPreviousRitzVectorRecyclingActiveFor(true, 0.05));
+	CHECK_FALSE(IsPreviousRitzVectorRecyclingActiveFor(false, 0.05));
+}
+
+
+TEST_CASE("iVI appends previous Ritz directions when dynamic recycling is disabled", "[Math][iVI]")
+{
+	const Eigen::MatrixXd matrix = CoupledHermitianMatrix<double>(10);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> referenceSolver(matrix);
+	const double lowerBound = (referenceSolver.eigenvalues()[4] + referenceSolver.eigenvalues()[5]) / 2;
+	const double upperBound = (referenceSolver.eigenvalues()[5] + referenceSolver.eigenvalues()[6]) / 2;
+	const DenseSelfAdjointLinearOperator<double> linearOperator{matrix};
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 1;
+	options.MaximumIterationCount = 2;
+	options.EigenvalueChangeTolerance = 1e-15;
+	options.ResidualNormTolerance = 1e-15;
+	options.IsPreviousRitzVectorRecyclingEnabled = true;
+	options.IsPreviousRitzVectorRecyclingDynamicallyEnabled = false;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{lowerBound, upperBound}, options);
+	CHECK(solver.Status() == InteriorEigenSolverStatus::IterationLimitReached);
+	CHECK(solver.Statistics().CompletedIterationCount == 2);
+	CHECK(solver.Statistics().RecycledVectorCount > 0);
 }

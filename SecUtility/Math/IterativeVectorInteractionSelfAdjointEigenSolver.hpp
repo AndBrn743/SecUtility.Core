@@ -60,8 +60,11 @@ namespace SecUtility::Math
 		RealScalar ResidualNormTolerance = static_cast<RealScalar>(1e-7);
 		RealScalar PreconditionerDenominatorFloor = static_cast<RealScalar>(1e-2);
 		RealScalar LinearDependenceTolerance = static_cast<RealScalar>(1e-10);
+		RealScalar PreviousRitzVectorRecyclingTolerance = static_cast<RealScalar>(1e-8);
+		RealScalar RecyclingRefinementTolerance = static_cast<RealScalar>(1e-2);
 
 		bool IsPreviousRitzVectorRecyclingEnabled = true;
+		bool IsPreviousRitzVectorRecyclingDynamicallyEnabled = true;
 		bool IsFreezingEnabled = true;
 	};
 
@@ -86,6 +89,7 @@ namespace SecUtility::Math
 		Eigen::Index MaximumExpansionSpaceSize = 0;
 		Eigen::Index ExplicitImageRecalculationCount = 0;
 		Eigen::Index GeneralizedSolveCount = 0;
+		Eigen::Index RecycledVectorCount = 0;
 	};
 
 
@@ -543,6 +547,24 @@ namespace SecUtility::Math
 		}
 
 
+		template <typename RealScalar>
+		bool IsPreviousRitzVectorRecyclingActiveFor(
+		        const bool isCurrentlyActive,
+		        const RealScalar maximumMatchedEigenvalueChange)
+		{
+			if (maximumMatchedEigenvalueChange > static_cast<RealScalar>(0.1)
+			    || maximumMatchedEigenvalueChange < static_cast<RealScalar>(1e-5))
+			{
+				return false;
+			}
+			if (maximumMatchedEigenvalueChange < static_cast<RealScalar>(0.01))
+			{
+				return true;
+			}
+			return isCurrentlyActive;
+		}
+
+
 		template <SelfAdjointLinearOperator Operator>
 		Eigen::MatrixX<LinearOperatorScalar<Operator>> ApplyOperator(
 		        const Operator& linearOperator,
@@ -636,6 +658,23 @@ namespace SecUtility::Math
 		{
 			return SymmetricallyOrthonormalize(
 			        ProjectAgainstBasis(basis, candidates), relativeLinearDependenceTolerance);
+		}
+
+
+		template <typename Scalar>
+		Eigen::MatrixX<Scalar> FormPreviousRitzVectorRecyclingCoefficients(
+		        const Eigen::MatrixX<Scalar>& selectedRitzCoefficients,
+		        const Eigen::Index previousPrimaryVectorCount,
+		        const typename Eigen::NumTraits<Scalar>::Real linearDependenceTolerance,
+		        const typename Eigen::NumTraits<Scalar>::Real refinementTolerance)
+		{
+			Eigen::MatrixX<Scalar> previousPrimaryCoefficients =
+			        Eigen::MatrixX<Scalar>::Zero(selectedRitzCoefficients.rows(), previousPrimaryVectorCount);
+			previousPrimaryCoefficients.topRows(previousPrimaryVectorCount).setIdentity();
+			Eigen::MatrixX<Scalar> recyclingCoefficients = OrthogonalizeAndRemoveLinearDependence(
+			        selectedRitzCoefficients, previousPrimaryCoefficients, linearDependenceTolerance);
+			return OrthogonalizeAndRemoveLinearDependence(
+			        selectedRitzCoefficients, recyclingCoefficients, refinementTolerance);
 		}
 
 
@@ -795,7 +834,11 @@ namespace SecUtility::Math
 		    || !std::isfinite(options.ResidualNormTolerance) || options.ResidualNormTolerance <= 0
 		    || !std::isfinite(options.PreconditionerDenominatorFloor)
 		    || options.PreconditionerDenominatorFloor <= 0 || !std::isfinite(options.LinearDependenceTolerance)
-		    || options.LinearDependenceTolerance <= 0)
+		    || options.LinearDependenceTolerance <= 0
+		    || !std::isfinite(options.PreviousRitzVectorRecyclingTolerance)
+		    || options.PreviousRitzVectorRecyclingTolerance <= 0
+		    || !std::isfinite(options.RecyclingRefinementTolerance)
+		    || options.RecyclingRefinementTolerance <= 0)
 		{
 			throw InvalidArgumentException("All numerical tolerances must be positive");
 		}
@@ -842,6 +885,7 @@ namespace SecUtility::Math
 		Eigen::VectorX<RealScalar> previousRetainedEigenvalues;
 		Eigen::Index previousPrimaryVectorCount = 0;
 		Eigen::Index previousRetainedVectorCount = 0;
+		bool isPreviousRitzVectorRecyclingActive = options.IsPreviousRitzVectorRecyclingEnabled;
 		for (Eigen::Index iterationIndex = 0; iterationIndex < options.MaximumIterationCount; iterationIndex++)
 		{
 			m_Statistics.CompletedIterationCount = iterationIndex + 1;
@@ -878,12 +922,33 @@ namespace SecUtility::Math
 			const auto orderedRitzPairs =
 			        PermuteSelectedRitzPairsToTheFront(currentEigenvalues, reducedEigenvectors, selection);
 			const auto intervalEigenpairCount = static_cast<Eigen::Index>(selection.IntervalRitzIndices.size());
-			const Eigen::Index retainedVectorCount = intervalEigenpairCount
-			                                               + static_cast<Eigen::Index>(selection.AdditionalRitzIndices.size());
+			const Eigen::Index selectedRetainedVectorCount = intervalEigenpairCount
+			                                                       + static_cast<Eigen::Index>(
+			                                                               selection.AdditionalRitzIndices.size());
 			const Eigen::Index primaryVectorCount = CalculatePrimaryRitzVectorCount(
-			        intervalEigenpairCount, 0, retainedVectorCount);
-			const Eigen::MatrixX<Scalar> retainedCoefficients = orderedRitzPairs.Eigenvectors.leftCols(retainedVectorCount);
-			VectorImagePair<Scalar> retainedSpace = TransformVectorImagePair(expansionSpace, retainedCoefficients);
+			        intervalEigenpairCount, 0, selectedRetainedVectorCount);
+			Eigen::MatrixX<Scalar> collapseCoefficients =
+			        orderedRitzPairs.Eigenvectors.leftCols(selectedRetainedVectorCount);
+			if (iterationIndex > 0 && options.IsPreviousRitzVectorRecyclingEnabled
+			    && options.IsPreviousRitzVectorRecyclingDynamicallyEnabled)
+			{
+				isPreviousRitzVectorRecyclingActive = IsPreviousRitzVectorRecyclingActiveFor(
+				        isPreviousRitzVectorRecyclingActive, selection.MaximumMatchedEigenvalueChange);
+			}
+			if (iterationIndex > 0 && isPreviousRitzVectorRecyclingActive && previousPrimaryVectorCount > 0)
+			{
+				const Eigen::MatrixX<Scalar> recyclingCoefficients = FormPreviousRitzVectorRecyclingCoefficients(
+				        collapseCoefficients,
+				        previousPrimaryVectorCount,
+				        options.PreviousRitzVectorRecyclingTolerance,
+				        options.RecyclingRefinementTolerance);
+				const Eigen::Index selectedColumnCount = collapseCoefficients.cols();
+				collapseCoefficients.conservativeResize(
+				        Eigen::NoChange, selectedColumnCount + recyclingCoefficients.cols());
+				collapseCoefficients.rightCols(recyclingCoefficients.cols()) = recyclingCoefficients;
+				m_Statistics.RecycledVectorCount += recyclingCoefficients.cols();
+			}
+			VectorImagePair<Scalar> retainedSpace = TransformVectorImagePair(expansionSpace, collapseCoefficients);
 
 			// Materialize inspectable results before evaluating any terminal condition.
 			if (intervalEigenpairCount > 0)
@@ -926,9 +991,9 @@ namespace SecUtility::Math
 			}
 
 			// Collapse vectors and images together; only genuinely new corrections require operator applications.
-			previousRetainedEigenvalues = orderedRitzPairs.Eigenvalues.head(retainedVectorCount);
+			previousRetainedEigenvalues = orderedRitzPairs.Eigenvalues.head(selectedRetainedVectorCount);
 			previousPrimaryVectorCount = primaryVectorCount;
-			previousRetainedVectorCount = retainedVectorCount;
+			previousRetainedVectorCount = selectedRetainedVectorCount;
 			expansionSpace = std::move(retainedSpace);
 
 			const VectorImagePair<Scalar> primaryPairs{
