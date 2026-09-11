@@ -326,7 +326,8 @@ namespace SecUtility::Math
 			const auto gridIndex = static_cast<std::size_t>(a * Detail::Boys::BoyTableDensity);
 			const auto delta = (gridIndex + 0.5) / Detail::Boys::BoyTableDensity - a;
 
-			return UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
+			// return UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
+			return UnrolledEstrinTaylorPolynomial<Scalar, HornerTermCount>(
 			        MakeIndexAccessor(Detail::Boys::BoysTable[gridIndex].cbegin() + n), delta);
 		}
 
@@ -393,7 +394,8 @@ namespace SecUtility::Math
 			std::size_t n = 0;
 			for (auto it = begin; it != end; ++it, ++n)
 			{
-				*it = UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
+				// *it = UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
+				*it = UnrolledEstrinTaylorPolynomial<Scalar, HornerTermCount>(
 				        MakeIndexAccessor(Detail::Boys::BoysTable[gridIndex].cbegin() + n), delta);
 			}
 			return;
