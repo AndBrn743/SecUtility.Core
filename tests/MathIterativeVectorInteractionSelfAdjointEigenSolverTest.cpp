@@ -173,6 +173,8 @@ TEMPLATE_TEST_CASE("iVI public result contract", "[Math][iVI]", double, (std::co
 	CHECK(solver.Statistics().ExplicitImageRecalculationCount == 0);
 	CHECK(solver.Statistics().GeneralizedSolveCount == 0);
 	CHECK(solver.Statistics().RecycledVectorCount == 0);
+	CHECK(solver.Statistics().CurrentFrozenVectorCount == 0);
+	CHECK(solver.Statistics().MaximumFrozenVectorCount == 0);
 }
 
 
@@ -240,6 +242,14 @@ TEMPLATE_TEST_CASE("iVI operator contract and input validation", "[Math][iVI]", 
 		CHECK_THROWS_AS(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options), SecUtility::InvalidArgumentException);
 
 		options.ResidualNormTolerance = std::numeric_limits<RealScalar>::quiet_NaN();
+		CHECK_THROWS_AS(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options), SecUtility::InvalidArgumentException);
+
+		options.ResidualNormTolerance = RealScalar{1e-8};
+		options.FreezingCoefficientTolerance = 0;
+		CHECK_THROWS_AS(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options), SecUtility::InvalidArgumentException);
+
+		options.FreezingCoefficientTolerance = RealScalar{1e-8};
+		options.FreezingResidualNormTolerance = std::numeric_limits<RealScalar>::infinity();
 		CHECK_THROWS_AS(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options), SecUtility::InvalidArgumentException);
 	}
 }
@@ -844,4 +854,86 @@ TEST_CASE("iVI appends previous Ritz directions when dynamic recycling is disabl
 	CHECK(solver.Status() == InteriorEigenSolverStatus::IterationLimitReached);
 	CHECK(solver.Statistics().CompletedIterationCount == 2);
 	CHECK(solver.Statistics().RecycledVectorCount > 0);
+}
+
+
+TEMPLATE_TEST_CASE("iVI freezes only stable interval Ritz vectors",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	const RealScalar inverseSquareRootOfTwo = RealScalar{1} / std::sqrt(RealScalar{2});
+	const TestType phase = []
+	{
+		if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+		{
+			return TestType{0, 1};
+		}
+		else
+		{
+			return TestType{1};
+		}
+	}();
+	Eigen::MatrixX<TestType> reducedEigenvectors = Eigen::MatrixX<TestType>::Zero(4, 3);
+	reducedEigenvectors(0, 0) = phase;
+	reducedEigenvectors(0, 1) = inverseSquareRootOfTwo;
+	reducedEigenvectors(2, 1) = inverseSquareRootOfTwo;
+	reducedEigenvectors(1, 2) = TestType{1};
+	const Eigen::VectorX<RealScalar> residualNorms{{RealScalar{1e-9}, RealScalar{1e-9}, RealScalar{1e-3}}};
+	const std::vector<Eigen::Index> intervalRitzIndices{0, 1, 2};
+
+	const auto isFrozen = DetermineFrozenRitzVectors(
+	        reducedEigenvectors, residualNorms, intervalRitzIndices, 2, RealScalar{1e-8}, RealScalar{1e-7});
+	CHECK(isFrozen == std::vector<bool>{true, false, false});
+
+	const auto isFrozenWithoutPreviousPrimaryVectors = DetermineFrozenRitzVectors(
+	        reducedEigenvectors, residualNorms, intervalRitzIndices, 0, RealScalar{1e-8}, RealScalar{1e-7});
+	CHECK(isFrozenWithoutPreviousPrimaryVectors == std::vector<bool>{false, false, false});
+}
+
+
+TEST_CASE("iVI freezing can be disabled", "[Math][iVI]")
+{
+	const Eigen::MatrixXd matrix = CoupledHermitianMatrix<double>(10);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> referenceSolver(matrix);
+	const double lowerBound = (referenceSolver.eigenvalues()[4] + referenceSolver.eigenvalues()[5]) / 2;
+	const double upperBound = (referenceSolver.eigenvalues()[5] + referenceSolver.eigenvalues()[6]) / 2;
+	const DenseSelfAdjointLinearOperator<double> linearOperator{matrix};
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 1;
+	options.MaximumIterationCount = 2;
+	options.EigenvalueChangeTolerance = 1e-15;
+	options.ResidualNormTolerance = 1e-15;
+	options.FreezingCoefficientTolerance = 1;
+	options.FreezingResidualNormTolerance = 1e6;
+	options.IsFreezingEnabled = false;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{lowerBound, upperBound}, options);
+	CHECK(solver.Statistics().CurrentFrozenVectorCount == 0);
+	CHECK(solver.Statistics().MaximumFrozenVectorCount == 0);
+}
+
+
+TEST_CASE("iVI skips corrections for frozen Ritz vectors", "[Math][iVI]")
+{
+	const Eigen::MatrixXd matrix = CoupledHermitianMatrix<double>(10);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> referenceSolver(matrix);
+	const double lowerBound = (referenceSolver.eigenvalues()[4] + referenceSolver.eigenvalues()[5]) / 2;
+	const double upperBound = (referenceSolver.eigenvalues()[5] + referenceSolver.eigenvalues()[6]) / 2;
+	const DenseSelfAdjointLinearOperator<double> linearOperator{matrix};
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 1;
+	options.MaximumIterationCount = 2;
+	options.EigenvalueChangeTolerance = 1e-15;
+	options.ResidualNormTolerance = 1e-15;
+	options.FreezingCoefficientTolerance = 1;
+	options.FreezingResidualNormTolerance = 1e6;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{lowerBound, upperBound}, options);
+	CHECK(solver.Statistics().CurrentFrozenVectorCount == 1);
+	CHECK(solver.Statistics().MaximumFrozenVectorCount == 1);
 }
