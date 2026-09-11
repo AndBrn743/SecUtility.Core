@@ -51,6 +51,26 @@ namespace
 	}
 
 
+	template <typename T>
+	struct VectorOnlySelfAdjointLinearOperator
+	{
+		using Scalar = T;
+		using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+
+		Eigen::MatrixX<Scalar> Matrix;
+
+		[[nodiscard]] Eigen::Index rows() const noexcept { return Matrix.rows(); }
+		[[nodiscard]] Eigen::Index cols() const noexcept { return Matrix.cols(); }
+		[[nodiscard]] Eigen::VectorX<RealScalar> Diagonal() const { return Matrix.diagonal().real(); }
+		template <typename Derived>
+			requires(Derived::ColsAtCompileTime == 1)
+		[[nodiscard]] Eigen::VectorX<Scalar> ApplyOn(const Eigen::MatrixBase<Derived>& vector) const
+		{
+			return Matrix * vector;
+		}
+	};
+
+
 	struct OperatorWithoutDiagonal
 	{
 		using Scalar = double;
@@ -89,6 +109,8 @@ static_assert(SelfAdjointLinearOperator<DenseSelfAdjointLinearOperator<double>>)
 static_assert(SelfAdjointLinearOperator<DenseSelfAdjointLinearOperator<std::complex<double>>>);
 static_assert(BlockSelfAdjointLinearOperator<DenseSelfAdjointLinearOperator<double>>);
 static_assert(BlockSelfAdjointLinearOperator<DenseSelfAdjointLinearOperator<std::complex<double>>>);
+static_assert(SelfAdjointLinearOperator<VectorOnlySelfAdjointLinearOperator<double>>);
+static_assert(!BlockSelfAdjointLinearOperator<VectorOnlySelfAdjointLinearOperator<double>>);
 static_assert(!SelfAdjointLinearOperator<OperatorWithoutDiagonal>);
 static_assert(!SelfAdjointLinearOperator<ComplexDiagonalOperator>);
 static_assert(!SelfAdjointLinearOperator<OperatorWithoutScalar>);
@@ -230,4 +252,129 @@ TEST_CASE("The existing matrix-free wrapper requires a diagonal-aware adapter fo
 {
 	const MatrixFreeLinearOperator operatorWithoutDiagonal([](const Eigen::VectorXd& vector) { return vector; }, 3);
 	STATIC_CHECK_FALSE(SelfAdjointLinearOperator<decltype(operatorWithoutDiagonal)>);
+}
+
+
+TEMPLATE_TEST_CASE("iVI projection and symmetric orthonormalization", "[Math][iVI]", double, (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	constexpr RealScalar tolerance = static_cast<RealScalar>(1e-12);
+
+	const Eigen::MatrixX<TestType> basis = Eigen::MatrixX<TestType>::Identity(4, 1);
+	Eigen::MatrixX<TestType> candidates = Eigen::MatrixX<TestType>::Zero(4, 3);
+	candidates(0, 0) = TestType{2};
+	candidates(1, 0) = TestType{1};
+	candidates(2, 1) = TestType{1};
+	candidates.col(2) = candidates.col(1);
+
+	const auto projected = ProjectAgainstBasis(basis, candidates);
+	CHECK((basis.adjoint() * projected).norm() < tolerance);
+	CHECK(projected(1, 0) == TestType{1});
+	CHECK(projected(2, 1) == TestType{1});
+	CHECK(ProjectAgainstBasis(Eigen::MatrixX<TestType>(4, 0), candidates).isApprox(candidates));
+
+	const auto orthonormalized = OrthogonalizeAndRemoveLinearDependence(basis, candidates, tolerance);
+	REQUIRE(orthonormalized.rows() == 4);
+	REQUIRE(orthonormalized.cols() == 2);
+	CHECK((basis.adjoint() * orthonormalized).norm() < tolerance);
+	CHECK((orthonormalized.adjoint() * orthonormalized - Eigen::MatrixX<TestType>::Identity(2, 2)).norm()
+	      < tolerance);
+
+	const Eigen::MatrixX<TestType> emptyCandidates(4, 0);
+	CHECK(OrthogonalizeAndRemoveLinearDependence(basis, emptyCandidates, tolerance).cols() == 0);
+	const Eigen::MatrixX<TestType> zeroCandidates = Eigen::MatrixX<TestType>::Zero(4, 2);
+	CHECK(SymmetricallyOrthonormalize(zeroCandidates, tolerance).cols() == 0);
+}
+
+
+TEST_CASE("iVI complex orthonormalization is invariant to column phase", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const std::complex<double> phase = std::polar(1.0, 0.73);
+	Eigen::MatrixXcd vectors = Eigen::MatrixXcd::Identity(3, 2);
+	vectors.col(1) *= phase;
+
+	const auto orthonormalized = SymmetricallyOrthonormalize(vectors, 1e-12);
+	REQUIRE(orthonormalized.cols() == 2);
+	CHECK((orthonormalized.adjoint() * orthonormalized - Eigen::MatrixXcd::Identity(2, 2)).norm() < 1e-12);
+}
+
+
+TEMPLATE_TEST_CASE("iVI vector and image transformations remain aligned", "[Math][iVI]", double, (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(3, 3);
+	matrix.diagonal() << TestType{1}, TestType{2}, TestType{4};
+	Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Identity(3, 3);
+	VectorImagePair<TestType> source{vectors, matrix * vectors};
+
+	Eigen::MatrixX<TestType> coefficients = Eigen::MatrixX<TestType>::Zero(3, 2);
+	coefficients(0, 0) = TestType{1} / std::sqrt(2.0);
+	coefficients(1, 0) = TestType{1} / std::sqrt(2.0);
+	coefficients(1, 1) = TestType{1} / std::sqrt(2.0);
+	coefficients(2, 1) = TestType{1} / std::sqrt(2.0);
+
+	const auto transformed = TransformVectorImagePair(source, coefficients);
+	CHECK(transformed.Vectors.isApprox(vectors * coefficients));
+	CHECK(transformed.Images.isApprox(matrix * transformed.Vectors));
+
+	const auto reducedMatrix = FormReducedMatrix(transformed);
+	CHECK(reducedMatrix.isApprox(reducedMatrix.adjoint()));
+	CHECK(reducedMatrix.isApprox(transformed.Vectors.adjoint() * matrix * transformed.Vectors));
+}
+
+
+TEMPLATE_TEST_CASE("iVI residual and absolute preconditioner kernels", "[Math][iVI]", double, (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+
+	Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Zero(3, 2);
+	vectors(0, 0) = TestType{1};
+	vectors(1, 1) = TestType{1};
+	Eigen::MatrixX<TestType> images = vectors;
+	images(2, 0) = TestType{3};
+	images(2, 1) = TestType{-4};
+	const Eigen::VectorX<RealScalar> eigenvalues{{1, 1}};
+
+	const auto residuals = CalculateResiduals(VectorImagePair<TestType>{vectors, images}, eigenvalues);
+	const auto residualNorms = CalculateColumnNorms(residuals);
+	CHECK(residualNorms.isApprox(Eigen::VectorX<RealScalar>{{3, 4}}));
+	CHECK(CalculateColumnNorms(Eigen::MatrixX<TestType>(3, 0)).size() == 0);
+
+	const Eigen::VectorX<RealScalar> diagonal{{RealScalar{0.5}, RealScalar{2}, RealScalar{1}}};
+	const auto corrections = ApplyAbsoluteDiagonalPreconditioner(residuals, eigenvalues, diagonal, RealScalar{0.25});
+	CHECK(corrections(2, 0) == TestType{12});
+	CHECK(corrections(2, 1) == TestType{-16});
+	CHECK(corrections(0, 0) == TestType{0});
+	CHECK(corrections(1, 1) == TestType{0});
+}
+
+
+TEMPLATE_TEST_CASE("iVI operator application selects block or column fallback", "[Math][iVI]", double, (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Identity(3, 3);
+	matrix.diagonal() << TestType{1}, TestType{2}, TestType{3};
+	const Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Random(3, 2);
+
+	InteriorEigenSolverStatistics blockStatistics;
+	const DenseSelfAdjointLinearOperator<TestType> blockOperator{matrix};
+	const auto blockImages = ApplyOperator(blockOperator, vectors, blockStatistics);
+	CHECK(blockImages.isApprox(matrix * vectors));
+	CHECK(blockStatistics.MultipliedVectorCount == 2);
+	CHECK(blockStatistics.OperatorApplicationCount == 1);
+
+	InteriorEigenSolverStatistics columnStatistics;
+	const VectorOnlySelfAdjointLinearOperator<TestType> columnOperator{matrix};
+	const auto columnImages = ApplyOperator(columnOperator, vectors, columnStatistics);
+	CHECK(columnImages.isApprox(blockImages));
+	CHECK(columnStatistics.MultipliedVectorCount == 2);
+	CHECK(columnStatistics.OperatorApplicationCount == 2);
+
+	const Eigen::MatrixX<TestType> emptyVectors(3, 0);
+	CHECK(ApplyOperator(blockOperator, emptyVectors, blockStatistics).cols() == 0);
+	CHECK(blockStatistics.MultipliedVectorCount == 2);
+	CHECK(blockStatistics.OperatorApplicationCount == 1);
 }
