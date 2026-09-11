@@ -20,6 +20,7 @@ namespace SecUtility
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
+#pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Winvalid-constexpr"
 #endif
 	template <typename Index, Index... Indices, typename Operation>
