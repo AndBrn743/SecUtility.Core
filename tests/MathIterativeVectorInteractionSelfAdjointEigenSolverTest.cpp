@@ -3,6 +3,7 @@
 
 #include <SecUtility/Math/IterativeVectorInteractionSelfAdjointEigenSolver.hpp>
 #include <SecUtility/Math/MatrixFreeLinearOperator.hpp>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -377,4 +378,226 @@ TEMPLATE_TEST_CASE("iVI operator application selects block or column fallback", 
 	CHECK(ApplyOperator(blockOperator, emptyVectors, blockStatistics).cols() == 0);
 	CHECK(blockStatistics.MultipliedVectorCount == 2);
 	CHECK(blockStatistics.OperatorApplicationCount == 1);
+}
+
+
+TEST_CASE("iVI population matching follows permuted real Ritz vectors", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixXd reducedEigenvectors = Eigen::MatrixXd::Zero(4, 4);
+	reducedEigenvectors(2, 0) = 1;
+	reducedEigenvectors(0, 1) = -1;
+	reducedEigenvectors(3, 2) = 1;
+	reducedEigenvectors(1, 3) = 1;
+
+	const auto populations = FormRitzPopulationMatrix(reducedEigenvectors, 4);
+	const auto matches = MatchRitzVectors(populations, 2, 4);
+	REQUIRE(matches.size() == 4);
+	CHECK(matches[0].PreviousIndex == 2);
+	CHECK(matches[1].PreviousIndex == 0);
+	CHECK(matches[2].PreviousIndex == 3);
+	CHECK(matches[3].PreviousIndex == 1);
+	CHECK(matches[1].IsPrimaryVectorContinuation);
+	CHECK(matches[0].IsRetainedVectorContinuation);
+	CHECK(matches[0].IsWeakMatch);
+	CHECK_FALSE(matches[1].IsWeakMatch);
+}
+
+
+TEST_CASE("iVI population matching is invariant to complex phase", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixXcd reducedEigenvectors = Eigen::MatrixXcd::Zero(3, 3);
+	reducedEigenvectors(1, 0) = std::polar(1.0, 0.4);
+	reducedEigenvectors(2, 1) = std::polar(1.0, -1.2);
+	reducedEigenvectors(0, 2) = std::polar(1.0, 2.3);
+
+	const auto populations = FormRitzPopulationMatrix(reducedEigenvectors, 3);
+	const auto matches = MatchRitzVectors(populations, 3, 3);
+	CHECK(populations.isApprox(Eigen::Matrix3d{{0, 1, 0}, {0, 0, 1}, {1, 0, 0}}));
+	CHECK(matches[0].PreviousIndex == 1);
+	CHECK(matches[1].PreviousIndex == 2);
+	CHECK(matches[2].PreviousIndex == 0);
+}
+
+
+TEST_CASE("iVI populations are squared coefficient magnitudes", "[Math][iVI]")
+{
+	using Detail::IterativeVectorInteraction::FormRitzPopulationMatrix;
+	Eigen::MatrixXcd reducedEigenvectors(2, 2);
+	reducedEigenvectors << std::polar(0.8, 0.4), std::polar(0.6, -0.7),
+	        std::polar(0.6, 1.1), std::polar(0.8, 2.2);
+
+	const auto populations = FormRitzPopulationMatrix(reducedEigenvectors, 2);
+	const Eigen::Matrix2d expectedPopulations{{0.64, 0.36}, {0.36, 0.64}};
+	CHECK(populations.isApprox(expectedPopulations, 1e-12));
+}
+
+
+TEST_CASE("iVI population matching handles rotations and deterministic ties", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const Eigen::MatrixXd equalPopulations = Eigen::MatrixXd::Constant(2, 2, 0.5);
+	const auto matches = MatchRitzVectors(equalPopulations, 2, 2);
+	CHECK(matches[0].PreviousIndex == 0);
+	CHECK(matches[1].PreviousIndex == 1);
+	CHECK(matches[0].IsWeakMatch);
+	CHECK(matches[1].IsWeakMatch);
+
+	const Eigen::Matrix<double, 3, 2> populations{{0.1, 0.8}, {0.9, 0.1}, {0.2, 0.2}};
+	const auto unmatched = MatchRitzVectors(Eigen::MatrixXd{populations}, 2, 2);
+	CHECK(unmatched[0].PreviousIndex == 1);
+	CHECK(unmatched[1].PreviousIndex == 0);
+	CHECK_FALSE(unmatched[2].IsMatched());
+}
+
+
+TEST_CASE("iVI Hungarian matching maximizes total population", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const Eigen::MatrixXd populations{{0.90, 0.80}, {0.85, 0.00}};
+
+	const auto greedyMatches = MatchRitzVectors_Greedy(populations, 2, 2);
+	CHECK(greedyMatches[0].PreviousIndex == 0);
+	CHECK(greedyMatches[1].PreviousIndex == 1);
+
+	const auto hungarianMatches = MatchRitzVectors_Hungarian(populations, 2, 2);
+	CHECK(hungarianMatches[0].PreviousIndex == 1);
+	CHECK(hungarianMatches[1].PreviousIndex == 0);
+	CHECK(hungarianMatches[0].Population + hungarianMatches[1].Population
+	      > greedyMatches[0].Population + greedyMatches[1].Population);
+
+	const auto defaultMatches = MatchRitzVectors(populations, 2, 2);
+	CHECK(defaultMatches[0].PreviousIndex == hungarianMatches[0].PreviousIndex);
+	CHECK(defaultMatches[1].PreviousIndex == hungarianMatches[1].PreviousIndex);
+}
+
+
+TEST_CASE("iVI matchers handle an empty previous Ritz set", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const Eigen::MatrixXd populations(3, 0);
+	const auto greedyMatches = MatchRitzVectors_Greedy(populations, 0, 0);
+	const auto hungarianMatches = MatchRitzVectors_Hungarian(populations, 0, 0);
+	REQUIRE(greedyMatches.size() == 3);
+	REQUIRE(hungarianMatches.size() == 3);
+	CHECK_FALSE(greedyMatches[0].IsMatched());
+	CHECK_FALSE(hungarianMatches[0].IsMatched());
+}
+
+
+TEST_CASE("iVI interval selection tracks matches and retains neighboring Ritz vectors", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const Eigen::VectorXd currentEigenvalues{{-2.0, -0.1, 0.4, 1.1, 3.0}};
+	const Eigen::VectorXd previousEigenvalues{{-0.11, 0.39, 1.08, 3.1}};
+	std::vector<RitzVectorMatch<double>> matches(5);
+	for (Eigen::Index index = 0; index < 5; index++)
+	{
+		matches[static_cast<std::size_t>(index)].CurrentIndex = index;
+	}
+	for (Eigen::Index index = 1; index < 5; index++)
+	{
+		auto& ref_match = matches[static_cast<std::size_t>(index)];
+		ref_match.PreviousIndex = index - 1;
+		ref_match.Population = 0.9;
+		ref_match.IsPrimaryVectorContinuation = true;
+		ref_match.IsRetainedVectorContinuation = true;
+		ref_match.IsWeakMatch = false;
+	}
+
+	const auto selection = SelectInteriorRitzVectors(
+	        currentEigenvalues, matches, previousEigenvalues, EigenvalueInterval<double>{-0.1, 1.1}, 3, 2);
+	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{1, 2, 3});
+	CHECK(selection.AdditionalRitzIndices == std::vector<Eigen::Index>{4, 0});
+	CHECK(selection.MaximumMatchedEigenvalueChange == Catch::Approx(0.02));
+	CHECK_FALSE(selection.HasUnmatchedIntervalRitzVector);
+	CHECK_FALSE(selection.IsMaximumEigenpairCountExceeded);
+}
+
+
+TEST_CASE("iVI interval selection reports new roots and capacity exhaustion", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const Eigen::VectorXd eigenvalues{{-0.5, 0.0, 0.5}};
+	std::vector<RitzVectorMatch<double>> matches(3);
+	for (Eigen::Index index = 0; index < 3; index++)
+	{
+		matches[static_cast<std::size_t>(index)].CurrentIndex = index;
+	}
+
+	const auto selection = SelectInteriorRitzVectors(
+	        eigenvalues, matches, Eigen::VectorXd{}, EigenvalueInterval<double>{-0.5, 0.5}, 2, 0);
+	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{0, 1, 2});
+	CHECK(selection.HasUnmatchedIntervalRitzVector);
+	CHECK(selection.IsMaximumEigenpairCountExceeded);
+	CHECK(std::isinf(selection.MaximumMatchedEigenvalueChange));
+
+	const auto emptySelection = SelectInteriorRitzVectors(
+	        eigenvalues, matches, Eigen::VectorXd{}, EigenvalueInterval<double>{2, 3}, 2, 1);
+	CHECK(emptySelection.IntervalRitzIndices.empty());
+	CHECK(emptySelection.AdditionalRitzIndices == std::vector<Eigen::Index>{2});
+	CHECK(std::isinf(emptySelection.MaximumMatchedEigenvalueChange));
+}
+
+
+TEST_CASE("iVI interval selection retains a near-degenerate boundary continuation", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const Eigen::VectorXd eigenvalues{{-1.0, -0.500004, -0.5, 0.2, 2.0}};
+	std::vector<RitzVectorMatch<double>> matches(5);
+	for (Eigen::Index index = 0; index < 5; index++)
+	{
+		matches[static_cast<std::size_t>(index)].CurrentIndex = index;
+	}
+
+	const auto selection = SelectInteriorRitzVectors(
+	        eigenvalues, matches, Eigen::VectorXd{}, EigenvalueInterval<double>{-0.5, 0.5}, 2, 1, 1e-5);
+	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{2, 3});
+	CHECK(selection.AdditionalRitzIndices == std::vector<Eigen::Index>{1, 0});
+}
+
+
+TEST_CASE("iVI interval selection retains chained upper-boundary continuations", "[Math][iVI]")
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const Eigen::VectorXd eigenvalues{{-2.0, -0.2, 0.5, 0.500004, 0.500009, 2.0}};
+	std::vector<RitzVectorMatch<double>> matches(6);
+	for (Eigen::Index index = 0; index < 6; index++)
+	{
+		matches[static_cast<std::size_t>(index)].CurrentIndex = index;
+	}
+
+	const auto selection = SelectInteriorRitzVectors(
+	        eigenvalues, matches, Eigen::VectorXd{}, EigenvalueInterval<double>{-0.5, 0.5}, 2, 1, 1e-5);
+	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{1, 2});
+	CHECK(selection.AdditionalRitzIndices == std::vector<Eigen::Index>{3, 4, 0});
+}
+
+
+TEST_CASE("iVI primary Ritz space uses interval headroom within the available space", "[Math][iVI]")
+{
+	using Detail::IterativeVectorInteraction::CalculatePrimaryRitzVectorCount;
+	CHECK(CalculatePrimaryRitzVectorCount(1, 0, 20) == 6);
+	CHECK(CalculatePrimaryRitzVectorCount(3, 0, 20) == 9);
+	CHECK(CalculatePrimaryRitzVectorCount(3, 2, 20) == 11);
+	CHECK(CalculatePrimaryRitzVectorCount(5, 0, 8) == 8);
+}
+
+
+TEMPLATE_TEST_CASE("iVI selected Ritz pairs are permuted to the front", "[Math][iVI]", double, (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	const Eigen::VectorX<RealScalar> eigenvalues{{-2, -1, 0, 1}};
+	const Eigen::MatrixX<TestType> eigenvectors = Eigen::MatrixX<TestType>::Identity(4, 4);
+	InteriorRitzSelection<RealScalar> selection;
+	selection.IntervalRitzIndices = {2, 3};
+	selection.AdditionalRitzIndices = {1};
+
+	const auto permuted = PermuteSelectedRitzPairsToTheFront(eigenvalues, eigenvectors, selection);
+	// CHECK(permuted.OriginalIndices == std::vector<Eigen::Index>{2, 3, 1, 0});
+	CHECK(permuted.Eigenvalues.isApprox(Eigen::VectorX<RealScalar>{{0, 1, -1, -2}}));
+	CHECK(permuted.Eigenvectors.col(0).isApprox(eigenvectors.col(2)));
+	CHECK(permuted.Eigenvectors.col(3).isApprox(eigenvectors.col(0)));
 }
