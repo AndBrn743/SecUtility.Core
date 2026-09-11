@@ -372,7 +372,7 @@ namespace SecUtility::Math
 			        [](const int n [[maybe_unused]], const Scalar a)
 			        {
 				        assert(n == 0);
-				        return Scalar{0.5} * SecUtility::Math::Constant::SqrtOfPi<Scalar> / std::sqrt(a);
+				        return Scalar{0.5} * Constant::SqrtOfPi<Scalar> / Sqrt(a);
 			        });
 			return;
 		}
