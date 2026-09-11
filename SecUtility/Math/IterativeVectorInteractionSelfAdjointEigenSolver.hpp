@@ -64,6 +64,7 @@ namespace SecUtility::Math
 		RealScalar RecyclingRefinementTolerance = static_cast<RealScalar>(1e-2);
 		RealScalar FreezingCoefficientTolerance = static_cast<RealScalar>(1e-8);
 		RealScalar FreezingResidualNormTolerance = static_cast<RealScalar>(1e-7);
+		RealScalar ReducedMatrixAsymmetryTolerance = static_cast<RealScalar>(1e-6);
 
 		bool IsPreviousRitzVectorRecyclingEnabled = true;
 		bool IsPreviousRitzVectorRecyclingDynamicallyEnabled = true;
@@ -629,6 +630,18 @@ namespace SecUtility::Math
 		}
 
 
+		template <SelfAdjointLinearOperator Operator>
+		void RecalculateImages(
+		        const Operator& linearOperator,
+		        VectorImagePair<LinearOperatorScalar<Operator>>& ref_vectorImagePair,
+		        InteriorEigenSolverStatistics& ref_statistics)
+		{
+			ref_vectorImagePair.Images =
+			        ApplyOperator(linearOperator, ref_vectorImagePair.Vectors, ref_statistics);
+			ref_statistics.ExplicitImageRecalculationCount++;
+		}
+
+
 		template <typename Scalar>
 		Eigen::MatrixX<Scalar> ProjectAgainstBasis(const Eigen::MatrixX<Scalar>& basis,
 		                                           const Eigen::MatrixX<Scalar>& candidates)
@@ -721,6 +734,24 @@ namespace SecUtility::Math
 		Eigen::MatrixX<Scalar> FormReducedMatrix(const VectorImagePair<Scalar>& vectorImagePair)
 		{
 			return vectorImagePair.Vectors.adjoint() * vectorImagePair.Images;
+		}
+
+
+		template <typename Scalar>
+		bool DoesReducedMatrixRequireExplicitImages(
+		        const Eigen::MatrixX<Scalar>& reducedMatrix,
+		        const typename Eigen::NumTraits<Scalar>::Real asymmetryTolerance)
+		{
+			if (reducedMatrix.size() == 0)
+			{
+				return false;
+			}
+			const auto maximumAsymmetry =
+			        (reducedMatrix - reducedMatrix.adjoint()).cwiseAbs().maxCoeff();
+			const auto scaledTolerance = asymmetryTolerance
+			                             * static_cast<Eigen::NumTraits<Scalar>::Real>(
+			                                     reducedMatrix.size());
+			return maximumAsymmetry > scaledTolerance;
 		}
 
 
@@ -918,7 +949,9 @@ namespace SecUtility::Math
 		    || !std::isfinite(options.RecyclingRefinementTolerance)
 		    || options.RecyclingRefinementTolerance <= 0 || !std::isfinite(options.FreezingCoefficientTolerance)
 		    || options.FreezingCoefficientTolerance <= 0 || !std::isfinite(options.FreezingResidualNormTolerance)
-		    || options.FreezingResidualNormTolerance <= 0)
+		    || options.FreezingResidualNormTolerance <= 0
+		    || !std::isfinite(options.ReducedMatrixAsymmetryTolerance)
+		    || options.ReducedMatrixAsymmetryTolerance <= 0)
 		{
 			throw InvalidArgumentException("All numerical tolerances must be positive");
 		}
@@ -974,6 +1007,8 @@ namespace SecUtility::Math
 			        Max(m_Statistics.MaximumExpansionSpaceSize, expansionSpace.Vectors.cols());
 
 			// Solve in the current expansion space and match its Ritz vectors to the preceding collapsed space.
+			const bool areExplicitImagesRequired = DoesReducedMatrixRequireExplicitImages(
+			        FormReducedMatrix(expansionSpace), options.ReducedMatrixAsymmetryTolerance);
 			const bool isGeneralizedSolve = iterationIndex % options.GeneralizedSolveInterval == 0;
 			Eigen::VectorX<RealScalar> currentEigenvalues;
 			Eigen::MatrixX<Scalar> reducedEigenvectors;
@@ -1061,6 +1096,10 @@ namespace SecUtility::Math
 				m_Statistics.RecycledVectorCount += recyclingCoefficients.cols();
 			}
 			VectorImagePair<Scalar> retainedSpace = TransformVectorImagePair(expansionSpace, collapseCoefficients);
+			if (areExplicitImagesRequired)
+			{
+				RecalculateImages(linearOperator, retainedSpace, m_Statistics);
+			}
 
 			// Materialize inspectable results before evaluating any terminal condition.
 			if (intervalEigenpairCount > 0)

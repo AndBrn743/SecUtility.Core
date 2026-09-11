@@ -135,6 +135,28 @@ namespace
 		[[nodiscard]] Eigen::VectorXd Diagonal() const { return Eigen::VectorXd::Ones(3); }
 		[[nodiscard]] Eigen::VectorXd ApplyOn(const Eigen::VectorXd& vector) const { return vector; }
 	};
+
+
+	struct InitiallyInconsistentIdentityOperator
+	{
+		using Scalar = double;
+		mutable Eigen::Index ApplicationCount = 0;
+
+		[[nodiscard]] Eigen::Index rows() const noexcept { return 8; }
+		[[nodiscard]] Eigen::Index cols() const noexcept { return 8; }
+		[[nodiscard]] Eigen::VectorXd Diagonal() const { return Eigen::VectorXd::Ones(8); }
+
+		template <typename Derived>
+		[[nodiscard]] Eigen::MatrixXd ApplyOn(const Eigen::MatrixBase<Derived>& vectors) const
+		{
+			Eigen::MatrixXd images = vectors;
+			if (ApplicationCount++ == 0)
+			{
+				images.row(0) += vectors.row(1);
+			}
+			return images;
+		}
+	};
 }
 
 
@@ -250,6 +272,10 @@ TEMPLATE_TEST_CASE("iVI operator contract and input validation", "[Math][iVI]", 
 
 		options.FreezingCoefficientTolerance = RealScalar{1e-8};
 		options.FreezingResidualNormTolerance = std::numeric_limits<RealScalar>::infinity();
+		CHECK_THROWS_AS(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options), SecUtility::InvalidArgumentException);
+
+		options.FreezingResidualNormTolerance = RealScalar{1e-7};
+		options.ReducedMatrixAsymmetryTolerance = 0;
 		CHECK_THROWS_AS(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options), SecUtility::InvalidArgumentException);
 	}
 }
@@ -412,6 +438,56 @@ TEMPLATE_TEST_CASE("iVI solves standard and generalized reduced eigenproblems",
 	                vectorImagePair, false, standardEigenvalues, standardEigenvectors)
 	        == Eigen::Success);
 	CHECK(standardEigenvalues.isApprox(Eigen::VectorX<RealScalar>{{RealScalar{1}, RealScalar{12}}}));
+}
+
+
+TEMPLATE_TEST_CASE("iVI detects material reduced-matrix asymmetry",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixX<TestType> reducedMatrix = Eigen::MatrixX<TestType>::Zero(2, 2);
+	reducedMatrix(0, 0) = TestType{1};
+	reducedMatrix(1, 1) = TestType{2};
+	reducedMatrix(0, 1) = TestType{1};
+
+	CHECK(DoesReducedMatrixRequireExplicitImages(reducedMatrix, 0.1));
+	CHECK_FALSE(DoesReducedMatrixRequireExplicitImages(reducedMatrix, 0.3));
+	CHECK_FALSE(DoesReducedMatrixRequireExplicitImages(Eigen::MatrixX<TestType>(0, 0), 0.1));
+}
+
+
+TEMPLATE_TEST_CASE("iVI explicitly refreshes images",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	const auto linearOperator = IdentityOperator<TestType>(3);
+	VectorImagePair<TestType> vectorImagePair{
+	        Eigen::MatrixX<TestType>::Identity(3, 2), Eigen::MatrixX<TestType>::Zero(3, 2)};
+	InteriorEigenSolverStatistics statistics;
+
+	RecalculateImages(linearOperator, vectorImagePair, statistics);
+	CHECK(vectorImagePair.Images.isApprox(vectorImagePair.Vectors));
+	CHECK(statistics.ExplicitImageRecalculationCount == 1);
+	CHECK(statistics.MultipliedVectorCount == vectorImagePair.Vectors.cols());
+}
+
+
+TEST_CASE("iVI refreshes retained images after detecting inconsistent projected images", "[Math][iVI]")
+{
+	const InitiallyInconsistentIdentityOperator linearOperator;
+	InteriorEigenSolverOptions<double> options;
+	options.MaximumEigenpairCount = 8;
+	IterativeVectorInteractionSelfAdjointEigenSolver<InitiallyInconsistentIdentityOperator> solver;
+	solver.Compute(linearOperator, EigenvalueInterval<double>{0, 2}, options);
+
+	CHECK(solver.Status() == InteriorEigenSolverStatus::Converged);
+	CHECK(solver.Statistics().ExplicitImageRecalculationCount == 1);
+	CHECK(solver.Statistics().OperatorApplicationCount == 2);
+	CHECK(solver.ResidualNorms().isZero());
 }
 
 
