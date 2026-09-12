@@ -597,13 +597,21 @@ TEMPLATE_TEST_CASE("iVI detects material reduced-matrix asymmetry",
 	               (std::complex<double>))
 {
 	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
 	Eigen::MatrixX<TestType> reducedMatrix = Eigen::MatrixX<TestType>::Zero(2, 2);
 	reducedMatrix(0, 0) = TestType{1};
 	reducedMatrix(1, 1) = TestType{2};
 	reducedMatrix(0, 1) = TestType{1};
 
 	CHECK(DoesReducedMatrixRequireExplicitImages(reducedMatrix, 0.1));
-	CHECK_FALSE(DoesReducedMatrixRequireExplicitImages(reducedMatrix, 0.3));
+	CHECK_FALSE(DoesReducedMatrixRequireExplicitImages(reducedMatrix, 0.6));
+	CHECK(DoesReducedMatrixRequireExplicitImages((RealScalar{100} * reducedMatrix).eval(), 0.1));
+	CHECK_FALSE(DoesReducedMatrixRequireExplicitImages((RealScalar{100} * reducedMatrix).eval(), 0.6));
+
+	Eigen::MatrixX<TestType> largeReducedMatrix = Eigen::MatrixX<TestType>::Zero(20, 20);
+	largeReducedMatrix.diagonal().setConstant(TestType{2});
+	largeReducedMatrix(0, 1) = TestType{1};
+	CHECK(DoesReducedMatrixRequireExplicitImages(largeReducedMatrix, 0.1));
 	CHECK_FALSE(DoesReducedMatrixRequireExplicitImages(Eigen::MatrixX<TestType>(0, 0), 0.1));
 }
 

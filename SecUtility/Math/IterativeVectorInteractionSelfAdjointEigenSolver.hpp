@@ -838,8 +838,9 @@ namespace SecUtility::Math
 				return false;
 			}
 			const auto maximumAsymmetry = (reducedMatrix - reducedMatrix.adjoint()).cwiseAbs().maxCoeff();
-			const auto scaledTolerance =
-			        asymmetryTolerance * static_cast<Eigen::NumTraits<Scalar>::Real>(reducedMatrix.size());
+			const auto matrixScale =
+			        Max(typename Eigen::NumTraits<Scalar>::Real{1}, reducedMatrix.cwiseAbs().maxCoeff());
+			const auto scaledTolerance = asymmetryTolerance * matrixScale;
 			return maximumAsymmetry > scaledTolerance;
 		}
 
