@@ -516,38 +516,6 @@ TEMPLATE_TEST_CASE("iVI vector and image transformations remain aligned", "[Math
 }
 
 
-TEMPLATE_TEST_CASE("iVI restores retained vector orthonormality without losing image alignment",
-	               "[Math][iVI]",
-	               double,
-	               (std::complex<double>))
-{
-	using namespace Detail::IterativeVectorInteraction;
-	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(3, 3);
-	matrix.diagonal() << TestType{1}, TestType{2}, TestType{4};
-	Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Zero(3, 2);
-	vectors(0, 0) = TestType{2};
-	vectors(1, 0) = TestType{1};
-	vectors(1, 1) = TestType{3};
-	vectors(2, 1) = TestType{1};
-	VectorImagePair<TestType> vectorImagePair{vectors, matrix * vectors};
-
-	REQUIRE(SymmetricallyOrthonormalizeVectorImagePair(vectorImagePair) == Eigen::Success);
-	CHECK((vectorImagePair.Vectors.adjoint() * vectorImagePair.Vectors)
-	              .isApprox(Eigen::MatrixX<TestType>::Identity(2, 2), 1e-12));
-	CHECK(vectorImagePair.Images.isApprox(matrix * vectorImagePair.Vectors, 1e-12));
-}
-
-
-TEST_CASE("iVI rejects a rank-deficient retained vector-image pair", "[Math][iVI]")
-{
-	using namespace Detail::IterativeVectorInteraction;
-	Eigen::MatrixXd vectors(2, 2);
-	vectors << 1, 1, 0, 0;
-	VectorImagePair<double> vectorImagePair{vectors, vectors};
-	CHECK(SymmetricallyOrthonormalizeVectorImagePair(vectorImagePair) != Eigen::Success);
-}
-
-
 TEMPLATE_TEST_CASE("iVI solves standard and generalized reduced eigenproblems",
 	               "[Math][iVI]",
 	               double,
@@ -1172,7 +1140,11 @@ TEMPLATE_TEST_CASE("iVI recovers discarded previous Ritz directions in coefficie
 	selectedCoefficients(1, 0) = inverseSquareRootOfTwo;
 
 	const auto recyclingCoefficients =
-	        FormPreviousRitzVectorRecyclingCoefficients(selectedCoefficients, 2, RealScalar{1e-10}, RealScalar{1e-2});
+	        FormPreviousRitzVectorRecyclingCoefficients(Eigen::MatrixX<TestType>::Identity(3, 3).eval(),
+	                                                      selectedCoefficients,
+	                                                      2,
+	                                                      RealScalar{1e-10},
+	                                                      RealScalar{1e-2});
 	REQUIRE(recyclingCoefficients.rows() == 3);
 	REQUIRE(recyclingCoefficients.cols() == 1);
 	CHECK((selectedCoefficients.adjoint() * recyclingCoefficients).norm() < 1e-12);
@@ -1188,9 +1160,46 @@ TEST_CASE("iVI recycling discards directions already retained by Ritz selection"
 {
 	using namespace Detail::IterativeVectorInteraction;
 	const Eigen::MatrixXd selectedCoefficients = Eigen::MatrixXd::Identity(3, 2);
-	const auto recyclingCoefficients =
-	        FormPreviousRitzVectorRecyclingCoefficients(selectedCoefficients, 2, 1e-10, 1e-2);
+	const auto recyclingCoefficients = FormPreviousRitzVectorRecyclingCoefficients(
+	        Eigen::MatrixXd::Identity(3, 3).eval(), selectedCoefficients, 2, 1e-10, 1e-2);
 	CHECK(recyclingCoefficients.cols() == 0);
+}
+
+
+TEMPLATE_TEST_CASE("iVI recycling preserves selected generalized Ritz vectors",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixX<TestType> expansionVectors = Eigen::MatrixX<TestType>::Zero(3, 3);
+	expansionVectors.diagonal() << TestType{2}, TestType{3}, TestType{4};
+	Eigen::MatrixX<TestType> selectedCoefficients = Eigen::MatrixX<TestType>::Zero(3, 2);
+	selectedCoefficients(1, 0) = TestType{1} / TestType{3};
+	selectedCoefficients(2, 1) = TestType{1} / TestType{4};
+
+	InteriorIterationAnalysis<TestType> analysis;
+	analysis.OrderedRitzPairs.Eigenvalues = Eigen::Vector3d{{1, 2, 3}};
+	analysis.OrderedRitzPairs.Eigenvectors = Eigen::MatrixX<TestType>::Zero(3, 3);
+	analysis.OrderedRitzPairs.Eigenvectors.leftCols(2) = selectedCoefficients;
+	analysis.RetainedVectorCount = 2;
+	InteriorIterationState<TestType> state;
+	state.ExpansionSpace = {expansionVectors, expansionVectors};
+	state.PreviousPrimaryVectorCount = 1;
+	state.IsPreviousRitzVectorRecyclingActive = true;
+	InteriorEigenSolverOptions<double> options{2};
+	options.IsPreviousRitzVectorRecyclingDynamicallyEnabled = false;
+	InteriorEigenSolverStatistics statistics;
+
+	const Eigen::MatrixX<TestType> collapseCoefficients =
+	        FormCollapseCoefficients(analysis, 1, options, state, statistics);
+
+	REQUIRE(collapseCoefficients.cols() == 3);
+	CHECK(collapseCoefficients.leftCols(2).isApprox(selectedCoefficients));
+	const Eigen::MatrixX<TestType> retainedVectors = expansionVectors * collapseCoefficients;
+	CHECK((retainedVectors.adjoint() * retainedVectors)
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(3, 3), 1e-12));
+	CHECK(statistics.RecycledVectorCount == 1);
 }
 
 

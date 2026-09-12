@@ -12,6 +12,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
+#include <Eigen/QR>
 
 #include <algorithm>
 #include <cmath>
@@ -767,7 +768,56 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
+		Eigen::MatrixX<Scalar> OrthogonalizeCoefficientDirectionsInVectorSpace(
+		        const Eigen::MatrixX<Scalar>& expansionVectors,
+		        const Eigen::MatrixX<Scalar>& basisCoefficients,
+		        const Eigen::MatrixX<Scalar>& candidateCoefficients,
+		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
+		{
+			using RealScalar = Eigen::NumTraits<Scalar>::Real;
+			const Eigen::MatrixX<Scalar> basisVectors = expansionVectors * basisCoefficients;
+			Eigen::MatrixX<Scalar> projectedCoefficients = candidateCoefficients;
+			if (basisCoefficients.cols() > 0)
+			{
+				projectedCoefficients -= basisCoefficients
+				                         * (basisVectors.adjoint()
+				                            * (expansionVectors * candidateCoefficients));
+			}
+
+			const Eigen::MatrixX<Scalar> projectedVectors = expansionVectors * projectedCoefficients;
+			if (projectedVectors.cols() == 0)
+			{
+				return projectedCoefficients;
+			}
+			Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(projectedVectors);
+			const RealScalar maximumPivot = qr.maxPivot();
+			if (maximumPivot > RealScalar{})
+			{
+				// The public tolerance historically applies to squared vector magnitudes.
+				// Convert it to QR's relative pivot threshold while preserving the unit scale floor.
+				const RealScalar absoluteThreshold =
+				        std::sqrt(relativeLinearDependenceTolerance) * Max(RealScalar{1}, maximumPivot);
+				qr.setThreshold(absoluteThreshold / maximumPivot);
+			}
+			const Eigen::Index rank = qr.rank();
+			if (rank == 0)
+			{
+				return Eigen::MatrixX<Scalar>(projectedCoefficients.rows(), 0);
+			}
+
+			const Eigen::MatrixX<Scalar> permutedCoefficients = projectedCoefficients * qr.colsPermutation();
+			const Eigen::MatrixX<Scalar> inverseLeadingUpperFactor =
+			        qr.matrixR()
+			                .topLeftCorner(rank, rank)
+			                .template triangularView<Eigen::Upper>()
+			                .solve(Eigen::MatrixX<Scalar>::Identity(rank, rank));
+			return permutedCoefficients.leftCols(rank) * inverseLeadingUpperFactor;
+		}
+
+
+		template <typename Scalar>
 		Eigen::MatrixX<Scalar> FormPreviousRitzVectorRecyclingCoefficients(
+		        const Eigen::MatrixX<Scalar>& expansionVectors,
 		        const Eigen::MatrixX<Scalar>& selectedRitzCoefficients,
 		        const Eigen::Index previousPrimaryVectorCount,
 		        const typename Eigen::NumTraits<Scalar>::Real linearDependenceTolerance,
@@ -776,10 +826,15 @@ namespace SecUtility::Math
 			Eigen::MatrixX<Scalar> previousPrimaryCoefficients =
 			        Eigen::MatrixX<Scalar>::Zero(selectedRitzCoefficients.rows(), previousPrimaryVectorCount);
 			previousPrimaryCoefficients.topRows(previousPrimaryVectorCount).setIdentity();
-			Eigen::MatrixX<Scalar> recyclingCoefficients = OrthogonalizeAndRemoveLinearDependence(
-			        selectedRitzCoefficients, previousPrimaryCoefficients, linearDependenceTolerance);
-			return OrthogonalizeAndRemoveLinearDependence(
-			        selectedRitzCoefficients, recyclingCoefficients, refinementTolerance);
+			Eigen::MatrixX<Scalar> recyclingCoefficients = OrthogonalizeCoefficientDirectionsInVectorSpace(
+			        expansionVectors,
+			        selectedRitzCoefficients,
+			        previousPrimaryCoefficients,
+			        linearDependenceTolerance);
+			return OrthogonalizeCoefficientDirectionsInVectorSpace(expansionVectors,
+			                                                        selectedRitzCoefficients,
+			                                                        recyclingCoefficients,
+			                                                        refinementTolerance);
 		}
 
 
@@ -788,37 +843,6 @@ namespace SecUtility::Math
 		                                                 const Eigen::MatrixX<Scalar>& coefficients)
 		{
 			return {source.Vectors * coefficients, source.Images * coefficients};
-		}
-
-
-		template <typename Scalar>
-		Eigen::ComputationInfo SymmetricallyOrthonormalizeVectorImagePair(VectorImagePair<Scalar>& ref_vectorImagePair)
-		{
-			const Eigen::MatrixX<Scalar> gramMatrix =
-			        ref_vectorImagePair.Vectors.adjoint() * ref_vectorImagePair.Vectors;
-			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> gramEigenSolver(gramMatrix,
-			                                                                            Eigen::EigenvaluesOnly);
-			if (gramEigenSolver.info() != Eigen::Success)
-			{
-				return gramEigenSolver.info();
-			}
-			const auto& gramEigenvalues = gramEigenSolver.eigenvalues();
-			const auto minimumAcceptableGramEigenvalue =
-			        std::numeric_limits<typename Eigen::NumTraits<Scalar>::Real>::epsilon()
-			        * static_cast<Eigen::NumTraits<Scalar>::Real>(gramMatrix.rows()) * gramEigenvalues.cend()[-1];
-			if (gramEigenvalues[0] <= minimumAcceptableGramEigenvalue)
-			{
-				return Eigen::NumericalIssue;
-			}
-			const Eigen::LLT<Eigen::MatrixX<Scalar>> choleskyDecomposition(gramMatrix);
-			if (choleskyDecomposition.info() != Eigen::Success)
-			{
-				return choleskyDecomposition.info();
-			}
-			const Eigen::MatrixX<Scalar> inverseUpperFactor = choleskyDecomposition.matrixU().solve(
-			        Eigen::MatrixX<Scalar>::Identity(gramMatrix.rows(), gramMatrix.cols()));
-			ref_vectorImagePair = TransformVectorImagePair(ref_vectorImagePair, inverseUpperFactor);
-			return Eigen::Success;
 		}
 
 
@@ -1132,10 +1156,12 @@ namespace SecUtility::Math
 			}
 
 			const Eigen::MatrixX<Scalar> recyclingCoefficients =
-			        FormPreviousRitzVectorRecyclingCoefficients(coefficients,
-			                                                    ref_state.PreviousPrimaryVectorCount,
-			                                                    options.PreviousRitzVectorRecyclingTolerance,
-			                                                    options.RecyclingRefinementTolerance);
+			        FormPreviousRitzVectorRecyclingCoefficients(
+			                ref_state.ExpansionSpace.Vectors,
+			                coefficients,
+			                ref_state.PreviousPrimaryVectorCount,
+			                options.PreviousRitzVectorRecyclingTolerance,
+			                options.RecyclingRefinementTolerance);
 			const Eigen::Index selectedColumnCount = coefficients.cols();
 			coefficients.conservativeResize(Eigen::NoChange, selectedColumnCount + recyclingCoefficients.cols());
 			coefficients.rightCols(recyclingCoefficients.cols()) = recyclingCoefficients;
@@ -1373,12 +1399,6 @@ namespace SecUtility::Math
 			        FormCollapseCoefficients(analysis, iterationIndex, options, state, m_Statistics);
 			VectorImagePair<Scalar> retainedSpace =
 			        TransformVectorImagePair(state.ExpansionSpace, collapseCoefficients);
-			if (analysis.IsGeneralizedSolve
-			    && SymmetricallyOrthonormalizeVectorImagePair(retainedSpace) != Eigen::Success)
-			{
-				m_Status = InteriorEigenSolverStatus::NumericalFailure;
-				return m_Status;
-			}
 			if (analysis.AreExplicitImagesRequired)
 			{
 				RecalculateImages(linearOperator, retainedSpace, m_Statistics);
