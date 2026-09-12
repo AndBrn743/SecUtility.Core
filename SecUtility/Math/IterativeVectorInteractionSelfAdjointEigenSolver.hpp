@@ -62,7 +62,8 @@ namespace SecUtility::Math
 	{
 		explicit constexpr InteriorEigenSolverOptions(const Eigen::Index eigenpairCountLimit) noexcept
 		    : EigenpairCountLimit(eigenpairCountLimit)
-		{}
+		{
+		}
 
 		// This limits the expected result count, but an exceeded result may expose every
 		// residual-validated candidate so the overflow can be inspected.
@@ -170,8 +171,7 @@ namespace SecUtility::Math
 
 
 	template <typename Operator>
-	concept SelfAdjointLinearOperatorBase = requires(const std::remove_reference_t<Operator>& linearOperator)
-	{
+	concept SelfAdjointLinearOperatorBase = requires(const std::remove_reference_t<Operator>& linearOperator) {
 		typename LinearOperatorScalar<Operator>;
 		typename LinearOperatorRealScalar<Operator>;
 		requires Detail::IsSupportedEigenSolverScalar<LinearOperatorScalar<Operator>>;
@@ -181,46 +181,44 @@ namespace SecUtility::Math
 
 		{ linearOperator.Diagonal().size() } -> std::convertible_to<Eigen::Index>;
 		{ linearOperator.Diagonal()[Eigen::Index{}] } -> std::convertible_to<LinearOperatorRealScalar<Operator>>;
-
 	};
 
 
 	template <typename Operator>
-	concept ScalarSelfAdjointLinearOperator = SelfAdjointLinearOperatorBase<Operator>
-	                                        && requires(
-	                                                const std::remove_reference_t<Operator>& linearOperator,
-	                                                const Eigen::VectorX<LinearOperatorScalar<Operator>>& vector)
-	{
-		{ linearOperator.ApplyOn(vector).size() } -> std::convertible_to<Eigen::Index>;
-		{ linearOperator.ApplyOn(vector)[Eigen::Index{}] }
-		        -> std::convertible_to<LinearOperatorScalar<Operator>>;
-	};
+	concept ScalarSelfAdjointLinearOperator =
+	        SelfAdjointLinearOperatorBase<Operator>
+	        && requires(const std::remove_reference_t<Operator>& linearOperator,
+	                    const Eigen::VectorX<LinearOperatorScalar<Operator>>& vector) {
+		           { linearOperator.ApplyOn(vector).size() } -> std::convertible_to<Eigen::Index>;
+		           {
+			           linearOperator.ApplyOn(vector)[Eigen::Index{}]
+		           } -> std::convertible_to<LinearOperatorScalar<Operator>>;
+	           };
 
 
 	template <typename Operator>
-	concept BlockSelfAdjointLinearOperator = SelfAdjointLinearOperatorBase<Operator>
-	                                      && requires(
-	                                              const std::remove_reference_t<Operator>& linearOperator,
-	                                              const Eigen::MatrixX<LinearOperatorScalar<Operator>>& vectors)
-	{
-		{ linearOperator.ApplyOn(vectors).rows() } -> std::convertible_to<Eigen::Index>;
-		{ linearOperator.ApplyOn(vectors).cols() } -> std::convertible_to<Eigen::Index>;
-		{ linearOperator.ApplyOn(vectors)(Eigen::Index{}, Eigen::Index{}) }
-		        -> std::convertible_to<LinearOperatorScalar<Operator>>;
-	};
+	concept BlockSelfAdjointLinearOperator =
+	        SelfAdjointLinearOperatorBase<Operator>
+	        && requires(const std::remove_reference_t<Operator>& linearOperator,
+	                    const Eigen::MatrixX<LinearOperatorScalar<Operator>>& vectors) {
+		           { linearOperator.ApplyOn(vectors).rows() } -> std::convertible_to<Eigen::Index>;
+		           { linearOperator.ApplyOn(vectors).cols() } -> std::convertible_to<Eigen::Index>;
+		           {
+			           linearOperator.ApplyOn(vectors)(Eigen::Index{}, Eigen::Index{})
+		           } -> std::convertible_to<LinearOperatorScalar<Operator>>;
+	           };
 
 
 	template <typename Operator>
-	concept SelfAdjointLinearOperator = ScalarSelfAdjointLinearOperator<Operator>
-	                                  || BlockSelfAdjointLinearOperator<Operator>;
+	concept SelfAdjointLinearOperator =
+	        ScalarSelfAdjointLinearOperator<Operator> || BlockSelfAdjointLinearOperator<Operator>;
 
 
 	namespace Detail::IterativeVectorInteraction
 	{
 		template <typename Scalar>
 		Eigen::MatrixX<typename Eigen::NumTraits<Scalar>::Real> FormRitzPopulationMatrix(
-		        const Eigen::MatrixX<Scalar>& reducedEigenvectors,
-		        const Eigen::Index previousRetainedVectorCount)
+		        const Eigen::MatrixX<Scalar>& reducedEigenvectors, const Eigen::Index previousRetainedVectorCount)
 		{
 			return reducedEigenvectors.topRows(previousRetainedVectorCount).transpose().cwiseAbs2();
 		}
@@ -247,8 +245,8 @@ namespace SecUtility::Math
 				match.Population = populations(currentIndex, match.PreviousIndex);
 				match.IsPrimaryVectorContinuation = match.PreviousIndex < previousPrimaryVectorCount;
 				match.IsRetainedVectorContinuation = match.PreviousIndex < previousRetainedVectorCount;
-				match.IsWeakMatch = match.Population <= weakMatchPopulationThreshold
-				                    || !match.IsPrimaryVectorContinuation;
+				match.IsWeakMatch =
+				        match.Population <= weakMatchPopulationThreshold || !match.IsPrimaryVectorContinuation;
 			}
 			return matches;
 		}
@@ -262,14 +260,13 @@ namespace SecUtility::Math
 		{
 			std::vector<Eigen::Index> sortedPopulationIndices(static_cast<std::size_t>(populations.size()));
 			std::iota(sortedPopulationIndices.begin(), sortedPopulationIndices.end(), Eigen::Index{0});
-			std::ranges::stable_sort(
-			        sortedPopulationIndices,
-			        std::greater<>{},
-			        [&populations](const Eigen::Index index) { return populations.data()[index]; });
+			std::ranges::stable_sort(sortedPopulationIndices,
+			                         std::greater<>{},
+			                         [&populations](const Eigen::Index index) { return populations.data()[index]; });
 
 			std::vector isCurrentIndexAssigned(static_cast<std::size_t>(populations.rows()), false);
 			std::vector isPreviousIndexAssigned(static_cast<std::size_t>(populations.cols()), false);
-			std::vector previousIndexForCurrentIndex( static_cast<std::size_t>(populations.rows()), Eigen::Index{-1});
+			std::vector previousIndexForCurrentIndex(static_cast<std::size_t>(populations.rows()), Eigen::Index{-1});
 			Eigen::Index assignmentCount = 0;
 			const Eigen::Index maximumAssignmentCount = Min(populations.rows(), populations.cols());
 			for (const Eigen::Index populationIndex : sortedPopulationIndices)
@@ -318,12 +315,9 @@ namespace SecUtility::Math
 			const bool isCurrentSideSmaller = populations.rows() <= populations.cols();
 			const Eigen::Index workerCount = isCurrentSideSmaller ? populations.rows() : populations.cols();
 			const Eigen::Index jobCount = isCurrentSideSmaller ? populations.cols() : populations.rows();
-			const auto populationAt = [&populations, isCurrentSideSmaller](const Eigen::Index workerIndex,
-			                                                                       const Eigen::Index jobIndex)
-			{
-				return isCurrentSideSmaller ? populations(workerIndex, jobIndex)
-				                            : populations(jobIndex, workerIndex);
-			};
+			const auto populationAt =
+			        [&populations, isCurrentSideSmaller](const Eigen::Index workerIndex, const Eigen::Index jobIndex)
+			{ return isCurrentSideSmaller ? populations(workerIndex, jobIndex) : populations(jobIndex, workerIndex); };
 
 			std::vector<RealScalar> workerPotentials(static_cast<std::size_t>(workerCount + 1));
 			std::vector<RealScalar> jobPotentials(static_cast<std::size_t>(jobCount + 1));
@@ -332,8 +326,8 @@ namespace SecUtility::Math
 			for (Eigen::Index worker = 1; worker <= workerCount; worker++)
 			{
 				workerForJob[0] = worker;
-				std::vector<RealScalar> minimumReducedCosts(
-				        static_cast<std::size_t>(jobCount + 1), std::numeric_limits<RealScalar>::infinity());
+				std::vector<RealScalar> minimumReducedCosts(static_cast<std::size_t>(jobCount + 1),
+				                                            std::numeric_limits<RealScalar>::infinity());
 				std::vector<std::uint8_t> isJobInAlternatingTree(static_cast<std::size_t>(jobCount + 1));
 				Eigen::Index currentJob = 0;
 				do
@@ -348,10 +342,9 @@ namespace SecUtility::Math
 						{
 							continue;
 						}
-						const RealScalar reducedCost =
-						        -populationAt(currentWorker - 1, job - 1)
-						        - workerPotentials[static_cast<std::size_t>(currentWorker)]
-						        - jobPotentials[static_cast<std::size_t>(job)];
+						const RealScalar reducedCost = -populationAt(currentWorker - 1, job - 1)
+						                               - workerPotentials[static_cast<std::size_t>(currentWorker)]
+						                               - jobPotentials[static_cast<std::size_t>(job)];
 						if (reducedCost < minimumReducedCosts[static_cast<std::size_t>(job)])
 						{
 							minimumReducedCosts[static_cast<std::size_t>(job)] = reducedCost;
@@ -368,8 +361,8 @@ namespace SecUtility::Math
 					{
 						if (isJobInAlternatingTree[static_cast<std::size_t>(job)])
 						{
-							workerPotentials[static_cast<std::size_t>(workerForJob[static_cast<std::size_t>(job)])]
-							        += smallestReducedCost;
+							workerPotentials[static_cast<std::size_t>(workerForJob[static_cast<std::size_t>(job)])] +=
+							        smallestReducedCost;
 							jobPotentials[static_cast<std::size_t>(job)] -= smallestReducedCost;
 						}
 						else
@@ -415,19 +408,16 @@ namespace SecUtility::Math
 		        const Eigen::Index previousRetainedVectorCount,
 		        const RealScalar weakMatchPopulationThreshold = RealScalar{0.5})
 		{
-			return MatchRitzVectors_Hungarian(populations,
-			                                   previousPrimaryVectorCount,
-			                                   previousRetainedVectorCount,
-			                                   weakMatchPopulationThreshold);
+			return MatchRitzVectors_Hungarian(
+			        populations, previousPrimaryVectorCount, previousRetainedVectorCount, weakMatchPopulationThreshold);
 		}
 
 
 		template <typename RealScalar>
-		void UpdateInteriorRitzConvergence(
-		        InteriorRitzSelection<RealScalar>& ref_selection,
-		        const Eigen::VectorX<RealScalar>& currentEigenvalues,
-		        const std::vector<RitzVectorMatch<RealScalar>>& matches,
-		        const Eigen::VectorX<RealScalar>& previousEigenvalues)
+		void UpdateInteriorRitzConvergence(InteriorRitzSelection<RealScalar>& ref_selection,
+		                                   const Eigen::VectorX<RealScalar>& currentEigenvalues,
+		                                   const std::vector<RitzVectorMatch<RealScalar>>& matches,
+		                                   const Eigen::VectorX<RealScalar>& previousEigenvalues)
 		{
 			ref_selection.MaximumMatchedEigenvalueChange = std::numeric_limits<RealScalar>::infinity();
 			ref_selection.HasUnmatchedIntervalRitzVector = false;
@@ -440,9 +430,8 @@ namespace SecUtility::Math
 					ref_selection.HasUnmatchedIntervalRitzVector = true;
 					continue;
 				}
-				maximumChange = Max(
-				        maximumChange,
-				        Abs(currentEigenvalues[currentIndex] - previousEigenvalues[match.PreviousIndex]));
+				maximumChange = Max(maximumChange,
+				                    Abs(currentEigenvalues[currentIndex] - previousEigenvalues[match.PreviousIndex]));
 			}
 			if (!ref_selection.IntervalRitzIndices.empty() && !ref_selection.HasUnmatchedIntervalRitzVector)
 			{
@@ -475,7 +464,8 @@ namespace SecUtility::Math
 			selection.IsEigenpairCountLimitExceeded =
 			        static_cast<Eigen::Index>(selection.IntervalRitzIndices.size()) > maximumEigenpairCount;
 
-			// Compare each target with its previous identity match. A new or weakly matched target prevents convergence.
+			// Compare each target with its previous identity match. A new or weakly matched target prevents
+			// convergence.
 			UpdateInteriorRitzConvergence(selection, currentEigenvalues, matches, previousEigenvalues);
 
 			// Retain complete near-degenerate clusters straddling either interval boundary.
@@ -484,8 +474,8 @@ namespace SecUtility::Math
 			{
 				Eigen::Index adjacentIndex = selection.IntervalRitzIndices.front();
 				for (Eigen::Index index = adjacentIndex - 1;
-				     index >= 0 && currentEigenvalues[adjacentIndex] - currentEigenvalues[index]
-				                           <= boundaryDegeneracyTolerance;
+				     index >= 0
+				     && currentEigenvalues[adjacentIndex] - currentEigenvalues[index] <= boundaryDegeneracyTolerance;
 				     index--)
 				{
 					isBoundaryContinuation[static_cast<std::size_t>(index)] = true;
@@ -528,8 +518,10 @@ namespace SecUtility::Math
 			                 candidates.end(),
 			                 [&matches, &distanceFromInterval](const Eigen::Index lhs, const Eigen::Index rhs)
 			                 {
-				                 const bool isLhsContinuation = matches[static_cast<std::size_t>(lhs)].IsRetainedVectorContinuation;
-				                 const bool isRhsContinuation = matches[static_cast<std::size_t>(rhs)].IsRetainedVectorContinuation;
+				                 const bool isLhsContinuation =
+				                         matches[static_cast<std::size_t>(lhs)].IsRetainedVectorContinuation;
+				                 const bool isRhsContinuation =
+				                         matches[static_cast<std::size_t>(rhs)].IsRetainedVectorContinuation;
 				                 if (isLhsContinuation != isRhsContinuation)
 				                 {
 					                 return isLhsContinuation;
@@ -538,11 +530,11 @@ namespace SecUtility::Math
 			                 });
 
 			// Boundary-cluster continuations do not consume the configured additional-vector allowance.
-			const Eigen::Index retainedCandidateCount = Min(
-			        additionalRitzVectorCount, static_cast<Eigen::Index>(candidates.size()));
+			const Eigen::Index retainedCandidateCount =
+			        Min(additionalRitzVectorCount, static_cast<Eigen::Index>(candidates.size()));
 			selection.AdditionalRitzIndices.insert(selection.AdditionalRitzIndices.end(),
-			                                           candidates.begin(),
-			                                           candidates.begin() + retainedCandidateCount);
+			                                       candidates.begin(),
+			                                       candidates.begin() + retainedCandidateCount);
 			return selection;
 		}
 
@@ -572,8 +564,9 @@ namespace SecUtility::Math
 
 			PermutedRitzPairs<Scalar> result{
 			        Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>(eigenvalues.size()),
-			        Eigen::MatrixX<Scalar>(eigenvectors.rows(), eigenvectors.cols())  /*,
-			        order*/};
+			        Eigen::MatrixX<Scalar>(eigenvectors.rows(),
+			                               eigenvectors.cols()) /*,
+order*/};
 			for (Eigen::Index destinationIndex = 0; destinationIndex < eigenvalues.size(); destinationIndex++)
 			{
 				const Eigen::Index sourceIndex = order[static_cast<std::size_t>(destinationIndex)];
@@ -585,19 +578,18 @@ namespace SecUtility::Math
 
 
 		inline Eigen::Index CalculatePrimaryRitzVectorCount(const Eigen::Index intervalEigenpairCount,
-		                                                  const Eigen::Index frozenVectorCount,
-		                                                  const Eigen::Index availableRitzVectorCount)
+		                                                    const Eigen::Index frozenVectorCount,
+		                                                    const Eigen::Index availableRitzVectorCount)
 		{
-			const Eigen::Index requestedCount = Max(
-			        6 + frozenVectorCount, 3 * intervalEigenpairCount + frozenVectorCount);
+			const Eigen::Index requestedCount =
+			        Max(6 + frozenVectorCount, 3 * intervalEigenpairCount + frozenVectorCount);
 			return Min(requestedCount, availableRitzVectorCount);
 		}
 
 
 		template <typename RealScalar>
-		bool IsPreviousRitzVectorRecyclingActiveFor(
-		        const bool isCurrentlyActive,
-		        const RealScalar maximumMatchedEigenvalueChange)
+		bool IsPreviousRitzVectorRecyclingActiveFor(const bool isCurrentlyActive,
+		                                            const RealScalar maximumMatchedEigenvalueChange)
 		{
 			if (maximumMatchedEigenvalueChange > static_cast<RealScalar>(0.1)
 			    || maximumMatchedEigenvalueChange < static_cast<RealScalar>(1e-5))
@@ -640,20 +632,19 @@ namespace SecUtility::Math
 
 
 		template <typename RealScalar>
-		void DemoteUnvalidatedExcessIntervalRitzVectors(
-		        InteriorRitzSelection<RealScalar>& ref_selection,
-		        const Eigen::VectorX<RealScalar>& residualNorms,
-		        const Eigen::Index maximumEigenpairCount,
-		        const RealScalar residualNormTolerance)
+		void DemoteUnvalidatedExcessIntervalRitzVectors(InteriorRitzSelection<RealScalar>& ref_selection,
+		                                                const Eigen::VectorX<RealScalar>& residualNorms,
+		                                                const Eigen::Index maximumEigenpairCount,
+		                                                const RealScalar residualNormTolerance)
 		{
 			if (!ref_selection.IsEigenpairCountLimitExceeded)
 			{
 				return;
 			}
-			const bool areAllIntervalCandidatesValidated = std::ranges::all_of(
-			        ref_selection.IntervalRitzIndices,
-			        [&residualNorms, residualNormTolerance](const Eigen::Index index)
-			        { return residualNorms[index] <= residualNormTolerance; });
+			const bool areAllIntervalCandidatesValidated =
+			        std::ranges::all_of(ref_selection.IntervalRitzIndices,
+			                            [&residualNorms, residualNormTolerance](const Eigen::Index index)
+			                            { return residualNorms[index] <= residualNormTolerance; });
 			if (areAllIntervalCandidatesValidated)
 			{
 				return;
@@ -663,10 +654,10 @@ namespace SecUtility::Math
 			                 ref_selection.IntervalRitzIndices.end(),
 			                 [&residualNorms](const Eigen::Index lhs, const Eigen::Index rhs)
 			                 { return residualNorms[lhs] < residualNorms[rhs]; });
-			ref_selection.AdditionalRitzIndices.insert(
-			        ref_selection.AdditionalRitzIndices.begin(),
-			        ref_selection.IntervalRitzIndices.begin() + maximumEigenpairCount,
-			        ref_selection.IntervalRitzIndices.end());
+			ref_selection.AdditionalRitzIndices.insert(ref_selection.AdditionalRitzIndices.begin(),
+			                                           ref_selection.IntervalRitzIndices.begin()
+			                                                   + maximumEigenpairCount,
+			                                           ref_selection.IntervalRitzIndices.end());
 			ref_selection.IntervalRitzIndices.resize(static_cast<std::size_t>(maximumEigenpairCount));
 			ref_selection.IsEigenpairCountLimitExceeded = false;
 		}
@@ -706,13 +697,11 @@ namespace SecUtility::Math
 
 
 		template <SelfAdjointLinearOperator Operator>
-		void RecalculateImages(
-		        const Operator& linearOperator,
-		        VectorImagePair<LinearOperatorScalar<Operator>>& ref_vectorImagePair,
-		        InteriorEigenSolverStatistics& ref_statistics)
+		void RecalculateImages(const Operator& linearOperator,
+		                       VectorImagePair<LinearOperatorScalar<Operator>>& ref_vectorImagePair,
+		                       InteriorEigenSolverStatistics& ref_statistics)
 		{
-			ref_vectorImagePair.Images =
-			        ApplyOperator(linearOperator, ref_vectorImagePair.Vectors, ref_statistics);
+			ref_vectorImagePair.Images = ApplyOperator(linearOperator, ref_vectorImagePair.Vectors, ref_statistics);
 			ref_statistics.ExplicitImageRecalculationCount++;
 		}
 
@@ -751,12 +740,12 @@ namespace SecUtility::Math
 			const RealScalar largestEigenvalue = gramEigenvalues.cend()[-1];
 			const RealScalar rejectionThreshold =
 			        relativeLinearDependenceTolerance * Max(RealScalar{1}, largestEigenvalue);
-			const auto firstAcceptedIndex = static_cast<Eigen::Index>(std::distance(
-			        gramEigenvalues.begin(),
-			        std::find_if(gramEigenvalues.begin(),
-			                     gramEigenvalues.end(),
-			                     [rejectionThreshold](const RealScalar eigenvalue)
-			                     { return eigenvalue >= rejectionThreshold; })));
+			const auto firstAcceptedIndex = static_cast<Eigen::Index>(
+			        std::distance(gramEigenvalues.begin(),
+			                      std::find_if(gramEigenvalues.begin(),
+			                                   gramEigenvalues.end(),
+			                                   [rejectionThreshold](const RealScalar eigenvalue)
+			                                   { return eigenvalue >= rejectionThreshold; })));
 			const Eigen::Index acceptedCount = vectors.cols() - firstAcceptedIndex;
 			if (acceptedCount == 0)
 			{
@@ -775,8 +764,8 @@ namespace SecUtility::Math
 		        const Eigen::MatrixX<Scalar>& candidates,
 		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
 		{
-			return SymmetricallyOrthonormalize(
-			        ProjectAgainstBasis(basis, candidates), relativeLinearDependenceTolerance);
+			return SymmetricallyOrthonormalize(ProjectAgainstBasis(basis, candidates),
+			                                   relativeLinearDependenceTolerance);
 		}
 
 
@@ -806,13 +795,12 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
-		Eigen::ComputationInfo SymmetricallyOrthonormalizeVectorImagePair(
-		        VectorImagePair<Scalar>& ref_vectorImagePair)
+		Eigen::ComputationInfo SymmetricallyOrthonormalizeVectorImagePair(VectorImagePair<Scalar>& ref_vectorImagePair)
 		{
 			const Eigen::MatrixX<Scalar> gramMatrix =
 			        ref_vectorImagePair.Vectors.adjoint() * ref_vectorImagePair.Vectors;
-			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> gramEigenSolver(
-			        gramMatrix, Eigen::EigenvaluesOnly);
+			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> gramEigenSolver(gramMatrix,
+			                                                                            Eigen::EigenvaluesOnly);
 			if (gramEigenSolver.info() != Eigen::Success)
 			{
 				return gramEigenSolver.info();
@@ -820,8 +808,7 @@ namespace SecUtility::Math
 			const auto& gramEigenvalues = gramEigenSolver.eigenvalues();
 			const auto minimumAcceptableGramEigenvalue =
 			        std::numeric_limits<typename Eigen::NumTraits<Scalar>::Real>::epsilon()
-			        * static_cast<Eigen::NumTraits<Scalar>::Real>(gramMatrix.rows())
-			        * gramEigenvalues.cend()[-1];
+			        * static_cast<Eigen::NumTraits<Scalar>::Real>(gramMatrix.rows()) * gramEigenvalues.cend()[-1];
 			if (gramEigenvalues[0] <= minimumAcceptableGramEigenvalue)
 			{
 				return Eigen::NumericalIssue;
@@ -846,19 +833,16 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
-		bool DoesReducedMatrixRequireExplicitImages(
-		        const Eigen::MatrixX<Scalar>& reducedMatrix,
-		        const typename Eigen::NumTraits<Scalar>::Real asymmetryTolerance)
+		bool DoesReducedMatrixRequireExplicitImages(const Eigen::MatrixX<Scalar>& reducedMatrix,
+		                                            const typename Eigen::NumTraits<Scalar>::Real asymmetryTolerance)
 		{
 			if (reducedMatrix.size() == 0)
 			{
 				return false;
 			}
-			const auto maximumAsymmetry =
-			        (reducedMatrix - reducedMatrix.adjoint()).cwiseAbs().maxCoeff();
-			const auto scaledTolerance = asymmetryTolerance
-			                             * static_cast<Eigen::NumTraits<Scalar>::Real>(
-			                                     reducedMatrix.size());
+			const auto maximumAsymmetry = (reducedMatrix - reducedMatrix.adjoint()).cwiseAbs().maxCoeff();
+			const auto scaledTolerance =
+			        asymmetryTolerance * static_cast<Eigen::NumTraits<Scalar>::Real>(reducedMatrix.size());
 			return maximumAsymmetry > scaledTolerance;
 		}
 
@@ -875,8 +859,8 @@ namespace SecUtility::Math
 			{
 				const Eigen::MatrixX<Scalar> overlapMatrix =
 				        vectorImagePair.Vectors.adjoint() * vectorImagePair.Vectors;
-				const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> overlapEigenSolver(
-				        overlapMatrix, Eigen::EigenvaluesOnly);
+				const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> overlapEigenSolver(overlapMatrix,
+				                                                                               Eigen::EigenvaluesOnly);
 				if (overlapEigenSolver.info() != Eigen::Success)
 				{
 					return overlapEigenSolver.info();
@@ -890,8 +874,8 @@ namespace SecUtility::Math
 				{
 					return Eigen::NumericalIssue;
 				}
-				const Eigen::GeneralizedSelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> eigenSolver(
-				        reducedMatrix, overlapMatrix);
+				const Eigen::GeneralizedSelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> eigenSolver(reducedMatrix,
+				                                                                                   overlapMatrix);
 				if (eigenSolver.info() == Eigen::Success)
 				{
 					out_eigenvalues = eigenSolver.eigenvalues();
@@ -934,17 +918,14 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
-		void SortEigenpairsInAscendingOrder(
-		        Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& ref_eigenvalues,
-		        Eigen::MatrixX<Scalar>& ref_eigenvectors,
-		        Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& ref_residualNorms)
+		void SortEigenpairsInAscendingOrder(Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& ref_eigenvalues,
+		                                    Eigen::MatrixX<Scalar>& ref_eigenvectors,
+		                                    Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& ref_residualNorms)
 		{
 			std::vector<Eigen::Index> indices(static_cast<std::size_t>(ref_eigenvalues.size()));
 			std::iota(indices.begin(), indices.end(), Eigen::Index{});
-			std::ranges::stable_sort(indices,
-			                         {},
-			                         [&ref_eigenvalues](const Eigen::Index index)
-			                         { return ref_eigenvalues[index]; });
+			std::ranges::stable_sort(
+			        indices, {}, [&ref_eigenvalues](const Eigen::Index index) { return ref_eigenvalues[index]; });
 
 			const auto eigenvalues = ref_eigenvalues.eval();
 			const auto eigenvectors = ref_eigenvectors.eval();
@@ -991,10 +972,9 @@ namespace SecUtility::Math
 
 		// Returns and stores the terminal status. Non-converged runs retain the latest
 		// interval Ritz approximations for diagnosis.
-		[[nodiscard]] InteriorEigenSolverStatus Compute(
-		        const Operator& linearOperator,
-		        const EigenvalueInterval<RealScalar>& interval,
-		        const InteriorEigenSolverOptions<RealScalar>& options);
+		[[nodiscard]] InteriorEigenSolverStatus Compute(const Operator& linearOperator,
+		                                                const EigenvalueInterval<RealScalar>& interval,
+		                                                const InteriorEigenSolverOptions<RealScalar>& options);
 
 		[[nodiscard]] InteriorEigenSolverStatus Status() const noexcept
 		{
@@ -1039,62 +1019,60 @@ namespace SecUtility::Math
 		        const EigenvalueInterval<LinearOperatorRealScalar<Operator>>& interval,
 		        const InteriorEigenSolverOptions<LinearOperatorRealScalar<Operator>>& options)
 		{
-		if (linearOperator.rows() != linearOperator.cols())
-		{
-			throw InvalidArgumentException("The self-adjoint linear operator must be square");
-		}
-		if (linearOperator.rows() <= 0)
-		{
-			throw InvalidArgumentException("The self-adjoint linear operator must have a positive dimension");
-		}
-		if (linearOperator.Diagonal().size() != linearOperator.rows())
-		{
-			throw InvalidArgumentException("The linear operator diagonal has an inconsistent dimension");
-		}
-		if (!interval.IsValid())
-		{
-			throw InvalidArgumentException("The eigenvalue interval lower bound must not exceed its upper bound");
-		}
-		if (!std::isfinite(interval.LowerBound) || !std::isfinite(interval.UpperBound))
-		{
-			throw InvalidArgumentException("The eigenvalue interval bounds must be finite");
-		}
-		if (options.EigenpairCountLimit <= 0)
-		{
-			throw InvalidArgumentException("EigenpairCountLimit must be positive");
-		}
-		if (options.EigenpairCountLimit > linearOperator.rows())
-		{
-			throw InvalidArgumentException("EigenpairCountLimit must not exceed the operator dimension");
-		}
-		if (options.MaximumIterationCount <= 0)
-		{
-			throw InvalidArgumentException("MaximumIterationCount must be positive");
-		}
-		if (options.AdditionalRitzVectorCount < 0)
-		{
-			throw InvalidArgumentException("AdditionalRitzVectorCount must not be negative");
-		}
-		if (options.GeneralizedSolveInterval <= 0)
-		{
-			throw InvalidArgumentException("GeneralizedSolveInterval must be positive");
-		}
-		if (!std::isfinite(options.EigenvalueChangeTolerance) || options.EigenvalueChangeTolerance <= 0
-		    || !std::isfinite(options.ResidualNormTolerance) || options.ResidualNormTolerance <= 0
-		    || !std::isfinite(options.PreconditionerDenominatorFloor)
-		    || options.PreconditionerDenominatorFloor <= 0 || !std::isfinite(options.LinearDependenceTolerance)
-		    || options.LinearDependenceTolerance <= 0
-		    || !std::isfinite(options.PreviousRitzVectorRecyclingTolerance)
-		    || options.PreviousRitzVectorRecyclingTolerance <= 0
-		    || !std::isfinite(options.RecyclingRefinementTolerance)
-		    || options.RecyclingRefinementTolerance <= 0 || !std::isfinite(options.FreezingCoefficientTolerance)
-		    || options.FreezingCoefficientTolerance <= 0 || !std::isfinite(options.FreezingResidualNormTolerance)
-		    || options.FreezingResidualNormTolerance < 0
-		    || !std::isfinite(options.ReducedMatrixAsymmetryTolerance)
-		    || options.ReducedMatrixAsymmetryTolerance <= 0)
-		{
-			throw InvalidArgumentException("All numerical tolerances must be positive");
-		}
+			if (linearOperator.rows() != linearOperator.cols())
+			{
+				throw InvalidArgumentException("The self-adjoint linear operator must be square");
+			}
+			if (linearOperator.rows() <= 0)
+			{
+				throw InvalidArgumentException("The self-adjoint linear operator must have a positive dimension");
+			}
+			if (linearOperator.Diagonal().size() != linearOperator.rows())
+			{
+				throw InvalidArgumentException("The linear operator diagonal has an inconsistent dimension");
+			}
+			if (!interval.IsValid())
+			{
+				throw InvalidArgumentException("The eigenvalue interval lower bound must not exceed its upper bound");
+			}
+			if (!std::isfinite(interval.LowerBound) || !std::isfinite(interval.UpperBound))
+			{
+				throw InvalidArgumentException("The eigenvalue interval bounds must be finite");
+			}
+			if (options.EigenpairCountLimit <= 0)
+			{
+				throw InvalidArgumentException("EigenpairCountLimit must be positive");
+			}
+			if (options.EigenpairCountLimit > linearOperator.rows())
+			{
+				throw InvalidArgumentException("EigenpairCountLimit must not exceed the operator dimension");
+			}
+			if (options.MaximumIterationCount <= 0)
+			{
+				throw InvalidArgumentException("MaximumIterationCount must be positive");
+			}
+			if (options.AdditionalRitzVectorCount < 0)
+			{
+				throw InvalidArgumentException("AdditionalRitzVectorCount must not be negative");
+			}
+			if (options.GeneralizedSolveInterval <= 0)
+			{
+				throw InvalidArgumentException("GeneralizedSolveInterval must be positive");
+			}
+			if (!std::isfinite(options.EigenvalueChangeTolerance) || options.EigenvalueChangeTolerance <= 0
+			    || !std::isfinite(options.ResidualNormTolerance) || options.ResidualNormTolerance <= 0
+			    || !std::isfinite(options.PreconditionerDenominatorFloor) || options.PreconditionerDenominatorFloor <= 0
+			    || !std::isfinite(options.LinearDependenceTolerance) || options.LinearDependenceTolerance <= 0
+			    || !std::isfinite(options.PreviousRitzVectorRecyclingTolerance)
+			    || options.PreviousRitzVectorRecyclingTolerance <= 0
+			    || !std::isfinite(options.RecyclingRefinementTolerance) || options.RecyclingRefinementTolerance <= 0
+			    || !std::isfinite(options.FreezingCoefficientTolerance) || options.FreezingCoefficientTolerance <= 0
+			    || !std::isfinite(options.FreezingResidualNormTolerance) || options.FreezingResidualNormTolerance < 0
+			    || !std::isfinite(options.ReducedMatrixAsymmetryTolerance)
+			    || options.ReducedMatrixAsymmetryTolerance <= 0)
+			{
+				throw InvalidArgumentException("All numerical tolerances must be positive");
+			}
 		}
 	}
 
@@ -1116,28 +1094,27 @@ namespace SecUtility::Math
 
 		const Eigen::VectorX<RealScalar> diagonal = linearOperator.Diagonal();
 		const RealScalar freezingResidualNormTolerance = options.FreezingResidualNormTolerance == RealScalar{}
-		                                                       ? options.ResidualNormTolerance
-		                                                       : options.FreezingResidualNormTolerance;
+		                                                         ? options.ResidualNormTolerance
+		                                                         : options.FreezingResidualNormTolerance;
 
 		// Start from coordinate vectors whose diagonal estimates are closest to the requested interval.
 		const RealScalar intervalCenter = (interval.LowerBound + interval.UpperBound) / RealScalar{2};
 		std::vector<Eigen::Index> coordinateIndices(static_cast<std::size_t>(linearOperator.rows()));
 		std::iota(coordinateIndices.begin(), coordinateIndices.end(), Eigen::Index{0});
-		std::ranges::stable_sort(
-		        coordinateIndices,
-		        {},
-		        [&diagonal, intervalCenter](const Eigen::Index index)
-		        { return Abs(diagonal[index] - intervalCenter); });
+		std::ranges::stable_sort(coordinateIndices,
+		                         {},
+		                         [&diagonal, intervalCenter](const Eigen::Index index)
+		                         { return Abs(diagonal[index] - intervalCenter); });
 
-		const Eigen::Index initialVectorCount = Min(
-		        linearOperator.rows(), Max(Eigen::Index{6}, Eigen::Index{3} * options.EigenpairCountLimit));
+		const Eigen::Index initialVectorCount =
+		        Min(linearOperator.rows(), Max(Eigen::Index{6}, Eigen::Index{3} * options.EigenpairCountLimit));
 		Eigen::MatrixX<Scalar> initialVectors = Eigen::MatrixX<Scalar>::Zero(linearOperator.rows(), initialVectorCount);
 		for (Eigen::Index columnIndex = 0; columnIndex < initialVectorCount; columnIndex++)
 		{
 			initialVectors(coordinateIndices[static_cast<std::size_t>(columnIndex)], columnIndex) = Scalar{1};
 		}
-		VectorImagePair<Scalar> expansionSpace{
-		        initialVectors, ApplyOperator(linearOperator, initialVectors, m_Statistics)};
+		VectorImagePair<Scalar> expansionSpace{initialVectors,
+		                                       ApplyOperator(linearOperator, initialVectors, m_Statistics)};
 
 		Eigen::VectorX<RealScalar> previousRetainedEigenvalues;
 		Eigen::Index previousPrimaryVectorCount = 0;
@@ -1166,42 +1143,33 @@ namespace SecUtility::Math
 			m_Statistics.GeneralizedSolveCount += static_cast<Eigen::Index>(isGeneralizedSolve);
 			const Eigen::MatrixX<RealScalar> populations =
 			        FormRitzPopulationMatrix(reducedEigenvectors, previousRetainedVectorCount);
-			const auto matches = MatchRitzVectors(
-			        populations, previousPrimaryVectorCount, previousRetainedVectorCount);
-			const Eigen::Index requestedAdditionalCount = options.AdditionalRitzVectorCount == 0
-			                                                          ? Max(Eigen::Index{6},
-			                                                                Eigen::Index{3}
-			                                                                        * options.EigenpairCountLimit)
-			                                                          : options.AdditionalRitzVectorCount;
+			const auto matches = MatchRitzVectors(populations, previousPrimaryVectorCount, previousRetainedVectorCount);
+			const Eigen::Index requestedAdditionalCount =
+			        options.AdditionalRitzVectorCount == 0
+			                ? Max(Eigen::Index{6}, Eigen::Index{3} * options.EigenpairCountLimit)
+			                : options.AdditionalRitzVectorCount;
 			// Select exact interval results and nearby directions that keep the next cycle productive.
 			auto selection = SelectInteriorRitzVectors(currentEigenvalues,
-			                                                       matches,
-			                                                       previousRetainedEigenvalues,
-			                                                       interval,
-			                                                       options.EigenpairCountLimit,
-			                                                       requestedAdditionalCount);
-			const VectorImagePair<Scalar> allRitzPairs =
-			        TransformVectorImagePair(expansionSpace, reducedEigenvectors);
+			                                           matches,
+			                                           previousRetainedEigenvalues,
+			                                           interval,
+			                                           options.EigenpairCountLimit,
+			                                           requestedAdditionalCount);
+			const VectorImagePair<Scalar> allRitzPairs = TransformVectorImagePair(expansionSpace, reducedEigenvectors);
 			const Eigen::VectorX<RealScalar> allResidualNorms =
 			        CalculateColumnNorms(CalculateResiduals(allRitzPairs, currentEigenvalues));
-			DemoteUnvalidatedExcessIntervalRitzVectors(selection,
-			                                               allResidualNorms,
-			                                               options.EigenpairCountLimit,
-			                                               options.ResidualNormTolerance);
-			UpdateInteriorRitzConvergence(
-			        selection, currentEigenvalues, matches, previousRetainedEigenvalues);
-			const std::vector<bool> isCurrentRitzVectorFrozen = options.IsFreezingEnabled
-			                                                              ? DetermineFrozenRitzVectors(
-			                                                                        reducedEigenvectors,
-			                                                                        allResidualNorms,
-				                                                                        selection.IntervalRitzIndices,
-				                                                                        previousPrimaryVectorCount,
-				                                                                        options.FreezingCoefficientTolerance,
-				                                                                        freezingResidualNormTolerance)
-			                                                              : std::vector<bool>(
-			                                                                        static_cast<std::size_t>(
-			                                                                                currentEigenvalues.size()),
-			                                                                        false);
+			DemoteUnvalidatedExcessIntervalRitzVectors(
+			        selection, allResidualNorms, options.EigenpairCountLimit, options.ResidualNormTolerance);
+			UpdateInteriorRitzConvergence(selection, currentEigenvalues, matches, previousRetainedEigenvalues);
+			const std::vector<bool> isCurrentRitzVectorFrozen =
+			        options.IsFreezingEnabled
+			                ? DetermineFrozenRitzVectors(reducedEigenvectors,
+			                                             allResidualNorms,
+			                                             selection.IntervalRitzIndices,
+			                                             previousPrimaryVectorCount,
+			                                             options.FreezingCoefficientTolerance,
+			                                             freezingResidualNormTolerance)
+			                : std::vector<bool>(static_cast<std::size_t>(currentEigenvalues.size()), false);
 			std::stable_sort(selection.IntervalRitzIndices.begin(),
 			                 selection.IntervalRitzIndices.end(),
 			                 [&isCurrentRitzVectorFrozen](const Eigen::Index lhs, const Eigen::Index rhs)
@@ -1209,19 +1177,17 @@ namespace SecUtility::Math
 				                 return isCurrentRitzVectorFrozen[static_cast<std::size_t>(lhs)]
 				                        && !isCurrentRitzVectorFrozen[static_cast<std::size_t>(rhs)];
 			                 });
-			frozenVectorCount = static_cast<Eigen::Index>(std::ranges::count_if(
-			        selection.IntervalRitzIndices,
-			        [&isCurrentRitzVectorFrozen](const Eigen::Index index)
-			        { return isCurrentRitzVectorFrozen[static_cast<std::size_t>(index)]; }));
+			frozenVectorCount = static_cast<Eigen::Index>(
+			        std::ranges::count_if(selection.IntervalRitzIndices,
+			                              [&isCurrentRitzVectorFrozen](const Eigen::Index index)
+			                              { return isCurrentRitzVectorFrozen[static_cast<std::size_t>(index)]; }));
 			m_Statistics.CurrentFrozenVectorCount = frozenVectorCount;
-			m_Statistics.MaximumFrozenVectorCount =
-			        Max(m_Statistics.MaximumFrozenVectorCount, frozenVectorCount);
+			m_Statistics.MaximumFrozenVectorCount = Max(m_Statistics.MaximumFrozenVectorCount, frozenVectorCount);
 			const auto orderedRitzPairs =
 			        PermuteSelectedRitzPairsToTheFront(currentEigenvalues, reducedEigenvectors, selection);
 			const auto intervalEigenpairCount = static_cast<Eigen::Index>(selection.IntervalRitzIndices.size());
-			const Eigen::Index selectedRetainedVectorCount = intervalEigenpairCount
-			                                                       + static_cast<Eigen::Index>(
-			                                                               selection.AdditionalRitzIndices.size());
+			const Eigen::Index selectedRetainedVectorCount =
+			        intervalEigenpairCount + static_cast<Eigen::Index>(selection.AdditionalRitzIndices.size());
 			const Eigen::Index primaryVectorCount = CalculatePrimaryRitzVectorCount(
 			        intervalEigenpairCount, frozenVectorCount, selectedRetainedVectorCount);
 			Eigen::MatrixX<Scalar> collapseCoefficients =
@@ -1234,20 +1200,19 @@ namespace SecUtility::Math
 			}
 			if (iterationIndex > 0 && isPreviousRitzVectorRecyclingActive && previousPrimaryVectorCount > 0)
 			{
-				const Eigen::MatrixX<Scalar> recyclingCoefficients = FormPreviousRitzVectorRecyclingCoefficients(
-				        collapseCoefficients,
-				        previousPrimaryVectorCount,
-				        options.PreviousRitzVectorRecyclingTolerance,
-				        options.RecyclingRefinementTolerance);
+				const Eigen::MatrixX<Scalar> recyclingCoefficients =
+				        FormPreviousRitzVectorRecyclingCoefficients(collapseCoefficients,
+				                                                    previousPrimaryVectorCount,
+				                                                    options.PreviousRitzVectorRecyclingTolerance,
+				                                                    options.RecyclingRefinementTolerance);
 				const Eigen::Index selectedColumnCount = collapseCoefficients.cols();
-				collapseCoefficients.conservativeResize(
-				        Eigen::NoChange, selectedColumnCount + recyclingCoefficients.cols());
+				collapseCoefficients.conservativeResize(Eigen::NoChange,
+				                                        selectedColumnCount + recyclingCoefficients.cols());
 				collapseCoefficients.rightCols(recyclingCoefficients.cols()) = recyclingCoefficients;
 				m_Statistics.RecycledVectorCount += recyclingCoefficients.cols();
 			}
 			VectorImagePair<Scalar> retainedSpace = TransformVectorImagePair(expansionSpace, collapseCoefficients);
-			if (isGeneralizedSolve
-			    && SymmetricallyOrthonormalizeVectorImagePair(retainedSpace) != Eigen::Success)
+			if (isGeneralizedSolve && SymmetricallyOrthonormalizeVectorImagePair(retainedSpace) != Eigen::Success)
 			{
 				m_Status = InteriorEigenSolverStatus::NumericalFailure;
 				return m_Status;
@@ -1260,9 +1225,8 @@ namespace SecUtility::Math
 			// Materialize inspectable results before evaluating any terminal condition.
 			if (intervalEigenpairCount > 0)
 			{
-				const VectorImagePair<Scalar> intervalPairs{
-				        retainedSpace.Vectors.leftCols(intervalEigenpairCount),
-				        retainedSpace.Images.leftCols(intervalEigenpairCount)};
+				const VectorImagePair<Scalar> intervalPairs{retainedSpace.Vectors.leftCols(intervalEigenpairCount),
+				                                            retainedSpace.Images.leftCols(intervalEigenpairCount)};
 				m_Eigenvalues = orderedRitzPairs.Eigenvalues.head(intervalEigenpairCount);
 				m_Eigenvectors = intervalPairs.Vectors;
 				m_ResidualNorms = CalculateColumnNorms(CalculateResiduals(intervalPairs, m_Eigenvalues));
@@ -1275,8 +1239,8 @@ namespace SecUtility::Math
 				m_ResidualNorms.resize(0);
 			}
 
-			const bool hasResidualConverged = intervalEigenpairCount > 0
-			                                  && m_ResidualNorms.maxCoeff() <= options.ResidualNormTolerance;
+			const bool hasResidualConverged =
+			        intervalEigenpairCount > 0 && m_ResidualNorms.maxCoeff() <= options.ResidualNormTolerance;
 			const bool hasEigenvalueConverged =
 			        (iterationIndex == 0 && hasResidualConverged)
 			        || (iterationIndex > 0 && !selection.HasUnmatchedIntervalRitzVector
