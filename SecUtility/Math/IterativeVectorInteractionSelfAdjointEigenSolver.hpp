@@ -1066,27 +1066,28 @@ namespace SecUtility::Math
 			UpdateInteriorRitzConvergence(
 			        analysis.Selection, currentEigenvalues, matches, state.PreviousRetainedEigenvalues);
 
-			// Move frozen interval targets to the leading columns used by the next cycle.
-			const std::vector<bool> isCurrentRitzVectorFrozen =
-			        options.IsFreezingEnabled
-			                ? DetermineFrozenRitzVectors(reducedEigenvectors,
-			                                             allResidualNorms,
-			                                             analysis.Selection.IntervalRitzIndices,
-			                                             state.PreviousPrimaryVectorCount,
-			                                             options.FreezingCoefficientTolerance,
-			                                             freezingResidualNormTolerance)
-			                : std::vector<bool>(static_cast<std::size_t>(currentEigenvalues.size()), false);
-			std::stable_sort(analysis.Selection.IntervalRitzIndices.begin(),
-			                 analysis.Selection.IntervalRitzIndices.end(),
-			                 [&isCurrentRitzVectorFrozen](const Eigen::Index lhs, const Eigen::Index rhs)
-			                 {
-				                 return isCurrentRitzVectorFrozen[static_cast<std::size_t>(lhs)]
-				                        && !isCurrentRitzVectorFrozen[static_cast<std::size_t>(rhs)];
-			                 });
-			analysis.FrozenVectorCount = static_cast<Eigen::Index>(
-			        std::ranges::count_if(analysis.Selection.IntervalRitzIndices,
-			                              [&isCurrentRitzVectorFrozen](const Eigen::Index index)
-			                              { return isCurrentRitzVectorFrozen[static_cast<std::size_t>(index)]; }));
+			if (options.IsFreezingEnabled)
+			{
+				// Move frozen interval targets to the leading columns used by the next cycle.
+				const auto isCurrentRitzVectorFrozen =
+				        DetermineFrozenRitzVectors(reducedEigenvectors,
+				                                   allResidualNorms,
+				                                   analysis.Selection.IntervalRitzIndices,
+				                                   state.PreviousPrimaryVectorCount,
+				                                   options.FreezingCoefficientTolerance,
+				                                   freezingResidualNormTolerance);
+				std::stable_sort(analysis.Selection.IntervalRitzIndices.begin(),
+				                 analysis.Selection.IntervalRitzIndices.end(),
+				                 [&isCurrentRitzVectorFrozen](const Eigen::Index lhs, const Eigen::Index rhs)
+				                 {
+					                 return isCurrentRitzVectorFrozen[static_cast<std::size_t>(lhs)]
+					                        && !isCurrentRitzVectorFrozen[static_cast<std::size_t>(rhs)];
+				                 });
+				analysis.FrozenVectorCount = static_cast<Eigen::Index>(
+				        std::ranges::count_if(analysis.Selection.IntervalRitzIndices,
+				                              [&isCurrentRitzVectorFrozen](const Eigen::Index index)
+				                              { return isCurrentRitzVectorFrozen[static_cast<std::size_t>(index)]; }));
+			}
 			analysis.OrderedRitzPairs =
 			        PermuteSelectedRitzPairsToTheFront(currentEigenvalues, reducedEigenvectors, analysis.Selection);
 			analysis.IntervalEigenpairCount = static_cast<Eigen::Index>(analysis.Selection.IntervalRitzIndices.size());
