@@ -890,7 +890,7 @@ TEST_CASE("iVI interval selection tracks matches and retains neighboring Ritz ve
 	CHECK(selection.AdditionalRitzIndices == std::vector<Eigen::Index>{4, 0});
 	CHECK(selection.MaximumMatchedEigenvalueChange == Catch::Approx(0.02));
 	CHECK_FALSE(selection.HasUnmatchedIntervalRitzVector);
-	CHECK_FALSE(selection.IsEigenpairCountLimitExceeded);
+	CHECK_FALSE(selection.HasExcessIntervalRitzCandidates);
 }
 
 
@@ -908,7 +908,7 @@ TEST_CASE("iVI interval selection reports new roots and capacity exhaustion", "[
 	        eigenvalues, matches, Eigen::VectorXd{}, EigenvalueInterval<double>{-0.5, 0.5}, 2, 0);
 	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{0, 1, 2});
 	CHECK(selection.HasUnmatchedIntervalRitzVector);
-	CHECK(selection.IsEigenpairCountLimitExceeded);
+	CHECK(selection.HasExcessIntervalRitzCandidates);
 	CHECK(std::isinf(selection.MaximumMatchedEigenvalueChange));
 
 	const auto emptySelection = SelectInteriorRitzVectors(
@@ -925,13 +925,14 @@ TEST_CASE("iVI demotes unvalidated transient interval overflow", "[Math][iVI]")
 	InteriorRitzSelection<double> selection;
 	selection.IntervalRitzIndices = {0, 1, 2};
 	selection.AdditionalRitzIndices = {3};
-	selection.IsEigenpairCountLimitExceeded = true;
+	selection.HasExcessIntervalRitzCandidates = true;
 	const Eigen::VectorXd residualNorms{{1e-3, 1e-9, 1e-8, 2e-2}};
 
 	DemoteUnvalidatedExcessIntervalRitzVectors(selection, residualNorms, 2, 1e-7);
 	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{1, 2});
 	CHECK(selection.AdditionalRitzIndices == std::vector<Eigen::Index>{0, 3});
-	CHECK_FALSE(selection.IsEigenpairCountLimitExceeded);
+	CHECK(selection.HasExcessIntervalRitzCandidates);
+	CHECK_FALSE(selection.AreExcessIntervalRitzVectorsValidated);
 }
 
 
@@ -940,13 +941,14 @@ TEST_CASE("iVI preserves residual-validated interval overflow", "[Math][iVI]")
 	using namespace Detail::IterativeVectorInteraction;
 	InteriorRitzSelection<double> selection;
 	selection.IntervalRitzIndices = {0, 1, 2};
-	selection.IsEigenpairCountLimitExceeded = true;
+	selection.HasExcessIntervalRitzCandidates = true;
 	const Eigen::VectorXd residualNorms{{1e-9, 2e-9, 3e-9}};
 
 	DemoteUnvalidatedExcessIntervalRitzVectors(selection, residualNorms, 2, 1e-7);
 	CHECK(selection.IntervalRitzIndices == std::vector<Eigen::Index>{0, 1, 2});
 	CHECK(selection.AdditionalRitzIndices.empty());
-	CHECK(selection.IsEigenpairCountLimitExceeded);
+	CHECK(selection.HasExcessIntervalRitzCandidates);
+	CHECK(selection.AreExcessIntervalRitzVectorsValidated);
 }
 
 

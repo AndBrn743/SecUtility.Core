@@ -149,7 +149,8 @@ namespace SecUtility::Math
 			std::vector<Eigen::Index> AdditionalRitzIndices;
 			RealScalar MaximumMatchedEigenvalueChange = std::numeric_limits<RealScalar>::infinity();
 			bool HasUnmatchedIntervalRitzVector = false;
-			bool IsEigenpairCountLimitExceeded = false;
+			bool HasExcessIntervalRitzCandidates = false;
+			bool AreExcessIntervalRitzVectorsValidated = false;
 		};
 
 
@@ -460,7 +461,7 @@ namespace SecUtility::Math
 				}
 			}
 
-			selection.IsEigenpairCountLimitExceeded =
+			selection.HasExcessIntervalRitzCandidates =
 			        static_cast<Eigen::Index>(selection.IntervalRitzIndices.size()) > maximumEigenpairCount;
 
 			// Compare each target with its previous identity match. A new or weakly matched target prevents
@@ -633,7 +634,7 @@ namespace SecUtility::Math
 		                                                const Eigen::Index maximumEigenpairCount,
 		                                                const RealScalar residualNormTolerance)
 		{
-			if (!ref_selection.IsEigenpairCountLimitExceeded)
+			if (!ref_selection.HasExcessIntervalRitzCandidates)
 			{
 				return;
 			}
@@ -641,6 +642,7 @@ namespace SecUtility::Math
 			        std::ranges::all_of(ref_selection.IntervalRitzIndices,
 			                            [&residualNorms, residualNormTolerance](const Eigen::Index index)
 			                            { return residualNorms[index] <= residualNormTolerance; });
+			ref_selection.AreExcessIntervalRitzVectorsValidated = areAllIntervalCandidatesValidated;
 			if (areAllIntervalCandidatesValidated)
 			{
 				return;
@@ -655,7 +657,6 @@ namespace SecUtility::Math
 			                                                   + maximumEigenpairCount,
 			                                           ref_selection.IntervalRitzIndices.end());
 			ref_selection.IntervalRitzIndices.resize(static_cast<std::size_t>(maximumEigenpairCount));
-			ref_selection.IsEigenpairCountLimitExceeded = false;
 		}
 
 
@@ -1398,7 +1399,8 @@ namespace SecUtility::Math
 			            && analysis.Selection.MaximumMatchedEigenvalueChange <= options.EigenvalueChangeTolerance);
 			// An unconverged Ritz value may drift through an interval temporarily. Treat the
 			// capacity as exceeded only after residuals validate the entire candidate set.
-			if (analysis.Selection.IsEigenpairCountLimitExceeded && hasResidualConverged)
+			if (analysis.Selection.HasExcessIntervalRitzCandidates
+			    && analysis.Selection.AreExcessIntervalRitzVectorsValidated)
 			{
 				m_Status = InteriorEigenSolverStatus::EigenpairCountLimitExceeded;
 				return m_Status;
