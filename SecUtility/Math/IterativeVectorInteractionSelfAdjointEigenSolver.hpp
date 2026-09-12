@@ -717,7 +717,7 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
-		Eigen::MatrixX<Scalar> SymmetricallyOrthonormalize(
+		Eigen::MatrixX<Scalar> OrthonormalizeAndRemoveLinearDependenceWithQR(
 		        const Eigen::MatrixX<Scalar>& vectors,
 		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
 		{
@@ -727,32 +727,23 @@ namespace SecUtility::Math
 				return vectors;
 			}
 
-			const Eigen::MatrixX<Scalar> gramMatrix = vectors.adjoint() * vectors;
-			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> eigenSolver(gramMatrix);
-			if (eigenSolver.info() != Eigen::Success)
+			Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(vectors);
+			const RealScalar maximumPivot = qr.maxPivot();
+			if (maximumPivot > RealScalar{})
 			{
-				throw OperationFailedException("Symmetric orthonormalization failed to diagonalize the Gram matrix");
+				// The public tolerance applies to squared vector magnitudes. Convert it to
+				// QR's relative pivot threshold while preserving the unit scale floor.
+				const RealScalar absoluteThreshold =
+				        std::sqrt(relativeLinearDependenceTolerance) * Max(RealScalar{1}, maximumPivot);
+				qr.setThreshold(absoluteThreshold / maximumPivot);
 			}
-
-			const auto& gramEigenvalues = eigenSolver.eigenvalues();
-			const RealScalar largestEigenvalue = gramEigenvalues.cend()[-1];
-			const RealScalar rejectionThreshold =
-			        relativeLinearDependenceTolerance * Max(RealScalar{1}, largestEigenvalue);
-			const auto firstAcceptedIndex = static_cast<Eigen::Index>(
-			        std::distance(gramEigenvalues.begin(),
-			                      std::find_if(gramEigenvalues.begin(),
-			                                   gramEigenvalues.end(),
-			                                   [rejectionThreshold](const RealScalar eigenvalue)
-			                                   { return eigenvalue >= rejectionThreshold; })));
-			const Eigen::Index acceptedCount = vectors.cols() - firstAcceptedIndex;
-			if (acceptedCount == 0)
+			const Eigen::Index rank = qr.rank();
+			if (rank == 0)
 			{
 				return Eigen::MatrixX<Scalar>(vectors.rows(), 0);
 			}
 
-			const auto acceptedEigenvalues = gramEigenvalues.tail(acceptedCount);
-			const auto acceptedEigenvectors = eigenSolver.eigenvectors().rightCols(acceptedCount);
-			return vectors * acceptedEigenvectors * acceptedEigenvalues.cwiseInverse().cwiseSqrt().asDiagonal();
+			return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(vectors.rows(), rank);
 		}
 
 
@@ -762,8 +753,12 @@ namespace SecUtility::Math
 		        const Eigen::MatrixX<Scalar>& candidates,
 		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
 		{
-			return SymmetricallyOrthonormalize(ProjectAgainstBasis(basis, candidates),
-			                                   relativeLinearDependenceTolerance);
+			Eigen::MatrixX<Scalar> projectedCandidates = ProjectAgainstBasis(basis, candidates);
+			// Reorthogonalize once: a single projection can leave basis components when
+			// the candidates are nearly contained in the established vector space.
+			projectedCandidates = ProjectAgainstBasis(basis, projectedCandidates);
+			return OrthonormalizeAndRemoveLinearDependenceWithQR(projectedCandidates,
+			                                                     relativeLinearDependenceTolerance);
 		}
 
 
@@ -779,9 +774,8 @@ namespace SecUtility::Math
 			Eigen::MatrixX<Scalar> projectedCoefficients = candidateCoefficients;
 			if (basisCoefficients.cols() > 0)
 			{
-				projectedCoefficients -= basisCoefficients
-				                         * (basisVectors.adjoint()
-				                            * (expansionVectors * candidateCoefficients));
+				projectedCoefficients -=
+				        basisCoefficients * (basisVectors.adjoint() * (expansionVectors * candidateCoefficients));
 			}
 
 			const Eigen::MatrixX<Scalar> projectedVectors = expansionVectors * projectedCoefficients;
@@ -806,12 +800,13 @@ namespace SecUtility::Math
 			}
 
 			const Eigen::MatrixX<Scalar> permutedCoefficients = projectedCoefficients * qr.colsPermutation();
-			const Eigen::MatrixX<Scalar> inverseLeadingUpperFactor =
-			        qr.matrixR()
-			                .topLeftCorner(rank, rank)
-			                .template triangularView<Eigen::Upper>()
-			                .solve(Eigen::MatrixX<Scalar>::Identity(rank, rank));
-			return permutedCoefficients.leftCols(rank) * inverseLeadingUpperFactor;
+			const Eigen::MatrixX<Scalar> leadingUpperFactor = qr.matrixR().topLeftCorner(rank, rank);
+			// Solve X R = C as R^T X^T = C^T instead of explicitly forming R^-1.
+			// This is an algebraic transpose even for complex scalars, not an adjoint.
+			return leadingUpperFactor.transpose()
+			        .template triangularView<Eigen::Lower>()
+			        .solve(permutedCoefficients.leftCols(rank).transpose())
+			        .transpose();
 		}
 
 
@@ -827,14 +822,9 @@ namespace SecUtility::Math
 			        Eigen::MatrixX<Scalar>::Zero(selectedRitzCoefficients.rows(), previousPrimaryVectorCount);
 			previousPrimaryCoefficients.topRows(previousPrimaryVectorCount).setIdentity();
 			Eigen::MatrixX<Scalar> recyclingCoefficients = OrthogonalizeCoefficientDirectionsInVectorSpace(
-			        expansionVectors,
-			        selectedRitzCoefficients,
-			        previousPrimaryCoefficients,
-			        linearDependenceTolerance);
-			return OrthogonalizeCoefficientDirectionsInVectorSpace(expansionVectors,
-			                                                        selectedRitzCoefficients,
-			                                                        recyclingCoefficients,
-			                                                        refinementTolerance);
+			        expansionVectors, selectedRitzCoefficients, previousPrimaryCoefficients, linearDependenceTolerance);
+			return OrthogonalizeCoefficientDirectionsInVectorSpace(
+			        expansionVectors, selectedRitzCoefficients, recyclingCoefficients, refinementTolerance);
 		}
 
 
@@ -1156,12 +1146,11 @@ namespace SecUtility::Math
 			}
 
 			const Eigen::MatrixX<Scalar> recyclingCoefficients =
-			        FormPreviousRitzVectorRecyclingCoefficients(
-			                ref_state.ExpansionSpace.Vectors,
-			                coefficients,
-			                ref_state.PreviousPrimaryVectorCount,
-			                options.PreviousRitzVectorRecyclingTolerance,
-			                options.RecyclingRefinementTolerance);
+			        FormPreviousRitzVectorRecyclingCoefficients(ref_state.ExpansionSpace.Vectors,
+			                                                    coefficients,
+			                                                    ref_state.PreviousPrimaryVectorCount,
+			                                                    options.PreviousRitzVectorRecyclingTolerance,
+			                                                    options.RecyclingRefinementTolerance);
 			const Eigen::Index selectedColumnCount = coefficients.cols();
 			coefficients.conservativeResize(Eigen::NoChange, selectedColumnCount + recyclingCoefficients.cols());
 			coefficients.rightCols(recyclingCoefficients.cols()) = recyclingCoefficients;

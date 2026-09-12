@@ -446,7 +446,7 @@ TEST_CASE("The existing matrix-free wrapper requires a diagonal-aware adapter fo
 }
 
 
-TEMPLATE_TEST_CASE("iVI projection and symmetric orthonormalization", "[Math][iVI]", double, (std::complex<double>))
+TEMPLATE_TEST_CASE("iVI projection and QR orthonormalization", "[Math][iVI]", double, (std::complex<double>))
 {
 	using namespace Detail::IterativeVectorInteraction;
 	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
@@ -475,7 +475,7 @@ TEMPLATE_TEST_CASE("iVI projection and symmetric orthonormalization", "[Math][iV
 	const Eigen::MatrixX<TestType> emptyCandidates(4, 0);
 	CHECK(OrthogonalizeAndRemoveLinearDependence(basis, emptyCandidates, tolerance).cols() == 0);
 	const Eigen::MatrixX<TestType> zeroCandidates = Eigen::MatrixX<TestType>::Zero(4, 2);
-	CHECK(SymmetricallyOrthonormalize(zeroCandidates, tolerance).cols() == 0);
+	CHECK(OrthonormalizeAndRemoveLinearDependenceWithQR(zeroCandidates, tolerance).cols() == 0);
 }
 
 
@@ -486,9 +486,62 @@ TEST_CASE("iVI complex orthonormalization is invariant to column phase", "[Math]
 	Eigen::MatrixXcd vectors = Eigen::MatrixXcd::Identity(3, 2);
 	vectors.col(1) *= phase;
 
-	const auto orthonormalized = SymmetricallyOrthonormalize(vectors, 1e-12);
+	const auto orthonormalized = OrthonormalizeAndRemoveLinearDependenceWithQR(vectors, 1e-12);
 	REQUIRE(orthonormalized.cols() == 2);
 	CHECK((orthonormalized.adjoint() * orthonormalized - Eigen::MatrixXcd::Identity(2, 2)).norm() < 1e-12);
+}
+
+
+TEMPLATE_TEST_CASE("iVI pivoted QR removes dependent correction directions", "[Math][iVI]", double,
+                   (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Zero(4, 3);
+	vectors(0, 0) = TestType{1e-3};
+	vectors(1, 1) = TestType{2};
+	vectors.col(2) = TestType{3} * vectors.col(1);
+
+	const auto orthonormalized = OrthonormalizeAndRemoveLinearDependenceWithQR(vectors, 1e-12);
+	REQUIRE(orthonormalized.cols() == 2);
+	CHECK((orthonormalized.adjoint() * orthonormalized
+	       - Eigen::MatrixX<TestType>::Identity(2, 2))
+	              .norm()
+	      < 1e-12);
+	CHECK((orthonormalized * orthonormalized.adjoint() * vectors - vectors).norm() < 1e-12);
+}
+
+
+TEMPLATE_TEST_CASE("iVI coefficient-space QR uses the vector-space metric", "[Math][iVI]", double,
+                   (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixX<TestType> expansionVectors = Eigen::MatrixX<TestType>::Zero(4, 4);
+	expansionVectors.diagonal() << TestType{2}, TestType{3}, TestType{4}, TestType{5};
+	Eigen::MatrixX<TestType> basisCoefficients = Eigen::MatrixX<TestType>::Zero(4, 1);
+	basisCoefficients(0, 0) = TestType{0.5};
+	Eigen::MatrixX<TestType> candidateCoefficients = Eigen::MatrixX<TestType>::Zero(4, 3);
+	candidateCoefficients(0, 0) = TestType{2};
+	candidateCoefficients(1, 0) = TestType{1} / TestType{3};
+	candidateCoefficients(2, 0) = TestType{1} / TestType{4};
+	candidateCoefficients(2, 1) = TestType{1} / TestType{4};
+	candidateCoefficients(3, 1) = TestType{1} / TestType{5};
+	candidateCoefficients.col(2) = candidateCoefficients.col(1);
+	if constexpr (!std::is_same_v<TestType, double>)
+	{
+		candidateCoefficients(2, 0) *= TestType{0, 1};
+	}
+
+	const auto orthonormalizedCoefficients = OrthogonalizeCoefficientDirectionsInVectorSpace(
+	        expansionVectors, basisCoefficients, candidateCoefficients, 1e-12);
+	const Eigen::MatrixX<TestType> basisVectors = expansionVectors * basisCoefficients;
+	const Eigen::MatrixX<TestType> orthonormalizedVectors = expansionVectors * orthonormalizedCoefficients;
+
+	REQUIRE(orthonormalizedCoefficients.cols() == 2);
+	CHECK((basisVectors.adjoint() * orthonormalizedVectors).norm() < 1e-12);
+	CHECK((orthonormalizedVectors.adjoint() * orthonormalizedVectors
+	       - Eigen::MatrixX<TestType>::Identity(2, 2))
+	              .norm()
+	      < 1e-12);
 }
 
 
