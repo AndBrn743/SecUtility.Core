@@ -154,11 +154,10 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
-		struct PermutedRitzPairs  // consider name to RitzPairs
+		struct RitzPairs
 		{
 			Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> Eigenvalues;
 			Eigen::MatrixX<Scalar> Eigenvectors;
-			// std::vector<Eigen::Index> OriginalIndices;
 		};
 	}
 
@@ -540,7 +539,7 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
-		PermutedRitzPairs<Scalar> PermuteSelectedRitzPairsToTheFront(
+		RitzPairs<Scalar> PermuteSelectedRitzPairsToTheFront(
 		        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& eigenvalues,
 		        const Eigen::MatrixX<Scalar>& eigenvectors,
 		        const InteriorRitzSelection<typename Eigen::NumTraits<Scalar>::Real>& selection)
@@ -562,11 +561,9 @@ namespace SecUtility::Math
 				}
 			}
 
-			PermutedRitzPairs<Scalar> result{
+			RitzPairs<Scalar> result{
 			        Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>(eigenvalues.size()),
-			        Eigen::MatrixX<Scalar>(eigenvectors.rows(),
-			                               eigenvectors.cols()) /*,
-order*/};
+			        Eigen::MatrixX<Scalar>(eigenvectors.rows(), eigenvectors.cols())};
 			for (Eigen::Index destinationIndex = 0; destinationIndex < eigenvalues.size(); destinationIndex++)
 			{
 				const Eigen::Index sourceIndex = order[static_cast<std::size_t>(destinationIndex)];
