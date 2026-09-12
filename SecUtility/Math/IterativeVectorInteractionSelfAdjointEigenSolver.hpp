@@ -988,6 +988,13 @@ namespace SecUtility::Math
 		};
 
 
+		enum class ExpansionResult
+		{
+			Expanded,
+			NoIndependentCorrections
+		};
+
+
 		template <SelfAdjointLinearOperator Operator>
 		VectorImagePair<LinearOperatorScalar<Operator>> CreateInitialExpansionSpace(
 		        const Operator& linearOperator,
@@ -1161,13 +1168,14 @@ namespace SecUtility::Math
 
 
 		template <SelfAdjointLinearOperator Operator>
-		bool ExpandForNextIteration(const Operator& linearOperator,
-		                            const Eigen::VectorX<LinearOperatorRealScalar<Operator>>& diagonal,
-		                            const InteriorIterationAnalysis<LinearOperatorScalar<Operator>>& analysis,
-		                            const InteriorEigenSolverOptions<LinearOperatorRealScalar<Operator>>& options,
-		                            VectorImagePair<LinearOperatorScalar<Operator>> retainedSpace,
-		                            InteriorIterationState<LinearOperatorScalar<Operator>>& ref_state,
-		                            InteriorEigenSolverStatistics& ref_statistics)
+		ExpansionResult ExpandForNextIteration(
+		        const Operator& linearOperator,
+		        const Eigen::VectorX<LinearOperatorRealScalar<Operator>>& diagonal,
+		        const InteriorIterationAnalysis<LinearOperatorScalar<Operator>>& analysis,
+		        const InteriorEigenSolverOptions<LinearOperatorRealScalar<Operator>>& options,
+		        VectorImagePair<LinearOperatorScalar<Operator>> retainedSpace,
+		        InteriorIterationState<LinearOperatorScalar<Operator>>& ref_state,
+		        InteriorEigenSolverStatistics& ref_statistics)
 		{
 			using Scalar = LinearOperatorScalar<Operator>;
 			ref_state.PreviousRetainedEigenvalues =
@@ -1189,7 +1197,7 @@ namespace SecUtility::Math
 			        ref_state.ExpansionSpace.Vectors, unorthogonalizedCorrections, options.LinearDependenceTolerance);
 			if (corrections.cols() == 0)
 			{
-				return false;
+				return ExpansionResult::NoIndependentCorrections;
 			}
 
 			const Eigen::MatrixX<Scalar> correctionImages = ApplyOperator(linearOperator, corrections, ref_statistics);
@@ -1198,7 +1206,7 @@ namespace SecUtility::Math
 			ref_state.ExpansionSpace.Images.conservativeResize(Eigen::NoChange, oldExpansionSize + corrections.cols());
 			ref_state.ExpansionSpace.Vectors.rightCols(corrections.cols()) = corrections;
 			ref_state.ExpansionSpace.Images.rightCols(corrections.cols()) = correctionImages;
-			return true;
+			return ExpansionResult::Expanded;
 		}
 	}
 
@@ -1406,8 +1414,9 @@ namespace SecUtility::Math
 				return m_Status;
 			}
 
-			if (!ExpandForNextIteration(
-			            linearOperator, diagonal, analysis, options, std::move(retainedSpace), state, m_Statistics))
+			const ExpansionResult expansionResult = ExpandForNextIteration(
+			        linearOperator, diagonal, analysis, options, std::move(retainedSpace), state, m_Statistics);
+			if (expansionResult == ExpansionResult::NoIndependentCorrections)
 			{
 				m_Status = InteriorEigenSolverStatus::ExpansionSpaceExhausted;
 				return m_Status;
