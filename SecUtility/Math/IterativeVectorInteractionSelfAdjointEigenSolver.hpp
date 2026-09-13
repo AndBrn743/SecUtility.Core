@@ -763,6 +763,7 @@ namespace SecUtility::Math
 			Eigen::MatrixX<Scalar> Vectors;
 			// Vectors approximately equal the projected source vectors multiplied by these coefficients.
 			Eigen::MatrixX<Scalar> SourceCoefficients;
+			std::vector<Eigen::Index> SourcePivotIndices;
 		};
 
 
@@ -774,7 +775,7 @@ namespace SecUtility::Math
 			using RealScalar = Eigen::NumTraits<Scalar>::Real;
 			if (vectors.cols() == 0)
 			{
-				return {vectors, Eigen::MatrixX<Scalar>(0, 0)};
+				return {vectors, Eigen::MatrixX<Scalar>(0, 0), {}};
 			}
 
 			Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(vectors);
@@ -790,7 +791,7 @@ namespace SecUtility::Math
 			const Eigen::Index rank = qr.rank();
 			if (rank == 0)
 			{
-				return {Eigen::MatrixX<Scalar>(vectors.rows(), 0), Eigen::MatrixX<Scalar>(vectors.cols(), 0)};
+				return {Eigen::MatrixX<Scalar>(vectors.rows(), 0), Eigen::MatrixX<Scalar>(vectors.cols(), 0), {}};
 			}
 
 			const Eigen::MatrixX<Scalar> orthonormalizedVectors =
@@ -803,7 +804,14 @@ namespace SecUtility::Math
 			                .template triangularView<Eigen::Lower>()
 			                .solve(sourcePermutation.leftCols(rank).transpose())
 			                .transpose();
-			return {orthonormalizedVectors, sourceCoefficients};
+			std::vector<Eigen::Index> sourcePivotIndices(static_cast<std::size_t>(rank));
+			for (Eigen::Index pivotIndex = 0; pivotIndex < rank; pivotIndex++)
+			{
+				sourcePermutation.col(pivotIndex)
+				        .cwiseAbs()
+				        .maxCoeff(&sourcePivotIndices[static_cast<std::size_t>(pivotIndex)]);
+			}
+			return {orthonormalizedVectors, sourceCoefficients, std::move(sourcePivotIndices)};
 		}
 
 
@@ -1110,22 +1118,76 @@ namespace SecUtility::Math
 		};
 
 
+		template <typename Scalar>
+		struct AuxiliaryExpansionCandidates
+		{
+			Eigen::MatrixX<Scalar> Vectors;
+			Eigen::Index CorrectionImageVectorCount = 0;
+		};
+
+
+		template <typename Scalar>
+		AuxiliaryExpansionCandidates<Scalar> FormAuxiliaryExpansionCandidates(
+		        const Eigen::MatrixX<Scalar>& expansionVectors,
+		        const OrthonormalizedDirections<Scalar>& corrections,
+		        const Eigen::MatrixX<Scalar>& correctionImages,
+		        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& sourceEigenvalues,
+		        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& diagonal,
+		        const InteriorEigenSolverOptions<typename Eigen::NumTraits<Scalar>::Real>& options)
+		{
+			const bool areCorrectionImagesEnabled = IsSubspaceExtensionEnabled(
+			        options.SubspaceExtensions, IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages);
+			const bool areOffDiagonalCorrectionsEnabled = IsSubspaceExtensionEnabled(
+			        options.SubspaceExtensions,
+			        IterativeVectorInteractionSubspaceExtension::PreconditionedOffDiagonalCorrectionImages);
+			const Eigen::Index correctionImageVectorCount = areCorrectionImagesEnabled ? correctionImages.cols() : 0;
+			const Eigen::Index offDiagonalCorrectionVectorCount =
+			        areOffDiagonalCorrectionsEnabled ? correctionImages.cols() : 0;
+			Eigen::MatrixX<Scalar> candidates(correctionImages.rows(),
+			                                  correctionImageVectorCount + offDiagonalCorrectionVectorCount);
+			if (areCorrectionImagesEnabled)
+			{
+				candidates.leftCols(correctionImageVectorCount) = correctionImages;
+			}
+			if (areOffDiagonalCorrectionsEnabled)
+			{
+				Eigen::MatrixX<Scalar> offDiagonalActions =
+				        FormOffDiagonalCorrectionVectors(corrections.Vectors, correctionImages, diagonal);
+				// BDF projects this block once before preconditioning; the combined auxiliary
+				// block is projected and rank-filtered again before it enters the expansion.
+				offDiagonalActions = ProjectAgainstBasis(expansionVectors, offDiagonalActions);
+				const auto weightedEigenvalues = CalculateSourceCoefficientWeightedEigenvalues(
+				        corrections.SourceCoefficients, sourceEigenvalues);
+				candidates.rightCols(offDiagonalCorrectionVectorCount) = ApplyAbsoluteDiagonalPreconditioner(
+				        offDiagonalActions, weightedEigenvalues, diagonal, options.PreconditionerDenominatorFloor);
+			}
+			return {std::move(candidates), correctionImageVectorCount};
+		}
+
+
 		template <SelfAdjointLinearOperator Operator>
-		void AppendCorrectionImageVectors(
+		void AppendAuxiliaryExpansionVectors(
 		        const Operator& linearOperator,
-		        const Eigen::MatrixX<LinearOperatorScalar<Operator>>& correctionImages,
+		        const AuxiliaryExpansionCandidates<LinearOperatorScalar<Operator>>& candidates,
 		        const LinearOperatorRealScalar<Operator> relativeLinearDependenceTolerance,
 		        VectorImagePair<LinearOperatorScalar<Operator>>& ref_expansionSpace,
 		        InteriorEigenSolverStatistics& ref_statistics)
 		{
 			using Scalar = LinearOperatorScalar<Operator>;
-			ref_statistics.GeneratedCorrectionImageVectorCount += correctionImages.cols();
-			const OrthonormalizedDirections<Scalar> orthonormalizedDirections =
-			        OrthogonalizeAndRemoveLinearDependence(ref_expansionSpace.Vectors,
-			                                               correctionImages,
-			                                               relativeLinearDependenceTolerance);
+			const OrthonormalizedDirections<Scalar> orthonormalizedDirections = OrthogonalizeAndRemoveLinearDependence(
+			        ref_expansionSpace.Vectors, candidates.Vectors, relativeLinearDependenceTolerance);
 			const Eigen::MatrixX<Scalar>& vectors = orthonormalizedDirections.Vectors;
-			ref_statistics.RetainedCorrectionImageVectorCount += vectors.cols();
+			for (const Eigen::Index sourcePivotIndex : orthonormalizedDirections.SourcePivotIndices)
+			{
+				if (sourcePivotIndex < candidates.CorrectionImageVectorCount)
+				{
+					ref_statistics.RetainedCorrectionImageVectorCount++;
+				}
+				else
+				{
+					ref_statistics.RetainedOffDiagonalCorrectionVectorCount++;
+				}
+			}
 			if (vectors.cols() == 0)
 			{
 				return;
@@ -1345,8 +1407,7 @@ namespace SecUtility::Math
 			const Eigen::MatrixX<Scalar> unorthogonalizedCorrections = ApplyAbsoluteDiagonalPreconditioner(
 			        residuals, primaryEigenvalues, diagonal, options.PreconditionerDenominatorFloor);
 			ref_statistics.GeneratedCorrectionVectorCount += unorthogonalizedCorrections.cols();
-			const OrthonormalizedDirections<Scalar> orthonormalizedCorrections =
-			        OrthogonalizeAndRemoveLinearDependence(
+			const OrthonormalizedDirections<Scalar> orthonormalizedCorrections = OrthogonalizeAndRemoveLinearDependence(
 			        ref_state.ExpansionSpace.Vectors, unorthogonalizedCorrections, options.LinearDependenceTolerance);
 			const Eigen::MatrixX<Scalar>& corrections = orthonormalizedCorrections.Vectors;
 			ref_statistics.RetainedCorrectionVectorCount += corrections.cols();
@@ -1361,14 +1422,28 @@ namespace SecUtility::Math
 			ref_state.ExpansionSpace.Images.conservativeResize(Eigen::NoChange, oldExpansionSize + corrections.cols());
 			ref_state.ExpansionSpace.Vectors.rightCols(corrections.cols()) = corrections;
 			ref_state.ExpansionSpace.Images.rightCols(corrections.cols()) = correctionImages;
-			if (IsSubspaceExtensionEnabled(options.SubspaceExtensions,
-			                               IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages))
+			const bool areCorrectionImagesEnabled = IsSubspaceExtensionEnabled(
+			        options.SubspaceExtensions, IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages);
+			const bool areOffDiagonalCorrectionsEnabled = IsSubspaceExtensionEnabled(
+			        options.SubspaceExtensions,
+			        IterativeVectorInteractionSubspaceExtension::PreconditionedOffDiagonalCorrectionImages);
+			if (areCorrectionImagesEnabled || areOffDiagonalCorrectionsEnabled)
 			{
-				AppendCorrectionImageVectors(linearOperator,
-				                             correctionImages,
-				                             options.LinearDependenceTolerance,
-				                             ref_state.ExpansionSpace,
-				                             ref_statistics);
+				const AuxiliaryExpansionCandidates<Scalar> auxiliaryCandidates =
+				        FormAuxiliaryExpansionCandidates(ref_state.ExpansionSpace.Vectors,
+				                                         orthonormalizedCorrections,
+				                                         correctionImages,
+				                                         primaryEigenvalues,
+				                                         diagonal,
+				                                         options);
+				ref_statistics.GeneratedCorrectionImageVectorCount += auxiliaryCandidates.CorrectionImageVectorCount;
+				ref_statistics.GeneratedOffDiagonalCorrectionVectorCount +=
+				        auxiliaryCandidates.Vectors.cols() - auxiliaryCandidates.CorrectionImageVectorCount;
+				AppendAuxiliaryExpansionVectors(linearOperator,
+				                                auxiliaryCandidates,
+				                                options.LinearDependenceTolerance,
+				                                ref_state.ExpansionSpace,
+				                                ref_statistics);
 			}
 			return ExpansionResult::Expanded;
 		}

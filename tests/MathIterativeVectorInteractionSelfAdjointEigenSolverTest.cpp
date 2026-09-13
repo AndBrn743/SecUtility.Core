@@ -605,6 +605,7 @@ TEMPLATE_TEST_CASE("iVI pivoted QR removes dependent correction directions", "[M
 
 	const auto orthonormalized = OrthonormalizeAndRemoveLinearDependenceWithQR(vectors, 1e-12);
 	REQUIRE(orthonormalized.Vectors.cols() == 2);
+	CHECK(orthonormalized.SourcePivotIndices == std::vector<Eigen::Index>{2, 0});
 	CHECK((orthonormalized.Vectors.adjoint() * orthonormalized.Vectors
 	       - Eigen::MatrixX<TestType>::Identity(2, 2))
 	              .norm()
@@ -629,6 +630,7 @@ TEMPLATE_TEST_CASE("iVI correction QR applies the squared-magnitude dependence t
 	REQUIRE(orthonormalized.Vectors.cols() == 2);
 	REQUIRE(orthonormalized.SourceCoefficients.rows() == 3);
 	REQUIRE(orthonormalized.SourceCoefficients.cols() == 2);
+	CHECK(orthonormalized.SourcePivotIndices == std::vector<Eigen::Index>{0, 1});
 	CHECK((vectors * orthonormalized.SourceCoefficients).isApprox(orthonormalized.Vectors, 1e-12));
 	CHECK((orthonormalized.Vectors.adjoint() * orthonormalized.Vectors
 	       - Eigen::MatrixX<TestType>::Identity(2, 2))
@@ -1076,13 +1078,72 @@ TEMPLATE_TEST_CASE("iVI discards correction-vector images contained in the expan
 	const Eigen::MatrixX<TestType> correctionImages = Eigen::MatrixX<TestType>::Identity(3, 2);
 	InteriorEigenSolverStatistics statistics;
 
-	AppendCorrectionImageVectors(linearOperator, correctionImages, 1e-12, expansionSpace, statistics);
+	const AuxiliaryExpansionCandidates<TestType> candidates{correctionImages, 2};
+	AppendAuxiliaryExpansionVectors(linearOperator, candidates, 1e-12, expansionSpace, statistics);
 
 	CHECK(expansionSpace.Vectors.cols() == 3);
-	CHECK(statistics.GeneratedCorrectionImageVectorCount == 2);
 	CHECK(statistics.RetainedCorrectionImageVectorCount == 0);
 	CHECK(statistics.MultipliedVectorCount == 0);
 	CHECK(statistics.OperatorApplicationCount == 0);
+}
+
+
+TEMPLATE_TEST_CASE("iVI integrates and jointly filters auxiliary correction directions",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(3, 3);
+	matrix.diagonal() << TestType{1}, TestType{2}, TestType{3};
+	matrix(0, 1) = TestType{0.5};
+	matrix(1, 0) = TestType{0.5};
+	matrix(1, 2) = TestType{0.25};
+	matrix(2, 1) = TestType{0.25};
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	const Eigen::MatrixX<TestType> retainedVectors = Eigen::MatrixX<TestType>::Identity(3, 1);
+	const VectorImagePair<TestType> retainedSpace{retainedVectors, matrix * retainedVectors};
+	InteriorIterationAnalysis<TestType> analysis;
+	analysis.OrderedRitzPairs.Eigenvalues = Eigen::VectorX<RealScalar>{{1}};
+	analysis.RetainedVectorCount = 1;
+	analysis.PrimaryVectorCount = 1;
+	const Eigen::VectorX<RealScalar> diagonal = matrix.diagonal().real();
+
+	const auto expandWith = [&](const IterativeVectorInteractionSubspaceExtension extensions)
+	{
+		InteriorEigenSolverOptions<RealScalar> options{1};
+		options.SubspaceExtensions = extensions;
+		InteriorIterationState<TestType> state;
+		InteriorEigenSolverStatistics statistics;
+		CHECK(ExpandForNextIteration(
+		              linearOperator, diagonal, analysis, options, retainedSpace, state, statistics)
+		      == ExpansionResult::Expanded);
+		return std::pair{std::move(state), statistics};
+	};
+
+	auto [offDiagonalState, offDiagonalStatistics] = expandWith(
+	        IterativeVectorInteractionSubspaceExtension::PreconditionedOffDiagonalCorrectionImages);
+	CHECK(offDiagonalState.ExpansionSpace.Vectors.cols() == 3);
+	CHECK(offDiagonalState.ExpansionSpace.Images.isApprox(
+	        matrix * offDiagonalState.ExpansionSpace.Vectors, 1e-12));
+	CHECK(offDiagonalStatistics.GeneratedCorrectionImageVectorCount == 0);
+	CHECK(offDiagonalStatistics.RetainedCorrectionImageVectorCount == 0);
+	CHECK(offDiagonalStatistics.GeneratedOffDiagonalCorrectionVectorCount == 1);
+	CHECK(offDiagonalStatistics.RetainedOffDiagonalCorrectionVectorCount == 1);
+	CHECK(offDiagonalStatistics.MultipliedVectorCount == 2);
+
+	auto [combinedState, combinedStatistics] = expandWith(
+	        IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages
+	        | IterativeVectorInteractionSubspaceExtension::PreconditionedOffDiagonalCorrectionImages);
+	CHECK(combinedState.ExpansionSpace.Vectors.cols() == 3);
+	CHECK(combinedState.ExpansionSpace.Images.isApprox(matrix * combinedState.ExpansionSpace.Vectors, 1e-12));
+	CHECK(combinedStatistics.GeneratedCorrectionImageVectorCount == 1);
+	CHECK(combinedStatistics.GeneratedOffDiagonalCorrectionVectorCount == 1);
+	CHECK(combinedStatistics.RetainedCorrectionImageVectorCount
+	              + combinedStatistics.RetainedOffDiagonalCorrectionVectorCount
+	      == 1);
+	CHECK(combinedStatistics.MultipliedVectorCount == 2);
 }
 
 
@@ -1533,6 +1594,39 @@ TEMPLATE_TEST_CASE("iVI correction-vector-image expansion converges to the dense
 	CHECK(solver.Statistics().RetainedCorrectionImageVectorCount > 0);
 	CHECK(solver.Statistics().RetainedCorrectionImageVectorCount
 	      <= solver.Statistics().GeneratedCorrectionImageVectorCount);
+}
+
+
+TEMPLATE_TEST_CASE("iVI off-diagonal correction expansion converges to the dense reference",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using RealScalar = Eigen::NumTraits<TestType>::Real;
+	const Eigen::MatrixX<TestType> matrix = CoupledHermitianMatrix<TestType>(10);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> referenceSolver(matrix);
+	const RealScalar lowerBound = (referenceSolver.eigenvalues()[4] + referenceSolver.eigenvalues()[5]) / 2;
+	const RealScalar upperBound = (referenceSolver.eigenvalues()[5] + referenceSolver.eigenvalues()[6]) / 2;
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	InteriorEigenSolverOptions<RealScalar> options{1};
+	options.MaximumIterationCount = 50;
+	options.EigenvalueChangeTolerance = 1e-10;
+	options.ResidualNormTolerance = 1e-10;
+	options.SubspaceExtensions = IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+	                             | IterativeVectorInteractionSubspaceExtension::PreconditionedOffDiagonalCorrectionImages;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	(void)solver.Compute(linearOperator, EigenvalueInterval<RealScalar>{lowerBound, upperBound}, options);
+
+	REQUIRE(solver.Status() == InteriorEigenSolverStatus::Converged);
+	REQUIRE(solver.Eigenvalues().size() == 1);
+	CHECK(solver.Eigenvalues()[0] == Catch::Approx(referenceSolver.eigenvalues()[5]).margin(1e-10));
+	CHECK(solver.ResidualNorms()[0] < 1e-10);
+	CHECK(solver.Statistics().GeneratedOffDiagonalCorrectionVectorCount
+	      == solver.Statistics().RetainedCorrectionVectorCount);
+	CHECK(solver.Statistics().RetainedOffDiagonalCorrectionVectorCount > 0);
+	CHECK(solver.Statistics().RetainedOffDiagonalCorrectionVectorCount
+	      <= solver.Statistics().GeneratedOffDiagonalCorrectionVectorCount);
 }
 
 
