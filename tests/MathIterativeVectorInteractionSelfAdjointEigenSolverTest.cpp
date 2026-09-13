@@ -855,6 +855,90 @@ TEMPLATE_TEST_CASE("iVI residual and absolute preconditioner kernels", "[Math][i
 }
 
 
+TEMPLATE_TEST_CASE("iVI source-coefficient-weighted eigenvalues follow the reference convention",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	const RealScalar inverseSquareRootOfTwo = RealScalar{1} / std::sqrt(RealScalar{2});
+	Eigen::MatrixX<TestType> sourceCoefficients = Eigen::MatrixX<TestType>::Zero(2, 2);
+	sourceCoefficients(0, 0) = TestType{2};
+	sourceCoefficients(0, 1) = TestType{inverseSquareRootOfTwo};
+	sourceCoefficients(1, 1) = TestType{inverseSquareRootOfTwo};
+	if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+	{
+		sourceCoefficients(1, 1) *= TestType{0, 1};
+	}
+	const Eigen::VectorX<RealScalar> sourceEigenvalues{{2, 10}};
+
+	const auto weightedEigenvalues =
+	        CalculateSourceCoefficientWeightedEigenvalues(sourceCoefficients, sourceEigenvalues);
+
+	REQUIRE(weightedEigenvalues.size() == 2);
+	CHECK(weightedEigenvalues[0] == Catch::Approx(8));
+	CHECK(weightedEigenvalues[1] == Catch::Approx(6));
+
+	const TestType phase = []
+	{
+		if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+		{
+			return std::polar(RealScalar{1}, RealScalar{0.73});
+		}
+		return TestType{-1};
+	}();
+	sourceCoefficients.col(1) *= phase;
+	CHECK(CalculateSourceCoefficientWeightedEigenvalues(sourceCoefficients, sourceEigenvalues)
+	              .isApprox(weightedEigenvalues));
+	CHECK(CalculateSourceCoefficientWeightedEigenvalues(Eigen::MatrixX<TestType>(2, 0), sourceEigenvalues).size()
+	      == 0);
+}
+
+
+TEMPLATE_TEST_CASE("iVI forms preconditioned off-diagonal correction vectors",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	const Eigen::VectorX<RealScalar> diagonal{{1, 2, 4}};
+	const Eigen::MatrixX<TestType> corrections = Eigen::MatrixX<TestType>::Identity(3, 2);
+	Eigen::MatrixX<TestType> offDiagonalActions = Eigen::MatrixX<TestType>::Zero(3, 2);
+	offDiagonalActions(0, 0) = TestType{0.5};
+	offDiagonalActions(2, 0) = TestType{3};
+	offDiagonalActions(0, 1) = TestType{-2};
+	const Eigen::MatrixX<TestType> correctionImages =
+	        diagonal.template cast<TestType>().asDiagonal() * corrections + offDiagonalActions;
+	const Eigen::MatrixX<TestType> sourceCoefficients = Eigen::MatrixX<TestType>::Identity(2, 2);
+	const Eigen::VectorX<RealScalar> sourceEigenvalues{{1, 2}};
+
+	CHECK(FormOffDiagonalCorrectionVectors(corrections, correctionImages, diagonal)
+	              .isApprox(offDiagonalActions));
+	const auto preconditioned = FormPreconditionedOffDiagonalCorrectionVectors(corrections,
+	                                                                           correctionImages,
+	                                                                           sourceCoefficients,
+	                                                                           sourceEigenvalues,
+	                                                                           diagonal,
+	                                                                           RealScalar{0.25});
+	CHECK(preconditioned(2, 0) == TestType{1});
+	CHECK(preconditioned(0, 1) == TestType{-2});
+	CHECK(preconditioned(0, 0) == TestType{2});
+	CHECK(preconditioned(1, 1) == TestType{0});
+
+	const Eigen::MatrixX<TestType> diagonalImages =
+	        diagonal.template cast<TestType>().asDiagonal() * corrections;
+	CHECK(FormPreconditionedOffDiagonalCorrectionVectors(corrections,
+	                                                     diagonalImages,
+	                                                     sourceCoefficients,
+	                                                     sourceEigenvalues,
+	                                                     diagonal,
+	                                                     RealScalar{0.25})
+	              .isZero());
+}
+
+
 TEMPLATE_TEST_CASE("iVI correction statistics distinguish generated and retained vectors",
 	               "[Math][iVI]",
 	               double,

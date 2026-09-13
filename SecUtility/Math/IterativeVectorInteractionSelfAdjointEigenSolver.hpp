@@ -1035,6 +1035,45 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
+		Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> CalculateSourceCoefficientWeightedEigenvalues(
+		        const Eigen::MatrixX<Scalar>& sourceCoefficients,
+		        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& sourceEigenvalues)
+		{
+			// Match the reference implementation: these weights are intentionally not normalized.
+			return sourceCoefficients.cwiseAbs2().transpose() * sourceEigenvalues;
+		}
+
+
+		template <typename Scalar>
+		Eigen::MatrixX<Scalar> FormOffDiagonalCorrectionVectors(
+		        const Eigen::MatrixX<Scalar>& corrections,
+		        const Eigen::MatrixX<Scalar>& correctionImages,
+		        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& diagonal)
+		{
+			return correctionImages - diagonal.template cast<Scalar>().asDiagonal() * corrections;
+		}
+
+
+		template <typename Scalar>
+		Eigen::MatrixX<Scalar> FormPreconditionedOffDiagonalCorrectionVectors(
+		        const Eigen::MatrixX<Scalar>& corrections,
+		        const Eigen::MatrixX<Scalar>& correctionImages,
+		        const Eigen::MatrixX<Scalar>& correctionSourceCoefficients,
+		        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& sourceEigenvalues,
+		        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& diagonal,
+		        const typename Eigen::NumTraits<Scalar>::Real denominatorFloor)
+		{
+			const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> weightedEigenvalues =
+			        CalculateSourceCoefficientWeightedEigenvalues(correctionSourceCoefficients, sourceEigenvalues);
+			return ApplyAbsoluteDiagonalPreconditioner(
+			        FormOffDiagonalCorrectionVectors(corrections, correctionImages, diagonal),
+			        weightedEigenvalues,
+			        diagonal,
+			        denominatorFloor);
+		}
+
+
+		template <typename Scalar>
 		struct InteriorIterationState
 		{
 			using RealScalar = Eigen::NumTraits<Scalar>::Real;
