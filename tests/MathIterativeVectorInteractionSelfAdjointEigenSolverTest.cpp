@@ -319,6 +319,13 @@ TEMPLATE_TEST_CASE("iVI public result contract", "[Math][iVI]", double, (std::co
 	CHECK(solver.Statistics().MaximumExpansionSpaceSize == 0);
 	CHECK(solver.Statistics().ExplicitImageRecalculationCount == 0);
 	CHECK(solver.Statistics().GeneralizedSolveCount == 0);
+	CHECK(solver.Statistics().GeneratedCorrectionVectorCount == 0);
+	CHECK(solver.Statistics().RetainedCorrectionVectorCount == 0);
+	CHECK(solver.Statistics().GeneratedCorrectionImageVectorCount == 0);
+	CHECK(solver.Statistics().RetainedCorrectionImageVectorCount == 0);
+	CHECK(solver.Statistics().GeneratedOffDiagonalCorrectionVectorCount == 0);
+	CHECK(solver.Statistics().RetainedOffDiagonalCorrectionVectorCount == 0);
+	CHECK(solver.Statistics().RetainedAdditionalRitzVectorCount == 0);
 	CHECK(solver.Statistics().RecycledVectorCount == 0);
 	CHECK(solver.Statistics().CurrentFrozenVectorCount == 0);
 	CHECK(solver.Statistics().MaximumFrozenVectorCount == 0);
@@ -806,6 +813,71 @@ TEMPLATE_TEST_CASE("iVI residual and absolute preconditioner kernels", "[Math][i
 	CHECK(corrections(2, 1) == TestType{-16});
 	CHECK(corrections(0, 0) == TestType{0});
 	CHECK(corrections(1, 1) == TestType{0});
+}
+
+
+TEMPLATE_TEST_CASE("iVI correction statistics distinguish generated and retained vectors",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(3, 3);
+	matrix << TestType{1}, TestType{0}, TestType{1},
+	          TestType{0}, TestType{2}, TestType{1},
+	          TestType{1}, TestType{1}, TestType{3};
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	const Eigen::MatrixX<TestType> retainedVectors = Eigen::MatrixX<TestType>::Identity(3, 2);
+	VectorImagePair<TestType> retainedSpace{retainedVectors, matrix * retainedVectors};
+
+	InteriorIterationAnalysis<TestType> analysis;
+	analysis.OrderedRitzPairs.Eigenvalues = Eigen::VectorX<RealScalar>{{1, 2}};
+	analysis.RetainedVectorCount = 2;
+	analysis.PrimaryVectorCount = 2;
+	InteriorEigenSolverOptions<RealScalar> options{2};
+	InteriorIterationState<TestType> state;
+	InteriorEigenSolverStatistics statistics;
+	const Eigen::VectorX<RealScalar> diagonal = matrix.diagonal().real();
+
+	const auto result = ExpandForNextIteration(
+	        linearOperator, diagonal, analysis, options, retainedSpace, state, statistics);
+
+	CHECK(result == ExpansionResult::Expanded);
+	CHECK(statistics.GeneratedCorrectionVectorCount == 2);
+	CHECK(statistics.RetainedCorrectionVectorCount == 1);
+	CHECK(statistics.MultipliedVectorCount == 1);
+	CHECK(statistics.OperatorApplicationCount == 1);
+	CHECK(state.ExpansionSpace.Vectors.cols() == 3);
+	CHECK(state.ExpansionSpace.Images.isApprox(matrix * state.ExpansionSpace.Vectors));
+	CHECK(statistics.GeneratedCorrectionImageVectorCount == 0);
+	CHECK(statistics.RetainedCorrectionImageVectorCount == 0);
+	CHECK(statistics.GeneratedOffDiagonalCorrectionVectorCount == 0);
+	CHECK(statistics.RetainedOffDiagonalCorrectionVectorCount == 0);
+
+	const auto identityOperator = IdentityOperator<TestType>(3);
+	InteriorIterationAnalysis<TestType> convergedAnalysis;
+	convergedAnalysis.OrderedRitzPairs.Eigenvalues = Eigen::VectorX<RealScalar>{{1}};
+	convergedAnalysis.RetainedVectorCount = 1;
+	convergedAnalysis.PrimaryVectorCount = 1;
+	const Eigen::MatrixX<TestType> convergedVector = Eigen::MatrixX<TestType>::Identity(3, 1);
+	const VectorImagePair<TestType> convergedSpace{convergedVector, convergedVector};
+	InteriorIterationState<TestType> convergedState;
+	InteriorEigenSolverStatistics convergedStatistics;
+	const Eigen::VectorX<RealScalar> identityDiagonal = identityOperator.Diagonal();
+
+	const auto convergedResult = ExpandForNextIteration(identityOperator,
+	                                                    identityDiagonal,
+	                                                    convergedAnalysis,
+	                                                    options,
+	                                                    convergedSpace,
+	                                                    convergedState,
+	                                                    convergedStatistics);
+	CHECK(convergedResult == ExpansionResult::NoIndependentCorrections);
+	CHECK(convergedStatistics.GeneratedCorrectionVectorCount == 1);
+	CHECK(convergedStatistics.RetainedCorrectionVectorCount == 0);
+	CHECK(convergedStatistics.MultipliedVectorCount == 0);
+	CHECK(convergedStatistics.OperatorApplicationCount == 0);
 }
 
 
@@ -1396,6 +1468,18 @@ TEMPLATE_TEST_CASE("iVI can solve without optional subspace extensions",
 	REQUIRE(solver.Eigenvalues().size() == 1);
 	CHECK(solver.Eigenvalues()[0] == Catch::Approx(-1));
 	CHECK(solver.Statistics().RecycledVectorCount == 0);
+	CHECK(solver.Statistics().RetainedAdditionalRitzVectorCount == 0);
+	CHECK(solver.Statistics().GeneratedCorrectionImageVectorCount == 0);
+	CHECK(solver.Statistics().RetainedCorrectionImageVectorCount == 0);
+	CHECK(solver.Statistics().GeneratedOffDiagonalCorrectionVectorCount == 0);
+	CHECK(solver.Statistics().RetainedOffDiagonalCorrectionVectorCount == 0);
+
+	options.SubspaceExtensions = IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors;
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solverWithAdditionalRitzVectors;
+	REQUIRE(solverWithAdditionalRitzVectors.Compute(
+	                linearOperator, EigenvalueInterval<RealScalar>{-1.5, -0.5}, options)
+	        == InteriorEigenSolverStatus::Converged);
+	CHECK(solverWithAdditionalRitzVectors.Statistics().RetainedAdditionalRitzVectorCount == 5);
 }
 
 

@@ -129,11 +129,21 @@ namespace SecUtility::Math
 	struct InteriorEigenSolverStatistics
 	{
 		Eigen::Index CompletedIterationCount = 0;
+		// Counts columns passed to the operator and calls made to it, respectively.
 		Eigen::Index MultipliedVectorCount = 0;
 		Eigen::Index OperatorApplicationCount = 0;
 		Eigen::Index MaximumExpansionSpaceSize = 0;
 		Eigen::Index ExplicitImageRecalculationCount = 0;
 		Eigen::Index GeneralizedSolveCount = 0;
+		// Generated counts candidates before rank filtering; retained counts survivors.
+		Eigen::Index GeneratedCorrectionVectorCount = 0;
+		Eigen::Index RetainedCorrectionVectorCount = 0;
+		Eigen::Index GeneratedCorrectionImageVectorCount = 0;
+		Eigen::Index RetainedCorrectionImageVectorCount = 0;
+		Eigen::Index GeneratedOffDiagonalCorrectionVectorCount = 0;
+		Eigen::Index RetainedOffDiagonalCorrectionVectorCount = 0;
+		// These cumulative counts measure vectors retained across all collapses.
+		Eigen::Index RetainedAdditionalRitzVectorCount = 0;
 		Eigen::Index RecycledVectorCount = 0;
 		Eigen::Index CurrentFrozenVectorCount = 0;
 		Eigen::Index MaximumFrozenVectorCount = 0;
@@ -1246,8 +1256,10 @@ namespace SecUtility::Math
 			const Eigen::MatrixX<Scalar> residuals = CalculateResiduals(primaryPairs, primaryEigenvalues);
 			const Eigen::MatrixX<Scalar> unorthogonalizedCorrections = ApplyAbsoluteDiagonalPreconditioner(
 			        residuals, primaryEigenvalues, diagonal, options.PreconditionerDenominatorFloor);
+			ref_statistics.GeneratedCorrectionVectorCount += unorthogonalizedCorrections.cols();
 			const Eigen::MatrixX<Scalar> corrections = OrthogonalizeAndRemoveLinearDependence(
 			        ref_state.ExpansionSpace.Vectors, unorthogonalizedCorrections, options.LinearDependenceTolerance);
+			ref_statistics.RetainedCorrectionVectorCount += corrections.cols();
 			if (corrections.cols() == 0)
 			{
 				return ExpansionResult::NoIndependentCorrections;
@@ -1432,6 +1444,8 @@ namespace SecUtility::Math
 				return m_Status;
 			}
 			m_Statistics.GeneralizedSolveCount += static_cast<Eigen::Index>(analysis.IsGeneralizedSolve);
+			m_Statistics.RetainedAdditionalRitzVectorCount +=
+			        static_cast<Eigen::Index>(analysis.Selection.AdditionalRitzIndices.size());
 			m_Statistics.CurrentFrozenVectorCount = analysis.FrozenVectorCount;
 			m_Statistics.MaximumFrozenVectorCount =
 			        Max(m_Statistics.MaximumFrozenVectorCount, analysis.FrozenVectorCount);
