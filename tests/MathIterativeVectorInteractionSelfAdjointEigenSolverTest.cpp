@@ -87,6 +87,45 @@ namespace
 	}
 
 
+	template <typename Scalar>
+	Eigen::MatrixX<Scalar> ClusteredHermitianMatrix(const Eigen::Index dimension)
+	{
+		using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+		Eigen::MatrixX<Scalar> matrix = Eigen::MatrixX<Scalar>::Zero(dimension, dimension);
+		for (Eigen::Index index = 0; index < dimension; index++)
+		{
+			matrix(index, index) = static_cast<RealScalar>(index);
+		}
+		const Eigen::Index firstClusterIndex = dimension / 2 - 1;
+		matrix(firstClusterIndex, firstClusterIndex) = static_cast<RealScalar>(dimension / 2);
+		matrix(firstClusterIndex + 1, firstClusterIndex + 1) =
+		        static_cast<RealScalar>(dimension / 2) + RealScalar{1e-3};
+		matrix(firstClusterIndex + 2, firstClusterIndex + 2) =
+		        static_cast<RealScalar>(dimension / 2) + RealScalar{2e-3};
+		const Scalar coupling = []
+		{
+			if constexpr (Eigen::NumTraits<Scalar>::IsComplex)
+			{
+				return Scalar{0.0025, 0.001};
+			}
+			return Scalar{0.0025};
+		}();
+		for (Eigen::Index index = 0; index + 1 < dimension; index++)
+		{
+			matrix(index, index + 1) = coupling;
+			if constexpr (Eigen::NumTraits<Scalar>::IsComplex)
+			{
+				matrix(index + 1, index) = std::conj(coupling);
+			}
+			else
+			{
+				matrix(index + 1, index) = coupling;
+			}
+		}
+		return matrix;
+	}
+
+
 	template <typename T>
 	struct VectorOnlySelfAdjointLinearOperator
 	{
@@ -1630,6 +1669,158 @@ TEMPLATE_TEST_CASE("iVI off-diagonal correction expansion converges to the dense
 }
 
 
+TEMPLATE_TEST_CASE("iVI converges on a clustered spectrum with every subspace-extension combination",
+	               "[Math][iVI][Validation]",
+	               double,
+	               (std::complex<double>))
+{
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	using Underlying = std::underlying_type_t<IterativeVectorInteractionSubspaceExtension>;
+	constexpr Eigen::Index dimension = 24;
+	constexpr Eigen::Index expectedEigenpairCount = 3;
+	const Eigen::MatrixX<TestType> matrix = ClusteredHermitianMatrix<TestType>(dimension);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> referenceSolver(matrix);
+	REQUIRE(referenceSolver.info() == Eigen::Success);
+	constexpr Eigen::Index firstExpectedIndex = dimension / 2 - 1;
+	const RealScalar lowerBound =
+	        (referenceSolver.eigenvalues()[firstExpectedIndex - 1]
+	         + referenceSolver.eigenvalues()[firstExpectedIndex])
+	        / 2;
+	const RealScalar upperBound =
+	        (referenceSolver.eigenvalues()[firstExpectedIndex + expectedEigenpairCount - 1]
+	         + referenceSolver.eigenvalues()[firstExpectedIndex + expectedEigenpairCount])
+	        / 2;
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	constexpr auto allExtensionBits =
+	        static_cast<Underlying>(IterativeVectorInteractionSubspaceExtension::All);
+
+	for (Underlying extensionBits = 0; extensionBits <= allExtensionBits; extensionBits++)
+	{
+		CAPTURE(extensionBits);
+		InteriorEigenSolverOptions<RealScalar> options{expectedEigenpairCount};
+		options.MaximumIterationCount = 200;
+		options.GeneralizedSolveInterval = 1;
+		options.EigenvalueChangeTolerance = RealScalar{1e-8};
+		options.ResidualNormTolerance = RealScalar{1e-8};
+		options.FreezingResidualNormTolerance = options.ResidualNormTolerance;
+		options.LinearDependenceTolerance = RealScalar{1e-14};
+		options.SubspaceExtensions = static_cast<IterativeVectorInteractionSubspaceExtension>(extensionBits);
+
+		IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+		(void)solver.Compute(linearOperator, EigenvalueInterval<RealScalar>{lowerBound, upperBound}, options);
+
+		INFO("iterations: " << solver.Statistics().CompletedIterationCount);
+		INFO("maximum expansion size: " << solver.Statistics().MaximumExpansionSpaceSize);
+		INFO("eigenvalues: " << solver.Eigenvalues().transpose());
+		INFO("residual norms: " << solver.ResidualNorms().transpose());
+		REQUIRE(solver.Status() == InteriorEigenSolverStatus::Converged);
+		REQUIRE(solver.Eigenvalues().size() == expectedEigenpairCount);
+		CHECK(solver.Eigenvalues().isApprox(
+		        referenceSolver.eigenvalues().segment(firstExpectedIndex, expectedEigenpairCount), RealScalar{1e-8}));
+		CHECK(solver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+		CHECK((solver.Eigenvectors().adjoint() * solver.Eigenvectors())
+		              .isApprox(Eigen::MatrixX<TestType>::Identity(expectedEigenpairCount, expectedEigenpairCount),
+		                        RealScalar{1e-9}));
+		CHECK(solver.Statistics().GeneralizedSolveCount == solver.Statistics().CompletedIterationCount);
+
+		const bool areAdditionalRitzVectorsEnabled =
+		        (extensionBits & static_cast<Underlying>(
+		                                 IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors))
+		        != 0;
+		const bool areCorrectionImagesEnabled =
+		        (extensionBits
+		         & static_cast<Underlying>(IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages))
+		        != 0;
+		const bool areOffDiagonalCorrectionsEnabled =
+		        (extensionBits
+		         & static_cast<Underlying>(
+		                 IterativeVectorInteractionSubspaceExtension::PreconditionedOffDiagonalCorrectionImages))
+		        != 0;
+		const bool arePreviousRitzVectorsEnabled =
+		        (extensionBits
+		         & static_cast<Underlying>(IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors))
+		        != 0;
+		if (!areAdditionalRitzVectorsEnabled)
+		{
+			CHECK(solver.Statistics().RetainedAdditionalRitzVectorCount == 0);
+		}
+		if (!areCorrectionImagesEnabled)
+		{
+			CHECK(solver.Statistics().GeneratedCorrectionImageVectorCount == 0);
+			CHECK(solver.Statistics().RetainedCorrectionImageVectorCount == 0);
+		}
+		else
+		{
+			CHECK(solver.Statistics().GeneratedCorrectionImageVectorCount
+			      == solver.Statistics().RetainedCorrectionVectorCount);
+		}
+		if (!areOffDiagonalCorrectionsEnabled)
+		{
+			CHECK(solver.Statistics().GeneratedOffDiagonalCorrectionVectorCount == 0);
+			CHECK(solver.Statistics().RetainedOffDiagonalCorrectionVectorCount == 0);
+		}
+		else
+		{
+			CHECK(solver.Statistics().GeneratedOffDiagonalCorrectionVectorCount
+			      == solver.Statistics().RetainedCorrectionVectorCount);
+		}
+		if (!arePreviousRitzVectorsEnabled)
+		{
+			CHECK(solver.Statistics().RecycledVectorCount == 0);
+		}
+	}
+}
+
+
+TEMPLATE_TEST_CASE("iVI preserves interval terminal semantics for every extension combination",
+	               "[Math][iVI][Validation]",
+	               double,
+	               (std::complex<double>))
+{
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	using Underlying = std::underlying_type_t<IterativeVectorInteractionSubspaceExtension>;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(8, 8);
+	matrix.diagonal() << TestType{-3}, TestType{-2}, TestType{-1}, TestType{0},
+	                     TestType{1}, TestType{2}, TestType{3}, TestType{4};
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	constexpr Underlying allExtensionBits =
+	        static_cast<Underlying>(IterativeVectorInteractionSubspaceExtension::All);
+
+	for (Underlying extensionBits = 0; extensionBits <= allExtensionBits; extensionBits++)
+	{
+		CAPTURE(extensionBits);
+		const auto extensions = static_cast<IterativeVectorInteractionSubspaceExtension>(extensionBits);
+
+		InteriorEigenSolverOptions<RealScalar> intervalOptions{3};
+		intervalOptions.SubspaceExtensions = extensions;
+		IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> intervalSolver;
+		REQUIRE(intervalSolver.Compute(
+		                linearOperator, EigenvalueInterval<RealScalar>{-1, 1}, intervalOptions)
+		        == InteriorEigenSolverStatus::Converged);
+		CHECK(intervalSolver.Eigenvalues().isApprox(Eigen::VectorX<RealScalar>{{-1, 0, 1}}));
+		CHECK(intervalSolver.ResidualNorms().isZero());
+
+		InteriorEigenSolverOptions<RealScalar> overflowOptions{2};
+		overflowOptions.SubspaceExtensions = extensions;
+		IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> overflowSolver;
+		REQUIRE(overflowSolver.Compute(
+		                linearOperator, EigenvalueInterval<RealScalar>{-1, 1}, overflowOptions)
+		        == InteriorEigenSolverStatus::EigenpairCountLimitExceeded);
+		CHECK(overflowSolver.Eigenvalues().isApprox(Eigen::VectorX<RealScalar>{{-1, 0, 1}}));
+
+		InteriorEigenSolverOptions<RealScalar> emptyOptions{2};
+		emptyOptions.SubspaceExtensions = extensions;
+		IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> emptySolver;
+		REQUIRE(emptySolver.Compute(
+		                linearOperator, EigenvalueInterval<RealScalar>{10, 11}, emptyOptions)
+		        == InteriorEigenSolverStatus::ExpansionSpaceExhausted);
+		CHECK(emptySolver.Eigenvalues().size() == 0);
+		CHECK(emptySolver.Eigenvectors().cols() == 0);
+		CHECK(emptySolver.ResidualNorms().size() == 0);
+	}
+}
+
+
 TEST_CASE("iVI exposes a partial result at the iteration limit", "[Math][iVI]")
 {
 	const Eigen::MatrixXd matrix = CoupledHermitianMatrix<double>(10);
@@ -1987,6 +2178,24 @@ TEMPLATE_TEST_CASE("iVI finds a complete interior set for a large matrix-free He
 	              .isApprox(Eigen::MatrixX<TestType>::Identity(expectedEigenpairCount, expectedEigenpairCount),
 	                        RealScalar{1e-9}));
 	CHECK(solver.Statistics().MaximumExpansionSpaceSize < dimension / 4);
+
+	options.SubspaceExtensions = IterativeVectorInteractionSubspaceExtension::All;
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> allExtensionsSolver;
+	(void)allExtensionsSolver.Compute(
+	        linearOperator, EigenvalueInterval<RealScalar>{lowerBound, upperBound}, options);
+	INFO("all-extension iterations: " << allExtensionsSolver.Statistics().CompletedIterationCount);
+	INFO("all-extension maximum expansion size: "
+	     << allExtensionsSolver.Statistics().MaximumExpansionSpaceSize);
+	INFO("all-extension eigenvalues: " << allExtensionsSolver.Eigenvalues().transpose());
+	INFO("all-extension residual norms: " << allExtensionsSolver.ResidualNorms().transpose());
+	REQUIRE(allExtensionsSolver.Status() == InteriorEigenSolverStatus::Converged);
+	REQUIRE(allExtensionsSolver.Eigenvalues().size() == expectedEigenpairCount);
+	CHECK(allExtensionsSolver.Eigenvalues().isApprox(
+	        referenceSolver.eigenvalues().segment(firstExpectedIndex, expectedEigenpairCount), RealScalar{1e-8}));
+	CHECK(allExtensionsSolver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+	CHECK((allExtensionsSolver.Eigenvectors().adjoint() * allExtensionsSolver.Eigenvectors())
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(expectedEigenpairCount, expectedEigenpairCount),
+	                        RealScalar{1e-9}));
 }
 
 
@@ -2042,4 +2251,27 @@ TEST_CASE("iVI finds the complete interval set for a matrix-free hub-and-band op
 	                                static_cast<Eigen::Index>(expectedEigenvalues.size())),
 	                        1e-8));
 	CHECK(solver.Statistics().MaximumExpansionSpaceSize < dimension);
+
+	options.SubspaceExtensions = IterativeVectorInteractionSubspaceExtension::All;
+	IterativeVectorInteractionSelfAdjointEigenSolver<HubAndBandSelfAdjointLinearOperator> allExtensionsSolver;
+	(void)allExtensionsSolver.Compute(linearOperator, interval, options);
+	INFO("all-extension iterations: " << allExtensionsSolver.Statistics().CompletedIterationCount);
+	INFO("all-extension maximum expansion size: "
+	     << allExtensionsSolver.Statistics().MaximumExpansionSpaceSize);
+	INFO("all-extension returned eigenvalues: " << allExtensionsSolver.Eigenvalues().transpose());
+	INFO("all-extension residual norms: " << allExtensionsSolver.ResidualNorms().transpose());
+	REQUIRE(allExtensionsSolver.Status() == InteriorEigenSolverStatus::Converged);
+	REQUIRE(allExtensionsSolver.Eigenvalues().size() == static_cast<Eigen::Index>(expectedEigenvalues.size()));
+	CHECK(std::equal(allExtensionsSolver.Eigenvalues().begin(),
+	                 allExtensionsSolver.Eigenvalues().end(),
+	                 expectedEigenvalues.begin(),
+	                 [](const double actual, const double expected)
+	                 { return actual == Catch::Approx(expected).margin(1e-7); }));
+	CHECK(allExtensionsSolver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+	CHECK((allExtensionsSolver.Eigenvectors().adjoint() * allExtensionsSolver.Eigenvectors())
+	              .isApprox(Eigen::MatrixXd::Identity(
+	                                static_cast<Eigen::Index>(expectedEigenvalues.size()),
+	                                static_cast<Eigen::Index>(expectedEigenvalues.size())),
+	                        1e-8));
+	CHECK(allExtensionsSolver.Statistics().MaximumExpansionSpaceSize <= dimension);
 }
