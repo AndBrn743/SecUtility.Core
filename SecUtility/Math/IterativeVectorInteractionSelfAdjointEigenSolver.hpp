@@ -1072,6 +1072,36 @@ namespace SecUtility::Math
 
 
 		template <SelfAdjointLinearOperator Operator>
+		void AppendCorrectionImageVectors(
+		        const Operator& linearOperator,
+		        const Eigen::MatrixX<LinearOperatorScalar<Operator>>& correctionImages,
+		        const LinearOperatorRealScalar<Operator> relativeLinearDependenceTolerance,
+		        VectorImagePair<LinearOperatorScalar<Operator>>& ref_expansionSpace,
+		        InteriorEigenSolverStatistics& ref_statistics)
+		{
+			using Scalar = LinearOperatorScalar<Operator>;
+			ref_statistics.GeneratedCorrectionImageVectorCount += correctionImages.cols();
+			const OrthonormalizedDirections<Scalar> orthonormalizedDirections =
+			        OrthogonalizeAndRemoveLinearDependence(ref_expansionSpace.Vectors,
+			                                               correctionImages,
+			                                               relativeLinearDependenceTolerance);
+			const Eigen::MatrixX<Scalar>& vectors = orthonormalizedDirections.Vectors;
+			ref_statistics.RetainedCorrectionImageVectorCount += vectors.cols();
+			if (vectors.cols() == 0)
+			{
+				return;
+			}
+
+			const Eigen::MatrixX<Scalar> images = ApplyOperator(linearOperator, vectors, ref_statistics);
+			const Eigen::Index oldExpansionSize = ref_expansionSpace.Vectors.cols();
+			ref_expansionSpace.Vectors.conservativeResize(Eigen::NoChange, oldExpansionSize + vectors.cols());
+			ref_expansionSpace.Images.conservativeResize(Eigen::NoChange, oldExpansionSize + vectors.cols());
+			ref_expansionSpace.Vectors.rightCols(vectors.cols()) = vectors;
+			ref_expansionSpace.Images.rightCols(vectors.cols()) = images;
+		}
+
+
+		template <SelfAdjointLinearOperator Operator>
 		VectorImagePair<LinearOperatorScalar<Operator>> CreateInitialExpansionSpace(
 		        const Operator& linearOperator,
 		        const Eigen::VectorX<LinearOperatorRealScalar<Operator>>& diagonal,
@@ -1292,6 +1322,15 @@ namespace SecUtility::Math
 			ref_state.ExpansionSpace.Images.conservativeResize(Eigen::NoChange, oldExpansionSize + corrections.cols());
 			ref_state.ExpansionSpace.Vectors.rightCols(corrections.cols()) = corrections;
 			ref_state.ExpansionSpace.Images.rightCols(corrections.cols()) = correctionImages;
+			if (IsSubspaceExtensionEnabled(options.SubspaceExtensions,
+			                               IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages))
+			{
+				AppendCorrectionImageVectors(linearOperator,
+				                             correctionImages,
+				                             options.LinearDependenceTolerance,
+				                             ref_state.ExpansionSpace,
+				                             ref_statistics);
+			}
 			return ExpansionResult::Expanded;
 		}
 	}
