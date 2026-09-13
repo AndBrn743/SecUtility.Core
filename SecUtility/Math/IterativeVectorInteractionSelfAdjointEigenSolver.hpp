@@ -9,6 +9,7 @@
 
 #include <SecUtility/Diagnostic/Exception.hpp>
 #include <SecUtility/Math/Core.hpp>
+#include <SecUtility/Misc/Bitflag.hpp>
 
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
@@ -26,6 +27,27 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+
+namespace SecUtility::Math
+{
+	enum class IterativeVectorInteractionSubspaceExtension : std::uint8_t
+	{
+		None = 0,
+		AdditionalRitzVectors = 1 << 0,
+		CorrectionVectorImages = 1 << 1,
+		PreconditionedOffDiagonalCorrectionImages = 1 << 2,
+		PreviousRitzVectors = 1 << 3,
+		All = 0b1111
+	};
+}
+
+
+template <>
+struct SecUtility::is_bitmask<SecUtility::Math::IterativeVectorInteractionSubspaceExtension> : std::true_type
+{
+	/* NO CODE */
+};
 
 
 namespace SecUtility::Math
@@ -85,7 +107,9 @@ namespace SecUtility::Math
 		RealScalar FreezingResidualNormTolerance{};
 		RealScalar ReducedMatrixAsymmetryTolerance = static_cast<RealScalar>(1e-6);
 
-		bool IsPreviousRitzVectorRecyclingEnabled = true;
+		IterativeVectorInteractionSubspaceExtension SubspaceExtensions =
+		        IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+		        | IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors;
 		bool IsPreviousRitzVectorRecyclingDynamicallyEnabled = true;
 		bool IsFreezingEnabled = true;
 	};
@@ -118,6 +142,13 @@ namespace SecUtility::Math
 
 	namespace Detail::IterativeVectorInteraction
 	{
+		constexpr bool IsSubspaceExtensionEnabled(const IterativeVectorInteractionSubspaceExtension extensions,
+		                                          const IterativeVectorInteractionSubspaceExtension extension) noexcept
+		{
+			return (extensions & extension) == extension;
+		}
+
+
 		template <typename Scalar>
 		struct VectorImagePair
 		{
@@ -1071,7 +1102,10 @@ namespace SecUtility::Math
 			const auto matches =
 			        MatchRitzVectors(populations, state.PreviousPrimaryVectorCount, state.PreviousRetainedVectorCount);
 			const Eigen::Index requestedAdditionalCount =
-			        options.AdditionalRitzVectorCount == 0
+			        !IsSubspaceExtensionEnabled(options.SubspaceExtensions,
+			                                    IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors)
+			                ? 0
+			        : options.AdditionalRitzVectorCount == 0
 			                ? Max(Eigen::Index{6}, Eigen::Index{3} * options.EigenpairCountLimit)
 			                : options.AdditionalRitzVectorCount;
 			analysis.Selection = SelectInteriorRitzVectors(currentEigenvalues,
@@ -1132,15 +1166,17 @@ namespace SecUtility::Math
 		{
 			Eigen::MatrixX<Scalar> coefficients =
 			        analysis.OrderedRitzPairs.Eigenvectors.leftCols(analysis.RetainedVectorCount);
-			if (iterationIndex > 0 && options.IsPreviousRitzVectorRecyclingEnabled
+			const bool isPreviousRitzVectorExtensionEnabled = IsSubspaceExtensionEnabled(
+			        options.SubspaceExtensions, IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors);
+			if (iterationIndex > 0 && isPreviousRitzVectorExtensionEnabled
 			    && options.IsPreviousRitzVectorRecyclingDynamicallyEnabled)
 			{
 				ref_state.IsPreviousRitzVectorRecyclingActive =
 				        IsPreviousRitzVectorRecyclingActiveFor(ref_state.IsPreviousRitzVectorRecyclingActive,
 				                                               analysis.Selection.MaximumMatchedEigenvalueChange);
 			}
-			if (iterationIndex == 0 || !ref_state.IsPreviousRitzVectorRecyclingActive
-			    || ref_state.PreviousPrimaryVectorCount == 0)
+			if (iterationIndex == 0 || !isPreviousRitzVectorExtensionEnabled
+			    || !ref_state.IsPreviousRitzVectorRecyclingActive || ref_state.PreviousPrimaryVectorCount == 0)
 			{
 				return coefficients;
 			}
@@ -1284,6 +1320,13 @@ namespace SecUtility::Math
 		        const EigenvalueInterval<LinearOperatorRealScalar<Operator>>& interval,
 		        const InteriorEigenSolverOptions<LinearOperatorRealScalar<Operator>>& options)
 		{
+			using SubspaceExtensionUnderlying = std::underlying_type_t<IterativeVectorInteractionSubspaceExtension>;
+			if (static_cast<SubspaceExtensionUnderlying>(options.SubspaceExtensions
+			                                             & ~IterativeVectorInteractionSubspaceExtension::All)
+			    != 0)
+			{
+				throw InvalidArgumentException("SubspaceExtensions contains an unknown flag");
+			}
 			if (linearOperator.rows() != linearOperator.cols())
 			{
 				throw InvalidArgumentException("The self-adjoint linear operator must be square");
@@ -1316,7 +1359,9 @@ namespace SecUtility::Math
 			{
 				throw InvalidArgumentException("MaximumIterationCount must be positive");
 			}
-			if (options.AdditionalRitzVectorCount < 0)
+			if (IsSubspaceExtensionEnabled(options.SubspaceExtensions,
+			                               IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors)
+			    && options.AdditionalRitzVectorCount < 0)
 			{
 				throw InvalidArgumentException("AdditionalRitzVectorCount must not be negative");
 			}
@@ -1328,15 +1373,21 @@ namespace SecUtility::Math
 			    || !std::isfinite(options.ResidualNormTolerance) || options.ResidualNormTolerance <= 0
 			    || !std::isfinite(options.PreconditionerDenominatorFloor) || options.PreconditionerDenominatorFloor <= 0
 			    || !std::isfinite(options.LinearDependenceTolerance) || options.LinearDependenceTolerance <= 0
-			    || !std::isfinite(options.PreviousRitzVectorRecyclingTolerance)
-			    || options.PreviousRitzVectorRecyclingTolerance <= 0
-			    || !std::isfinite(options.RecyclingRefinementTolerance) || options.RecyclingRefinementTolerance <= 0
 			    || !std::isfinite(options.FreezingCoefficientTolerance) || options.FreezingCoefficientTolerance <= 0
 			    || !std::isfinite(options.FreezingResidualNormTolerance) || options.FreezingResidualNormTolerance < 0
 			    || !std::isfinite(options.ReducedMatrixAsymmetryTolerance)
 			    || options.ReducedMatrixAsymmetryTolerance <= 0)
 			{
 				throw InvalidArgumentException("All numerical tolerances must be positive");
+			}
+			if (IsSubspaceExtensionEnabled(options.SubspaceExtensions,
+			                               IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors)
+			    && (!std::isfinite(options.PreviousRitzVectorRecyclingTolerance)
+			        || options.PreviousRitzVectorRecyclingTolerance <= 0
+			        || !std::isfinite(options.RecyclingRefinementTolerance)
+			        || options.RecyclingRefinementTolerance <= 0))
+			{
+				throw InvalidArgumentException("Previous-Ritz-vector recycling tolerances must be positive");
 			}
 		}
 	}
@@ -1365,7 +1416,8 @@ namespace SecUtility::Math
 		InteriorIterationState<Scalar> state;
 		state.ExpansionSpace = CreateInitialExpansionSpace(
 		        linearOperator, diagonal, interval, options.EigenpairCountLimit, m_Statistics);
-		state.IsPreviousRitzVectorRecyclingActive = options.IsPreviousRitzVectorRecyclingEnabled;
+		state.IsPreviousRitzVectorRecyclingActive = IsSubspaceExtensionEnabled(
+		        options.SubspaceExtensions, IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors);
 		for (Eigen::Index iterationIndex = 0; iterationIndex < options.MaximumIterationCount; iterationIndex++)
 		{
 			m_Statistics.CompletedIterationCount = iterationIndex + 1;

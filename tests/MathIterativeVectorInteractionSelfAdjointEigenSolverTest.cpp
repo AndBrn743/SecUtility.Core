@@ -287,6 +287,16 @@ static_assert(!SelfAdjointLinearOperator<ComplexDiagonalOperator>);
 static_assert(!SelfAdjointLinearOperator<OperatorWithoutScalar>);
 static_assert(!SelfAdjointLinearOperator<DenseSelfAdjointLinearOperator<int>>);
 static_assert(!SelfAdjointLinearOperator<DenseSelfAdjointLinearOperator<std::complex<int>>>);
+static_assert(SecUtility::is_bitmask_v<IterativeVectorInteractionSubspaceExtension>);
+static_assert(((IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+                | IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors)
+               & IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors)
+              == IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors);
+static_assert((IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+               | IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages
+               | IterativeVectorInteractionSubspaceExtension::PreconditionedOffDiagonalCorrectionImages
+               | IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors)
+              == IterativeVectorInteractionSubspaceExtension::All);
 
 
 TEMPLATE_TEST_CASE("iVI public result contract", "[Math][iVI]", double, (std::complex<double>))
@@ -395,6 +405,76 @@ TEMPLATE_TEST_CASE("iVI operator contract and input validation", "[Math][iVI]", 
 		options.FreezingResidualNormTolerance = RealScalar{};
 		options.ReducedMatrixAsymmetryTolerance = 0;
 		CHECK_THROWS_AS(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options), SecUtility::InvalidArgumentException);
+	}
+}
+
+
+TEST_CASE("iVI subspace-extension flags and validation", "[Math][iVI]")
+{
+	using Detail::IterativeVectorInteraction::IsSubspaceExtensionEnabled;
+	using Detail::IterativeVectorInteraction::ValidateInteriorEigenSolverInput;
+	using Underlying = std::underlying_type_t<IterativeVectorInteractionSubspaceExtension>;
+	constexpr Underlying allExtensionBits =
+	        static_cast<Underlying>(IterativeVectorInteractionSubspaceExtension::All);
+	const auto operatorMatrix = IdentityOperator<double>(4);
+	const EigenvalueInterval<double> interval{-1, 1};
+
+	SECTION("The default preserves the v1 extension configuration")
+	{
+		const InteriorEigenSolverOptions<double> options{2};
+		CHECK(IsSubspaceExtensionEnabled(
+		        options.SubspaceExtensions, IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors));
+		CHECK(IsSubspaceExtensionEnabled(
+		        options.SubspaceExtensions, IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors));
+		CHECK_FALSE(IsSubspaceExtensionEnabled(
+		        options.SubspaceExtensions, IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages));
+		CHECK_FALSE(IsSubspaceExtensionEnabled(
+		        options.SubspaceExtensions,
+		        IterativeVectorInteractionSubspaceExtension::PreconditionedOffDiagonalCorrectionImages));
+	}
+
+	SECTION("Every combination of known flags is valid")
+	{
+		for (Underlying bits = 0; bits <= allExtensionBits; ++bits)
+		{
+			InteriorEigenSolverOptions<double> options{2};
+			options.SubspaceExtensions = static_cast<IterativeVectorInteractionSubspaceExtension>(bits);
+			CHECK_NOTHROW(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options));
+		}
+	}
+
+	SECTION("Unknown flags are rejected")
+	{
+		InteriorEigenSolverOptions<double> options{2};
+		options.SubspaceExtensions = static_cast<IterativeVectorInteractionSubspaceExtension>(allExtensionBits + 1);
+		CHECK_THROWS_AS(
+		        ValidateInteriorEigenSolverInput(operatorMatrix, interval, options),
+		        SecUtility::InvalidArgumentException);
+	}
+
+	SECTION("Controls for disabled extensions are ignored")
+	{
+		InteriorEigenSolverOptions<double> options{2};
+		options.SubspaceExtensions = IterativeVectorInteractionSubspaceExtension::None;
+		options.AdditionalRitzVectorCount = -1;
+		options.PreviousRitzVectorRecyclingTolerance = -1;
+		options.RecyclingRefinementTolerance = -1;
+		CHECK_NOTHROW(ValidateInteriorEigenSolverInput(operatorMatrix, interval, options));
+	}
+
+	SECTION("Invalid controls for enabled extensions are rejected")
+	{
+		InteriorEigenSolverOptions<double> options{2};
+		options.PreviousRitzVectorRecyclingTolerance = -1;
+		CHECK_THROWS_AS(
+		        ValidateInteriorEigenSolverInput(operatorMatrix, interval, options),
+		        SecUtility::InvalidArgumentException);
+
+		options.PreviousRitzVectorRecyclingTolerance = 1e-8;
+		options.RecyclingRefinementTolerance = -1;
+		CHECK_THROWS_AS(
+		        ValidateInteriorEigenSolverInput(operatorMatrix, interval, options),
+		        SecUtility::InvalidArgumentException);
 	}
 }
 
@@ -1253,6 +1333,14 @@ TEMPLATE_TEST_CASE("iVI recycling preserves selected generalized Ritz vectors",
 	CHECK((retainedVectors.adjoint() * retainedVectors)
 	              .isApprox(Eigen::MatrixX<TestType>::Identity(3, 3), 1e-12));
 	CHECK(statistics.RecycledVectorCount == 1);
+
+	options.SubspaceExtensions = IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors;
+	InteriorEigenSolverStatistics disabledStatistics;
+	const Eigen::MatrixX<TestType> coefficientsWithoutRecycling =
+	        FormCollapseCoefficients(analysis, 1, options, state, disabledStatistics);
+	CHECK(coefficientsWithoutRecycling.cols() == 2);
+	CHECK(coefficientsWithoutRecycling.isApprox(selectedCoefficients));
+	CHECK(disabledStatistics.RecycledVectorCount == 0);
 }
 
 
@@ -1278,7 +1366,8 @@ TEST_CASE("iVI appends previous Ritz directions when dynamic recycling is disabl
 	options.MaximumIterationCount = 2;
 	options.EigenvalueChangeTolerance = 1e-15;
 	options.ResidualNormTolerance = 1e-15;
-	options.IsPreviousRitzVectorRecyclingEnabled = true;
+	options.SubspaceExtensions = IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+	                             | IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors;
 	options.IsPreviousRitzVectorRecyclingDynamicallyEnabled = false;
 
 	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
@@ -1286,6 +1375,27 @@ TEST_CASE("iVI appends previous Ritz directions when dynamic recycling is disabl
 	CHECK(solver.Status() == InteriorEigenSolverStatus::IterationLimitReached);
 	CHECK(solver.Statistics().CompletedIterationCount == 2);
 	CHECK(solver.Statistics().RecycledVectorCount > 0);
+}
+
+
+TEMPLATE_TEST_CASE("iVI can solve without optional subspace extensions",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(6, 6);
+	matrix.diagonal() << TestType{-3}, TestType{-2}, TestType{-1}, TestType{1}, TestType{2}, TestType{3};
+	const DenseSelfAdjointLinearOperator<TestType> linearOperator{matrix};
+	InteriorEigenSolverOptions<RealScalar> options{1};
+	options.SubspaceExtensions = IterativeVectorInteractionSubspaceExtension::None;
+
+	IterativeVectorInteractionSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	REQUIRE(solver.Compute(linearOperator, EigenvalueInterval<RealScalar>{-1.5, -0.5}, options)
+	        == InteriorEigenSolverStatus::Converged);
+	REQUIRE(solver.Eigenvalues().size() == 1);
+	CHECK(solver.Eigenvalues()[0] == Catch::Approx(-1));
+	CHECK(solver.Statistics().RecycledVectorCount == 0);
 }
 
 
