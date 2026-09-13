@@ -553,16 +553,29 @@ TEMPLATE_TEST_CASE("iVI projection and QR orthonormalization", "[Math][iVI]", do
 	CHECK(ProjectAgainstBasis(Eigen::MatrixX<TestType>(4, 0), candidates).isApprox(candidates));
 
 	const auto orthonormalized = OrthogonalizeAndRemoveLinearDependence(basis, candidates, tolerance);
-	REQUIRE(orthonormalized.rows() == 4);
-	REQUIRE(orthonormalized.cols() == 2);
-	CHECK((basis.adjoint() * orthonormalized).norm() < tolerance);
-	CHECK((orthonormalized.adjoint() * orthonormalized - Eigen::MatrixX<TestType>::Identity(2, 2)).norm()
+	REQUIRE(orthonormalized.Vectors.rows() == 4);
+	REQUIRE(orthonormalized.Vectors.cols() == 2);
+	REQUIRE(orthonormalized.SourceCoefficients.rows() == candidates.cols());
+	REQUIRE(orthonormalized.SourceCoefficients.cols() == 2);
+	CHECK((basis.adjoint() * orthonormalized.Vectors).norm() < tolerance);
+	CHECK((orthonormalized.Vectors.adjoint() * orthonormalized.Vectors
+	       - Eigen::MatrixX<TestType>::Identity(2, 2))
+	              .norm()
 	      < tolerance);
+	const auto twiceProjectedCandidates = ProjectAgainstBasis(basis, ProjectAgainstBasis(basis, candidates));
+	CHECK((twiceProjectedCandidates * orthonormalized.SourceCoefficients)
+	              .isApprox(orthonormalized.Vectors, tolerance));
 
 	const Eigen::MatrixX<TestType> emptyCandidates(4, 0);
-	CHECK(OrthogonalizeAndRemoveLinearDependence(basis, emptyCandidates, tolerance).cols() == 0);
+	const auto emptyDirections = OrthogonalizeAndRemoveLinearDependence(basis, emptyCandidates, tolerance);
+	CHECK(emptyDirections.Vectors.cols() == 0);
+	CHECK(emptyDirections.SourceCoefficients.rows() == 0);
+	CHECK(emptyDirections.SourceCoefficients.cols() == 0);
 	const Eigen::MatrixX<TestType> zeroCandidates = Eigen::MatrixX<TestType>::Zero(4, 2);
-	CHECK(OrthonormalizeAndRemoveLinearDependenceWithQR(zeroCandidates, tolerance).cols() == 0);
+	const auto zeroDirections = OrthonormalizeAndRemoveLinearDependenceWithQR(zeroCandidates, tolerance);
+	CHECK(zeroDirections.Vectors.cols() == 0);
+	CHECK(zeroDirections.SourceCoefficients.rows() == 2);
+	CHECK(zeroDirections.SourceCoefficients.cols() == 0);
 }
 
 
@@ -574,8 +587,10 @@ TEST_CASE("iVI complex orthonormalization is invariant to column phase", "[Math]
 	vectors.col(1) *= phase;
 
 	const auto orthonormalized = OrthonormalizeAndRemoveLinearDependenceWithQR(vectors, 1e-12);
-	REQUIRE(orthonormalized.cols() == 2);
-	CHECK((orthonormalized.adjoint() * orthonormalized - Eigen::MatrixXcd::Identity(2, 2)).norm() < 1e-12);
+	REQUIRE(orthonormalized.Vectors.cols() == 2);
+	CHECK((orthonormalized.Vectors.adjoint() * orthonormalized.Vectors - Eigen::MatrixXcd::Identity(2, 2)).norm()
+	      < 1e-12);
+	CHECK((vectors * orthonormalized.SourceCoefficients).isApprox(orthonormalized.Vectors, 1e-12));
 }
 
 
@@ -589,12 +604,36 @@ TEMPLATE_TEST_CASE("iVI pivoted QR removes dependent correction directions", "[M
 	vectors.col(2) = TestType{3} * vectors.col(1);
 
 	const auto orthonormalized = OrthonormalizeAndRemoveLinearDependenceWithQR(vectors, 1e-12);
-	REQUIRE(orthonormalized.cols() == 2);
-	CHECK((orthonormalized.adjoint() * orthonormalized
+	REQUIRE(orthonormalized.Vectors.cols() == 2);
+	CHECK((orthonormalized.Vectors.adjoint() * orthonormalized.Vectors
 	       - Eigen::MatrixX<TestType>::Identity(2, 2))
 	              .norm()
 	      < 1e-12);
-	CHECK((orthonormalized * orthonormalized.adjoint() * vectors - vectors).norm() < 1e-12);
+	CHECK((orthonormalized.Vectors * orthonormalized.Vectors.adjoint() * vectors - vectors).norm() < 1e-12);
+	CHECK((vectors * orthonormalized.SourceCoefficients).isApprox(orthonormalized.Vectors, 1e-12));
+}
+
+
+TEMPLATE_TEST_CASE("iVI correction QR applies the squared-magnitude dependence tolerance",
+	               "[Math][iVI]",
+	               double,
+	               (std::complex<double>))
+{
+	using namespace Detail::IterativeVectorInteraction;
+	Eigen::MatrixX<TestType> vectors = Eigen::MatrixX<TestType>::Zero(4, 3);
+	vectors(0, 0) = TestType{1};
+	vectors(1, 1) = TestType{2e-4};
+	vectors(2, 2) = TestType{5e-5};
+
+	const auto orthonormalized = OrthonormalizeAndRemoveLinearDependenceWithQR(vectors, 1e-8);
+	REQUIRE(orthonormalized.Vectors.cols() == 2);
+	REQUIRE(orthonormalized.SourceCoefficients.rows() == 3);
+	REQUIRE(orthonormalized.SourceCoefficients.cols() == 2);
+	CHECK((vectors * orthonormalized.SourceCoefficients).isApprox(orthonormalized.Vectors, 1e-12));
+	CHECK((orthonormalized.Vectors.adjoint() * orthonormalized.Vectors
+	       - Eigen::MatrixX<TestType>::Identity(2, 2))
+	              .norm()
+	      < 1e-12);
 }
 
 

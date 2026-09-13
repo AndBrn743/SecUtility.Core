@@ -758,14 +758,23 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
-		Eigen::MatrixX<Scalar> OrthonormalizeAndRemoveLinearDependenceWithQR(
+		struct OrthonormalizedDirections
+		{
+			Eigen::MatrixX<Scalar> Vectors;
+			// Vectors approximately equal the projected source vectors multiplied by these coefficients.
+			Eigen::MatrixX<Scalar> SourceCoefficients;
+		};
+
+
+		template <typename Scalar>
+		OrthonormalizedDirections<Scalar> OrthonormalizeAndRemoveLinearDependenceWithQR(
 		        const Eigen::MatrixX<Scalar>& vectors,
 		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
 		{
 			using RealScalar = Eigen::NumTraits<Scalar>::Real;
 			if (vectors.cols() == 0)
 			{
-				return vectors;
+				return {vectors, Eigen::MatrixX<Scalar>(0, 0)};
 			}
 
 			Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(vectors);
@@ -781,15 +790,25 @@ namespace SecUtility::Math
 			const Eigen::Index rank = qr.rank();
 			if (rank == 0)
 			{
-				return Eigen::MatrixX<Scalar>(vectors.rows(), 0);
+				return {Eigen::MatrixX<Scalar>(vectors.rows(), 0), Eigen::MatrixX<Scalar>(vectors.cols(), 0)};
 			}
 
-			return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(vectors.rows(), rank);
+			const Eigen::MatrixX<Scalar> orthonormalizedVectors =
+			        qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(vectors.rows(), rank);
+			const Eigen::MatrixX<Scalar> sourcePermutation =
+			        Eigen::MatrixX<Scalar>::Identity(vectors.cols(), vectors.cols()) * qr.colsPermutation();
+			const Eigen::MatrixX<Scalar> leadingUpperFactor = qr.matrixR().topLeftCorner(rank, rank);
+			const Eigen::MatrixX<Scalar> sourceCoefficients =
+			        leadingUpperFactor.transpose()
+			                .template triangularView<Eigen::Lower>()
+			                .solve(sourcePermutation.leftCols(rank).transpose())
+			                .transpose();
+			return {orthonormalizedVectors, sourceCoefficients};
 		}
 
 
 		template <typename Scalar>
-		Eigen::MatrixX<Scalar> OrthogonalizeAndRemoveLinearDependence(
+		OrthonormalizedDirections<Scalar> OrthogonalizeAndRemoveLinearDependence(
 		        const Eigen::MatrixX<Scalar>& basis,
 		        const Eigen::MatrixX<Scalar>& candidates,
 		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
@@ -1257,8 +1276,10 @@ namespace SecUtility::Math
 			const Eigen::MatrixX<Scalar> unorthogonalizedCorrections = ApplyAbsoluteDiagonalPreconditioner(
 			        residuals, primaryEigenvalues, diagonal, options.PreconditionerDenominatorFloor);
 			ref_statistics.GeneratedCorrectionVectorCount += unorthogonalizedCorrections.cols();
-			const Eigen::MatrixX<Scalar> corrections = OrthogonalizeAndRemoveLinearDependence(
+			const OrthonormalizedDirections<Scalar> orthonormalizedCorrections =
+			        OrthogonalizeAndRemoveLinearDependence(
 			        ref_state.ExpansionSpace.Vectors, unorthogonalizedCorrections, options.LinearDependenceTolerance);
+			const Eigen::MatrixX<Scalar>& corrections = orthonormalizedCorrections.Vectors;
 			ref_statistics.RetainedCorrectionVectorCount += corrections.cols();
 			if (corrections.cols() == 0)
 			{
