@@ -7,8 +7,13 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <array>
+#include <chrono>
 #include <complex>
+#include <iostream>
 #include <limits>
+#include <string_view>
 #include <type_traits>
 
 
@@ -305,6 +310,35 @@ namespace
 			return images;
 		}
 	};
+
+
+	struct SubspaceExtensionBenchmarkConfiguration
+	{
+		std::string_view Name;
+		SecUtility::Math::IterativeVectorInteractionSubspaceExtension Extensions;
+	};
+
+
+	constexpr auto SubspaceExtensionBenchmarkConfigurations = std::to_array<SubspaceExtensionBenchmarkConfiguration>({
+	        {"AdditionalRitzVectors+PreviousRitzVectors",
+	         SecUtility::Math::IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+	                 | SecUtility::Math::IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors},
+	        {"AdditionalRitzVectors+CorrectionVectorImages",
+	         SecUtility::Math::IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+	                 | SecUtility::Math::IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages},
+	        {"AdditionalRitzVectors+PreconditionedOffDiagonalCorrectionImages",
+	         SecUtility::Math::IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+	                 | SecUtility::Math::IterativeVectorInteractionSubspaceExtension::
+	                           PreconditionedOffDiagonalCorrectionImages},
+	        {"AdditionalRitzVectors",
+	         SecUtility::Math::IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors},
+	        {"AdditionalRitzVectors+BothImageExtensions",
+	         SecUtility::Math::IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
+	                 | SecUtility::Math::IterativeVectorInteractionSubspaceExtension::CorrectionVectorImages
+	                 | SecUtility::Math::IterativeVectorInteractionSubspaceExtension::
+	                           PreconditionedOffDiagonalCorrectionImages},
+	        {"All", SecUtility::Math::IterativeVectorInteractionSubspaceExtension::All},
+	});
 }
 
 
@@ -2274,4 +2308,128 @@ TEST_CASE("iVI finds the complete interval set for a matrix-free hub-and-band op
 	                                static_cast<Eigen::Index>(expectedEigenvalues.size())),
 	                        1e-8));
 	CHECK(allExtensionsSolver.Statistics().MaximumExpansionSpaceSize <= dimension);
+}
+
+
+namespace
+{
+	template <typename Operator>
+	void RunSubspaceExtensionBenchmarkScenario(
+	        const std::string_view family,
+	        const Operator& linearOperator,
+	        const EigenvalueInterval<LinearOperatorRealScalar<Operator>> interval,
+	        const Eigen::Index expectedEigenpairCount,
+	        const LinearOperatorRealScalar<Operator> residualNormTolerance)
+	{
+		using RealScalar = LinearOperatorRealScalar<Operator>;
+		for (const auto& configuration : SubspaceExtensionBenchmarkConfigurations)
+		{
+			InteriorEigenSolverOptions<RealScalar> options{expectedEigenpairCount};
+			options.MaximumIterationCount = 300;
+			options.ResidualNormTolerance = residualNormTolerance;
+			options.FreezingResidualNormTolerance = residualNormTolerance;
+			options.LinearDependenceTolerance = RealScalar{1e-14};
+			options.SubspaceExtensions = configuration.Extensions;
+
+			IterativeVectorInteractionSelfAdjointEigenSolver<Operator> solver;
+			const auto start = std::chrono::steady_clock::now();
+			(void)solver.Compute(linearOperator, interval, options);
+			const auto elapsed = std::chrono::duration<double, std::milli>(
+			        std::chrono::steady_clock::now() - start);
+			const InteriorEigenSolverStatistics& statistics = solver.Statistics();
+			const RealScalar maximumResidualNorm =
+			        solver.ResidualNorms().size() == 0 ? RealScalar{} : solver.ResidualNorms().maxCoeff();
+
+			INFO("family: " << family);
+			INFO("configuration: " << configuration.Name);
+			INFO("iterations: " << statistics.CompletedIterationCount);
+			INFO("operator applications: " << statistics.OperatorApplicationCount);
+			INFO("multiplied vectors: " << statistics.MultipliedVectorCount);
+			INFO("maximum expansion size: " << statistics.MaximumExpansionSpaceSize);
+			INFO("generalized solves: " << statistics.GeneralizedSolveCount);
+			INFO("explicit image recalculations: " << statistics.ExplicitImageRecalculationCount);
+			INFO("maximum residual norm: " << maximumResidualNorm);
+			REQUIRE(solver.Status() == InteriorEigenSolverStatus::Converged);
+			REQUIRE(solver.Eigenvalues().size() == expectedEigenpairCount);
+			CHECK(maximumResidualNorm <= residualNormTolerance);
+
+			std::cout << family << ',' << linearOperator.rows() << ',' << configuration.Name << ','
+			          << elapsed.count() << ',' << statistics.CompletedIterationCount << ','
+			          << statistics.OperatorApplicationCount << ',' << statistics.MultipliedVectorCount << ','
+			          << statistics.MaximumExpansionSpaceSize << ',' << statistics.GeneralizedSolveCount << ','
+			          << statistics.ExplicitImageRecalculationCount << ','
+			          << statistics.GeneratedCorrectionVectorCount << ','
+			          << statistics.RetainedCorrectionVectorCount << ','
+			          << statistics.GeneratedCorrectionImageVectorCount << ','
+			          << statistics.RetainedCorrectionImageVectorCount << ','
+			          << statistics.GeneratedOffDiagonalCorrectionVectorCount << ','
+			          << statistics.RetainedOffDiagonalCorrectionVectorCount << ','
+			          << statistics.RetainedAdditionalRitzVectorCount << ',' << statistics.RecycledVectorCount << ','
+			          << maximumResidualNorm << '\n';
+		}
+	}
+
+
+	template <typename Scalar>
+	void RunTridiagonalSubspaceExtensionBenchmark(const Eigen::Index dimension)
+	{
+		using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+		Eigen::VectorX<RealScalar> diagonal(dimension);
+		for (Eigen::Index index = 0; index < dimension; index++)
+		{
+			diagonal[index] = RealScalar{0.1} * static_cast<RealScalar>(index - dimension / 2);
+		}
+		const Scalar coupling = []
+		{
+			if constexpr (Eigen::NumTraits<Scalar>::IsComplex)
+			{
+				return Scalar{0.025, 0.01};
+			}
+			return Scalar{0.025};
+		}();
+		const TridiagonalSelfAdjointLinearOperator<Scalar> linearOperator{std::move(diagonal), coupling};
+		const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> referenceSolver(FormDenseMatrix(linearOperator));
+		REQUIRE(referenceSolver.info() == Eigen::Success);
+		const EigenvalueInterval<RealScalar> interval{RealScalar{-0.25}, RealScalar{0.25}};
+		const Eigen::Index expectedEigenpairCount = std::ranges::count_if(
+		        referenceSolver.eigenvalues(), [&interval](const RealScalar value) { return interval.IsContaining(value); });
+		REQUIRE(expectedEigenpairCount > 0);
+		RunSubspaceExtensionBenchmarkScenario(
+		        Eigen::NumTraits<Scalar>::IsComplex ? "complex-tridiagonal" : "real-tridiagonal",
+		        linearOperator,
+		        interval,
+		        expectedEigenpairCount,
+		        RealScalar{1e-8});
+	}
+}
+
+
+TEST_CASE("iVI subspace-extension performance comparison", "[Math][iVI][.benchmark]")
+{
+	std::cout
+	        << "family,dimension,extensions,elapsed_ms,iterations,operator_applications,multiplied_vectors,"
+	           "maximum_expansion_size,generalized_solves,explicit_image_recalculations,"
+	           "generated_corrections,retained_corrections,generated_correction_images,"
+	           "retained_correction_images,generated_off_diagonal_corrections,"
+	           "retained_off_diagonal_corrections,retained_additional_ritz_vectors,recycled_vectors,"
+	           "maximum_residual_norm\n";
+
+	RunTridiagonalSubspaceExtensionBenchmark<double>(128);
+	RunTridiagonalSubspaceExtensionBenchmark<double>(256);
+	RunTridiagonalSubspaceExtensionBenchmark<std::complex<double>>(128);
+	RunTridiagonalSubspaceExtensionBenchmark<std::complex<double>>(256);
+
+	for (const Eigen::Index dimension : {Eigen::Index{256}, Eigen::Index{512}})
+	{
+		const HubAndBandSelfAdjointLinearOperator linearOperator{dimension};
+		const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> referenceSolver(
+		        linearOperator.ApplyOn(Eigen::MatrixXd::Identity(dimension, dimension)));
+		REQUIRE(referenceSolver.info() == Eigen::Success);
+		const EigenvalueInterval<double> interval{15, 16};
+		const Eigen::Index expectedEigenpairCount = std::ranges::count_if(
+		        referenceSolver.eigenvalues(), [&interval](const double value) { return interval.IsContaining(value); });
+		REQUIRE(expectedEigenpairCount > 0);
+		RunSubspaceExtensionBenchmarkScenario(
+		        "hub-and-band", linearOperator, interval, expectedEigenpairCount, 1e-3);
+	}
 }
