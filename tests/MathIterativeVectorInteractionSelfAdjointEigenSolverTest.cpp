@@ -2234,7 +2234,7 @@ TEMPLATE_TEST_CASE("iVI finds a complete interior set for a large matrix-free He
 
 
 TEST_CASE("iVI finds the complete interval set for a matrix-free hub-and-band operator",
-	      "[Math][iVI][Validation]")
+	      "[Math][iVI][Validation][.slow]")
 {
 	constexpr Eigen::Index dimension = 512;
 	const HubAndBandSelfAdjointLinearOperator linearOperator{dimension};
