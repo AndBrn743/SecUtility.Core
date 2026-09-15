@@ -34,9 +34,13 @@ namespace SecUtility::Math
 	enum class IterativeVectorInteractionSubspaceExtension : std::uint8_t
 	{
 		None = 0,
+		// Paper buffer 0: unconverged interval Ritz vectors plus nearby Ritz vectors.
 		AdditionalRitzVectors = 1 << 0,
+		// Paper buffer 1: images of the accepted ordinary correction directions.
 		CorrectionVectorImages = 1 << 1,
+		// Paper buffer 2: diagonally preconditioned off-diagonal correction images.
 		PreconditionedOffDiagonalCorrectionImages = 1 << 2,
+		// Paper buffer 3: matched Ritz directions retained from the preceding iteration.
 		PreviousRitzVectors = 1 << 3,
 		All = 0b1111
 	};
@@ -107,6 +111,7 @@ namespace SecUtility::Math
 		RealScalar FreezingResidualNormTolerance{};
 		RealScalar ReducedMatrixAsymmetryTolerance = static_cast<RealScalar>(1e-6);
 
+		// The conservative v1-compatible default corresponds to paper buffers 0+3.
 		IterativeVectorInteractionSubspaceExtension SubspaceExtensions =
 		        IterativeVectorInteractionSubspaceExtension::AdditionalRitzVectors
 		        | IterativeVectorInteractionSubspaceExtension::PreviousRitzVectors;
@@ -1457,8 +1462,10 @@ namespace SecUtility::Math
 		using Scalar = LinearOperatorScalar<Operator>;
 		using RealScalar = LinearOperatorRealScalar<Operator>;
 
-		// Returns and stores the terminal status. Non-converged runs retain the latest
-		// interval Ritz approximations for diagnosis.
+		// Finds every eigenpair in the inclusive interval, up to EigenpairCountLimit,
+		// and returns and stores the algorithmic terminal status. Inspect Eigenvalues().empty()
+		// separately when distinguishing an empty interval from other terminal outcomes.
+		// Non-converged runs retain the latest interval Ritz approximations for diagnosis.
 		[[nodiscard]] InteriorEigenSolverStatus Compute(const Operator& linearOperator,
 		                                                const EigenvalueInterval<RealScalar>& interval,
 		                                                const InteriorEigenSolverOptions<RealScalar>& options);
