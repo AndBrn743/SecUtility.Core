@@ -11,9 +11,11 @@
 #include <SecUtility/Math/SelfAdjointLinearOperator.hpp>
 
 #include <Eigen/Core>
+#include <Eigen/QR>
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 
 namespace SecUtility::Math
@@ -65,6 +67,56 @@ namespace SecUtility::Math
 
 	namespace Detail::Davidson
 	{
+		template <typename Scalar>
+		struct VectorImageSubspace
+		{
+			Eigen::MatrixX<Scalar> Vectors;
+			Eigen::MatrixX<Scalar> Images;
+			Eigen::MatrixX<Scalar> ReducedMatrix;
+		};
+
+
+		template <typename Scalar>
+		Eigen::MatrixX<Scalar> OrthonormalizeAndRemoveLinearDependence(
+		        const Eigen::MatrixX<Scalar>& vectors,
+		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
+		{
+			Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(vectors);
+			qr.setThreshold(relativeLinearDependenceTolerance);
+			const Eigen::Index rank = qr.rank();
+			if (rank == 0)
+			{
+				return Eigen::MatrixX<Scalar>(vectors.rows(), 0);
+			}
+			return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(vectors.rows(), rank);
+		}
+
+
+		template <SelfAdjointLinearOperator Operator>
+		VectorImageSubspace<LinearOperatorScalar<Operator>> CreateInitialSubspace(
+		        const Operator& linearOperator,
+		        const Eigen::MatrixX<LinearOperatorScalar<Operator>>& initialBasis,
+		        const LinearOperatorRealScalar<Operator> relativeLinearDependenceTolerance,
+		        DavidsonEigenSolverStatistics& ref_statistics)
+		{
+			using Scalar = LinearOperatorScalar<Operator>;
+			Eigen::MatrixX<Scalar> vectors =
+			        OrthonormalizeAndRemoveLinearDependence(initialBasis, relativeLinearDependenceTolerance);
+			if (vectors.cols() == 0)
+			{
+				throw InvalidArgumentException("The initial basis does not contain a linearly independent vector");
+			}
+
+			Eigen::MatrixX<Scalar> images = ApplySelfAdjointLinearOperator(linearOperator, vectors);
+			ref_statistics.OperatorApplicationCount +=
+			        BlockSelfAdjointLinearOperator<Operator> ? 1 : vectors.cols();
+			ref_statistics.MultipliedVectorCount += vectors.cols();
+			ref_statistics.MaximumSubspaceDimension = vectors.cols();
+			Eigen::MatrixX<Scalar> reducedMatrix = vectors.adjoint() * images;
+			return {std::move(vectors), std::move(images), std::move(reducedMatrix)};
+		}
+
+
 		template <SelfAdjointLinearOperator Operator>
 		void ValidateInput(
 		        const Operator& linearOperator,
@@ -158,8 +210,13 @@ namespace SecUtility::Math
 			Reset();
 			Detail::Davidson::ValidateInput(linearOperator, initialBasis, options);
 			ResetResultRows(linearOperator.rows());
+			auto initialSubspace = Detail::Davidson::CreateInitialSubspace(
+			        linearOperator, initialBasis, options.LinearDependenceTolerance, m_Statistics);
+			m_BasisVectors = std::move(initialSubspace.Vectors);
+			m_BasisVectorImages = std::move(initialSubspace.Images);
+			m_ReducedMatrix = std::move(initialSubspace.ReducedMatrix);
 
-			// Transitional Phase 2 terminal path. The first algorithmic result is implemented in Phase 4.
+			// Transitional Phase 3 terminal path. The first algorithmic result is implemented in Phase 4.
 			m_Status = DavidsonEigenSolverStatus::IterationLimitReached;
 			return m_Status;
 		}

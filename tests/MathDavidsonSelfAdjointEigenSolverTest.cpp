@@ -40,6 +40,28 @@ namespace
 	{
 		return {Eigen::MatrixX<Scalar>::Identity(rows, cols), {}};
 	}
+
+
+	template <typename T>
+	struct VectorOnlyCountingOperator
+	{
+		using Scalar = T;
+		using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+		Eigen::MatrixX<Scalar> Matrix;
+		mutable Eigen::Index ApplicationCount = 0;
+
+		Eigen::Index rows() const { return Matrix.rows(); }
+		Eigen::Index cols() const { return Matrix.cols(); }
+		Eigen::VectorX<RealScalar> Diagonal() const { return Matrix.diagonal().real(); }
+
+		template <typename Derived>
+			requires(Derived::ColsAtCompileTime == 1)
+		Eigen::VectorX<Scalar> ApplyOn(const Eigen::MatrixBase<Derived>& vector) const
+		{
+			ApplicationCount++;
+			return Matrix * vector;
+		}
+	};
 }
 
 
@@ -70,7 +92,7 @@ TEST_CASE("Davidson option and statistic defaults are stable", "[Math][Davidson]
 }
 
 
-TEMPLATE_TEST_CASE("A Davidson solver has aligned empty results before and after its Phase 2 placeholder compute",
+TEMPLATE_TEST_CASE("A Davidson solver publishes an aligned initial subspace and empty Phase 3 Ritz results",
 	               "[Math][Davidson]", double, (std::complex<double>))
 {
 	using Operator = DenseOperator<TestType>;
@@ -96,11 +118,140 @@ TEMPLATE_TEST_CASE("A Davidson solver has aligned empty results before and after
 	CHECK(solver.Eigenvectors().cols() == 0);
 	CHECK(solver.ResidualNorms().size() == 0);
 	CHECK(solver.BasisVectors().rows() == 4);
-	CHECK(solver.BasisVectors().cols() == 0);
+	CHECK(solver.BasisVectors().cols() == 2);
+	CHECK((solver.BasisVectors().adjoint() * solver.BasisVectors())
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(2, 2)));
 	CHECK(solver.BasisVectorImages().rows() == 4);
-	CHECK(solver.BasisVectorImages().cols() == 0);
-	CHECK(solver.ReducedMatrix().size() == 0);
+	CHECK(solver.BasisVectorImages().cols() == 2);
+	CHECK(solver.BasisVectorImages().isApprox(solver.BasisVectors()));
+	CHECK(solver.ReducedMatrix().isApprox(Eigen::MatrixX<TestType>::Identity(2, 2)));
 	CHECK(solver.ReducedEigenvectors().size() == 0);
+	CHECK(solver.Statistics().OperatorApplicationCount == 1);
+	CHECK(solver.Statistics().MultipliedVectorCount == 2);
+	CHECK(solver.Statistics().MaximumSubspaceDimension == 2);
+}
+
+
+TEMPLATE_TEST_CASE("Davidson initial-subspace preparation orthonormalizes and removes dependent columns",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	using Operator = DenseOperator<TestType>;
+	const Operator linearOperator = IdentityOperator<TestType>(4, 4);
+	Eigen::MatrixX<TestType> initialBasis = Eigen::MatrixX<TestType>::Zero(4, 3);
+	initialBasis(0, 0) = TestType{3};
+	initialBasis(1, 1) = TestType{-2};
+	initialBasis(0, 2) = TestType{4};
+	const Eigen::MatrixX<TestType> originalBasis = initialBasis;
+	DavidsonSelfAdjointEigenSolver<Operator> solver;
+	DavidsonEigenSolverOptions<double> options{1};
+	options.InitialSubspaceDimension = 3;
+
+	CHECK(solver.Compute(linearOperator, initialBasis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+
+	REQUIRE(solver.BasisVectors().cols() == 2);
+	CHECK((solver.BasisVectors().adjoint() * solver.BasisVectors())
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(2, 2), 1e-12));
+	CHECK((solver.BasisVectors() * (solver.BasisVectors().adjoint() * originalBasis)).isApprox(originalBasis, 1e-12));
+	CHECK(initialBasis.isApprox(originalBasis, 0));
+	CHECK(solver.Statistics().MultipliedVectorCount == 2);
+	CHECK(solver.Statistics().MaximumSubspaceDimension == 2);
+}
+
+
+TEST_CASE("Davidson initial-subspace rank detection respects the configured relative threshold", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(3, 3);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	DavidsonEigenSolverOptions<double> options{1};
+	options.InitialSubspaceDimension = 2;
+	options.LinearDependenceTolerance = 1e-8;
+	Eigen::MatrixXd basis = Eigen::MatrixXd::Zero(3, 2);
+	basis(0, 0) = 1;
+
+	SECTION("A pivot above the threshold is retained")
+	{
+		basis(1, 1) = 1e-7;
+		CHECK(solver.Compute(linearOperator, basis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+		CHECK(solver.BasisVectors().cols() == 2);
+	}
+
+	SECTION("A pivot below the threshold is removed")
+	{
+		basis(1, 1) = 1e-9;
+		CHECK(solver.Compute(linearOperator, basis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+		CHECK(solver.BasisVectors().cols() == 1);
+	}
+}
+
+
+TEMPLATE_TEST_CASE("Davidson initial vector images and projection remain aligned",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(4, 4);
+	matrix.diagonal() << TestType{1}, TestType{2}, TestType{4}, TestType{7};
+	const TestType coupling = []
+	{
+		if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+		{
+			return TestType{0.25, 0.5};
+		}
+		return TestType{0.25};
+	}();
+	matrix(0, 1) = coupling;
+	matrix(1, 0) = Eigen::numext::conj(coupling);
+	const DenseOperator<TestType> linearOperator{matrix, {}};
+	Eigen::MatrixX<TestType> initialBasis = Eigen::MatrixX<TestType>::Random(4, 3);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	DavidsonEigenSolverOptions<double> options{2};
+	options.InitialSubspaceDimension = 3;
+
+	CHECK(solver.Compute(linearOperator, initialBasis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+
+	const auto expectedImages = matrix * solver.BasisVectors();
+	const auto expectedReducedMatrix = solver.BasisVectors().adjoint() * expectedImages;
+	CHECK(solver.BasisVectorImages().isApprox(expectedImages, 1e-12));
+	CHECK(solver.ReducedMatrix().isApprox(expectedReducedMatrix, 1e-12));
+	CHECK(solver.ReducedMatrix().isApprox(solver.ReducedMatrix().adjoint(), 1e-12));
+}
+
+
+TEMPLATE_TEST_CASE("Davidson initial-subspace accounting distinguishes block and vector-only operators",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	const Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Identity(4, 4);
+	const Eigen::MatrixX<TestType> basis = Eigen::MatrixX<TestType>::Identity(4, 3);
+	DenseOperator<TestType> blockOperator{matrix, {}};
+	VectorOnlyCountingOperator<TestType> vectorOperator{matrix};
+	DavidsonSelfAdjointEigenSolver<decltype(blockOperator)> blockSolver;
+	DavidsonSelfAdjointEigenSolver<decltype(vectorOperator)> vectorSolver;
+	DavidsonEigenSolverOptions<double> options{2};
+	options.InitialSubspaceDimension = 3;
+
+	CHECK(blockSolver.Compute(blockOperator, basis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+	CHECK(vectorSolver.Compute(vectorOperator, basis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+
+	CHECK(blockSolver.BasisVectorImages().isApprox(vectorSolver.BasisVectorImages()));
+	CHECK(blockSolver.Statistics().OperatorApplicationCount == 1);
+	CHECK(blockSolver.Statistics().MultipliedVectorCount == 3);
+	CHECK(vectorSolver.Statistics().OperatorApplicationCount == 3);
+	CHECK(vectorSolver.Statistics().MultipliedVectorCount == 3);
+	CHECK(vectorOperator.ApplicationCount == 3);
+}
+
+
+TEST_CASE("Davidson rejects an initial basis with no surviving direction", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(3, 3);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	DavidsonEigenSolverOptions<double> options{1};
+	options.InitialSubspaceDimension = 2;
+
+	CHECK_THROWS_AS(solver.Compute(linearOperator, Eigen::MatrixXd::Zero(3, 2), options),
+	                SecUtility::InvalidArgumentException);
+	CHECK(solver.Status() == DavidsonEigenSolverStatus::NotComputed);
+	CHECK(solver.BasisVectors().size() == 0);
+	CHECK(solver.BasisVectorImages().size() == 0);
+	CHECK(solver.ReducedMatrix().size() == 0);
 }
 
 
