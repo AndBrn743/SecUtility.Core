@@ -790,7 +790,7 @@ namespace SecUtility::Math
 				// The public tolerance applies to squared vector magnitudes. Convert it to
 				// QR's relative pivot threshold while preserving the unit scale floor.
 				const RealScalar absoluteThreshold =
-				        std::sqrt(relativeLinearDependenceTolerance) * Max(RealScalar{1}, maximumPivot);
+				        Sqrt(relativeLinearDependenceTolerance) * Max(RealScalar{1}, maximumPivot);
 				qr.setThreshold(absoluteThreshold / maximumPivot);
 			}
 			const Eigen::Index rank = qr.rank();
@@ -863,7 +863,7 @@ namespace SecUtility::Math
 				// The public tolerance historically applies to squared vector magnitudes.
 				// Convert it to QR's relative pivot threshold while preserving the unit scale floor.
 				const RealScalar absoluteThreshold =
-				        std::sqrt(relativeLinearDependenceTolerance) * Max(RealScalar{1}, maximumPivot);
+				        Sqrt(relativeLinearDependenceTolerance) * Max(RealScalar{1}, maximumPivot);
 				qr.setThreshold(absoluteThreshold / maximumPivot);
 			}
 			const Eigen::Index rank = qr.rank();
