@@ -44,8 +44,8 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 8 | Typed correction customization and Olsen correction | Complete |
 | 9 | Immutable iteration controller and custom convergence | Complete |
 | 10 | Controlled operator mutation for future TRAH use | Complete |
-| 11 | Initial-guess policies and dense convenience adapter | In progress |
-| 12 | Validation, documentation, and stabilization | Not started |
+| 11 | Initial-guess policies and dense convenience adapter | Complete |
+| 12 | Validation, documentation, and stabilization | In progress |
 
 ## Intended public architecture
 

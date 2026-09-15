@@ -2,9 +2,13 @@
 // Copyright (c) 2026 Andy Brown
 
 #include <SecUtility/Math/DavidsonSelfAdjointEigenSolver.hpp>
+#include <SecUtility/Math/DavidsonInitialGuess.hpp>
+#include <SecUtility/Math/DenseSelfAdjointLinearOperator.hpp>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include <Eigen/LU>
 
 #include <complex>
 #include <limits>
@@ -1419,6 +1423,136 @@ TEST_CASE("A rejected Davidson low-rank update clears potentially stale publishe
 	CHECK(solver.Eigenvectors().cols() == 0);
 	CHECK(solver.ResidualNorms().size() == 0);
 	CHECK(solver.Statistics().StructuredOperatorUpdateCount == 0);
+}
+
+
+TEMPLATE_TEST_CASE("Davidson identity-prefix and diagonal-coordinate guesses are deterministic",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	auto identity = IdentityPrefixDavidsonInitialBasis<TestType>(5, 3);
+	CHECK(identity.isApprox(Eigen::MatrixX<TestType>::Identity(5, 3)));
+	identity(0, 0) = TestType{2};
+	CHECK(identity(0, 0) == TestType{2});
+
+	const Eigen::VectorXd diagonal{{2, -1, -1, 4, 0}};
+	const auto first = CoordinateDavidsonInitialBasis<TestType>(diagonal, 4);
+	const auto second = CoordinateDavidsonInitialBasis<TestType>(diagonal, 4);
+	CHECK(first.isApprox(second));
+	CHECK(first.col(0).isApprox(Eigen::VectorX<TestType>::Unit(5, 1)));
+	CHECK(first.col(1).isApprox(Eigen::VectorX<TestType>::Unit(5, 2)));
+	CHECK(first.col(2).isApprox(Eigen::VectorX<TestType>::Unit(5, 4)));
+	CHECK(first.col(3).isApprox(Eigen::VectorX<TestType>::Unit(5, 0)));
+}
+
+
+TEMPLATE_TEST_CASE("Seeded random Davidson guesses reproduce full-rank orthonormal bases",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	const auto first = SeededRandomDavidsonInitialBasis<TestType>(7, 4, 12345);
+	const auto repeated = SeededRandomDavidsonInitialBasis<TestType>(7, 4, 12345);
+	const auto different = SeededRandomDavidsonInitialBasis<TestType>(7, 4, 54321);
+
+	CHECK(first.isApprox(repeated, 1e-14));
+	CHECK_FALSE(first.isApprox(different, 1e-8));
+	CHECK(first.adjoint().operator*(first).isApprox(Eigen::MatrixX<TestType>::Identity(4, 4), 1e-12));
+	CHECK(first.fullPivLu().rank() == 4);
+}
+
+
+TEMPLATE_TEST_CASE("Davidson basis augmentation preserves independent caller directions in order",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> supplied = Eigen::MatrixX<TestType>::Zero(4, 3);
+	supplied.col(0) = Eigen::VectorX<TestType>::Unit(4, 2);
+	supplied.col(1) = TestType{2} * supplied.col(0);
+	supplied.col(2) = Eigen::VectorX<TestType>::Unit(4, 0);
+
+	const auto augmented = AugmentDavidsonInitialBasis(supplied, 4, 1e-12);
+
+	CHECK(augmented.col(0).isApprox(Eigen::VectorX<TestType>::Unit(4, 2)));
+	CHECK(augmented.col(1).isApprox(Eigen::VectorX<TestType>::Unit(4, 0)));
+	CHECK(augmented.col(2).isApprox(Eigen::VectorX<TestType>::Unit(4, 1)));
+	CHECK(augmented.col(3).isApprox(Eigen::VectorX<TestType>::Unit(4, 3)));
+	CHECK(augmented.adjoint().operator*(augmented).isApprox(Eigen::MatrixX<TestType>::Identity(4, 4), 1e-12));
+}
+
+
+TEST_CASE("Davidson initial-guess helpers reject invalid requests", "[Math][Davidson]")
+{
+	CHECK_THROWS_AS(IdentityPrefixDavidsonInitialBasis<double>(0, 1), SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(IdentityPrefixDavidsonInitialBasis<double>(3, 0), SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(IdentityPrefixDavidsonInitialBasis<double>(3, 4), SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(CoordinateDavidsonInitialBasis<double>(Eigen::Vector2d{1, 2}, 3),
+	                SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(SeededRandomDavidsonInitialBasis<double>(2, 3, 1), SecUtility::InvalidArgumentException);
+
+	Eigen::Vector2d nonFiniteDiagonal{1, std::numeric_limits<double>::quiet_NaN()};
+	CHECK_THROWS_AS(CoordinateDavidsonInitialBasis<double>(nonFiniteDiagonal, 1),
+	                SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(AugmentDavidsonInitialBasis(Eigen::MatrixXd(0, 0), 1, 1e-12),
+	                SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(AugmentDavidsonInitialBasis(Eigen::MatrixXd::Identity(3, 1), 2, 0.0),
+	                SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(AugmentDavidsonInitialBasis(Eigen::MatrixXd::Identity(3, 2), 1, 1e-12),
+	                SecUtility::InvalidArgumentException);
+	Eigen::MatrixXd nonFiniteBasis = Eigen::MatrixXd::Identity(3, 1);
+	nonFiniteBasis(0, 0) = std::numeric_limits<double>::infinity();
+	CHECK_THROWS_AS(AugmentDavidsonInitialBasis(nonFiniteBasis, 2, 1e-12),
+	                SecUtility::InvalidArgumentException);
+}
+
+
+TEMPLATE_TEST_CASE("Dense self-adjoint operator adapts vector block and diagonal operations",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> matrix(3, 3);
+	matrix << TestType{1}, TestType{0.2}, TestType{0}, TestType{0.2}, TestType{2}, TestType{0.3},
+	        TestType{0}, TestType{0.3}, TestType{4};
+	const DenseSelfAdjointLinearOperator linearOperator(matrix);
+	static_assert(SelfAdjointLinearOperator<decltype(linearOperator)>);
+	static_assert(BlockSelfAdjointLinearOperator<decltype(linearOperator)>);
+	const Eigen::VectorX<TestType> vector = Eigen::VectorX<TestType>::Ones(3);
+	const Eigen::MatrixX<TestType> block = Eigen::MatrixX<TestType>::Identity(3, 2);
+
+	CHECK(linearOperator.rows() == 3);
+	CHECK(linearOperator.cols() == 3);
+	CHECK(linearOperator.Matrix().isApprox(matrix));
+	CHECK(linearOperator.Diagonal().isApprox(matrix.diagonal().real()));
+	CHECK(linearOperator.ApplyOn(vector).isApprox(matrix * vector));
+	CHECK(linearOperator.ApplyOn(block).isApprox(matrix * block));
+}
+
+
+TEST_CASE("Dense self-adjoint operator validates its owned matrix", "[Math][Davidson]")
+{
+	CHECK_THROWS_AS(DenseSelfAdjointLinearOperator(Eigen::MatrixXd::Ones(2, 3)),
+	                SecUtility::InvalidArgumentException);
+	Eigen::Matrix2d nonsymmetric;
+	nonsymmetric << 1, 2, 0, 1;
+	CHECK_THROWS_AS(DenseSelfAdjointLinearOperator(nonsymmetric), SecUtility::InvalidArgumentException);
+	Eigen::Matrix2d nonFinite = Eigen::Matrix2d::Identity();
+	nonFinite(0, 0) = std::numeric_limits<double>::quiet_NaN();
+	CHECK_THROWS_AS(DenseSelfAdjointLinearOperator(nonFinite), SecUtility::InvalidArgumentException);
+}
+
+
+TEST_CASE("Dense-adapted and matrix-free Davidson solves are equivalent", "[Math][Davidson]")
+{
+	Eigen::Matrix3d matrix;
+	matrix << 1, 0.2, 0, 0.2, 2, 0.3, 0, 0.3, 4;
+	const DenseSelfAdjointLinearOperator denseOperator(matrix);
+	const DenseOperator<double> matrixFreeOperator{matrix, {}};
+	DavidsonSelfAdjointEigenSolver<decltype(denseOperator)> denseSolver;
+	DavidsonSelfAdjointEigenSolver<decltype(matrixFreeOperator)> matrixFreeSolver;
+	DavidsonEigenSolverOptions<double> options{2};
+	options.ResidualNormTolerance = 1e-12;
+	const auto basis = CoordinateDavidsonInitialBasis<double>(matrix.diagonal(), 2);
+
+	REQUIRE(denseSolver.Compute(denseOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
+	REQUIRE(matrixFreeSolver.Compute(matrixFreeOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
+	CHECK(denseSolver.Eigenvalues().isApprox(matrixFreeSolver.Eigenvalues(), 1e-12));
+	CHECK(denseSolver.Eigenvectors().cwiseAbs().isApprox(matrixFreeSolver.Eigenvectors().cwiseAbs(), 1e-10));
+	CHECK(denseSolver.ResidualNorms().isApprox(matrixFreeSolver.ResidualNorms(), 1e-12));
 }
 
 
