@@ -1217,7 +1217,7 @@ namespace SecUtility::Math
 		{
 			using Scalar = LinearOperatorScalar<Operator>;
 			using RealScalar = LinearOperatorRealScalar<Operator>;
-			const RealScalar intervalCenter = (interval.LowerBound + interval.UpperBound) / RealScalar{2};
+			const RealScalar intervalCenter = MidPoint(interval.LowerBound, interval.UpperBound);
 			std::vector<Eigen::Index> coordinateIndices(static_cast<std::size_t>(linearOperator.rows()));
 			std::iota(coordinateIndices.begin(), coordinateIndices.end(), Eigen::Index{});
 			std::ranges::stable_sort(coordinateIndices,
