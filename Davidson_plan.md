@@ -40,8 +40,8 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 4 | Rayleigh-Ritz analysis and inspectable partial results | Complete |
 | 5 | Diagonal Davidson correction kernel | Complete |
 | 6 | Basic Davidson iteration and terminal semantics | Complete |
-| 7 | Thick restart and bounded storage | In progress |
-| 8 | Typed correction customization and Olsen correction | Not started |
+| 7 | Thick restart and bounded storage | Complete |
+| 8 | Typed correction customization and Olsen correction | In progress |
 | 9 | Immutable iteration controller and custom convergence | Not started |
 | 10 | Controlled operator mutation for future TRAH use | Not started |
 | 11 | Initial-guess policies and dense convenience adapter | Not started |

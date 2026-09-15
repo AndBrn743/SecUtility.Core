@@ -39,6 +39,7 @@ namespace SecUtility::Math
 		Eigen::Index InitialSubspaceDimension;
 		// Zero selects the operator dimension.
 		Eigen::Index MaximumSubspaceDimension = 0;
+		Eigen::Index AdditionalRestartRitzVectorCount = 0;
 		RealScalar ResidualNormTolerance = static_cast<RealScalar>(1e-7);
 		RealScalar EigenvalueChangeTolerance = static_cast<RealScalar>(1e-7);
 		RealScalar PreconditionerDenominatorFloor = static_cast<RealScalar>(1e-12);
@@ -85,6 +86,8 @@ namespace SecUtility::Math
 		struct RitzAnalysis
 		{
 			Eigen::ComputationInfo ComputationInfo = Eigen::Success;
+			Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> AllEigenvalues;
+			Eigen::MatrixX<Scalar> AllReducedEigenvectors;
 			Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> Eigenvalues;
 			Eigen::MatrixX<Scalar> Eigenvectors;
 			Eigen::MatrixX<Scalar> EigenvectorImages;
@@ -143,8 +146,7 @@ namespace SecUtility::Math
 
 		template <typename Scalar>
 		CorrectionCandidates<Scalar> GenerateDiagonalCorrectionCandidates(
-		        const DiagonalCorrectionContext<Scalar>& context,
-		        DavidsonEigenSolverStatistics& ref_statistics)
+		        const DiagonalCorrectionContext<Scalar>& context, DavidsonEigenSolverStatistics& ref_statistics)
 		{
 			assert(context.Residuals.cols() == context.RitzValues.size());
 			assert(context.Residuals.rows() == context.OperatorDiagonal.size());
@@ -163,12 +165,11 @@ namespace SecUtility::Math
 				}
 				for (Eigen::Index rowIndex = 0; rowIndex < context.Residuals.rows(); rowIndex++)
 				{
-					const auto denominator = RegularizeSignedDenominator(
-					        context.RitzValues[rootIndex] - context.OperatorDiagonal[rowIndex],
-					        context.DenominatorFloor);
+					const auto denominator = RegularizeSignedDenominator(context.RitzValues[rootIndex]
+					                                                             - context.OperatorDiagonal[rowIndex],
+					                                                     context.DenominatorFloor);
 					// t = -(D - theta I)^-1 r = r / (theta - D).
-					candidates.Vectors(rowIndex, candidateIndex) =
-					        context.Residuals(rowIndex, rootIndex) / denominator;
+					candidates.Vectors(rowIndex, candidateIndex) = context.Residuals(rowIndex, rootIndex) / denominator;
 				}
 				candidates.SourceRootIndices.push_back(rootIndex);
 				candidateIndex++;
@@ -190,8 +191,7 @@ namespace SecUtility::Math
 				return {Eigen::MatrixX<Scalar>(basis.rows(), 0), {}};
 			}
 
-			Eigen::MatrixX<Scalar> projected =
-			        candidates.Vectors - basis * (basis.adjoint() * candidates.Vectors);
+			Eigen::MatrixX<Scalar> projected = candidates.Vectors - basis * (basis.adjoint() * candidates.Vectors);
 			projected -= basis * (basis.adjoint() * projected);
 			Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(projected);
 			qr.setThreshold(relativeLinearDependenceTolerance);
@@ -231,8 +231,7 @@ namespace SecUtility::Math
 			}
 
 			Eigen::MatrixX<Scalar> images = ApplySelfAdjointLinearOperator(linearOperator, vectors);
-			ref_statistics.OperatorApplicationCount +=
-			        BlockSelfAdjointLinearOperator<Operator> ? 1 : vectors.cols();
+			ref_statistics.OperatorApplicationCount += BlockSelfAdjointLinearOperator<Operator> ? 1 : vectors.cols();
 			ref_statistics.MultipliedVectorCount += vectors.cols();
 			ref_statistics.MaximumSubspaceDimension = vectors.cols();
 			Eigen::MatrixX<Scalar> reducedMatrix = vectors.adjoint() * images;
@@ -259,15 +258,40 @@ namespace SecUtility::Math
 			}
 
 			const Eigen::Index rootCount = Min(requestedRootCount, subspace.Vectors.cols());
-			analysis.Eigenvalues = reducedSolver.eigenvalues().head(rootCount);
-			analysis.ReducedEigenvectors = reducedSolver.eigenvectors().leftCols(rootCount);
+			analysis.AllEigenvalues = reducedSolver.eigenvalues();
+			analysis.AllReducedEigenvectors = reducedSolver.eigenvectors();
+			analysis.Eigenvalues = analysis.AllEigenvalues.head(rootCount);
+			analysis.ReducedEigenvectors = analysis.AllReducedEigenvectors.leftCols(rootCount);
 			analysis.Eigenvectors = subspace.Vectors * analysis.ReducedEigenvectors;
 			analysis.EigenvectorImages = subspace.Images * analysis.ReducedEigenvectors;
-			analysis.Residuals =
-			        analysis.EigenvectorImages
-			        - analysis.Eigenvectors * analysis.Eigenvalues.template cast<Scalar>().asDiagonal();
+			analysis.Residuals = analysis.EigenvectorImages
+			                     - analysis.Eigenvectors * analysis.Eigenvalues.template cast<Scalar>().asDiagonal();
 			analysis.ResidualNorms = analysis.Residuals.colwise().norm().transpose();
 			return analysis;
+		}
+
+
+		template <typename Scalar>
+		VectorImageSubspace<Scalar> RestartSubspace(const VectorImageSubspace<Scalar>& subspace,
+		                                            const RitzAnalysis<Scalar>& analysis,
+		                                            const Eigen::Index requestedRootCount,
+		                                            const Eigen::Index additionalRitzVectorCount,
+		                                            const Eigen::Index maximumSubspaceDimension)
+		{
+			assert(additionalRitzVectorCount >= 0);
+			assert(maximumSubspaceDimension > 0);
+			const Eigen::Index requiredRitzVectorCount =
+			        Min(requestedRootCount, analysis.AllReducedEigenvectors.cols());
+			const Eigen::Index preferredRitzVectorCount =
+			        Min(analysis.AllReducedEigenvectors.cols(), requiredRitzVectorCount + additionalRitzVectorCount);
+			const Eigen::Index maximumRetainedCount = maximumSubspaceDimension > requiredRitzVectorCount
+			                                                  ? maximumSubspaceDimension - 1
+			                                                  : requiredRitzVectorCount;
+			const Eigen::Index retainedCount = Min(preferredRitzVectorCount, maximumRetainedCount);
+			const Eigen::MatrixX<Scalar> coefficients = analysis.AllReducedEigenvectors.leftCols(retainedCount);
+			VectorImageSubspace<Scalar> restarted{subspace.Vectors * coefficients, subspace.Images * coefficients, {}};
+			restarted.ReducedMatrix = restarted.Vectors.adjoint() * restarted.Images;
+			return restarted;
 		}
 
 
@@ -289,10 +313,9 @@ namespace SecUtility::Math
 
 
 		template <SelfAdjointLinearOperator Operator>
-		void ValidateInput(
-		        const Operator& linearOperator,
-		        const Eigen::MatrixX<LinearOperatorScalar<Operator>>& initialBasis,
-		        const DavidsonEigenSolverOptions<LinearOperatorRealScalar<Operator>>& options)
+		void ValidateInput(const Operator& linearOperator,
+		                   const Eigen::MatrixX<LinearOperatorScalar<Operator>>& initialBasis,
+		                   const DavidsonEigenSolverOptions<LinearOperatorRealScalar<Operator>>& options)
 		{
 			if (linearOperator.rows() != linearOperator.cols())
 			{
@@ -322,7 +345,8 @@ namespace SecUtility::Math
 			}
 			if (initialBasis.cols() > linearOperator.rows())
 			{
-				throw InvalidArgumentException("The initial basis cannot contain more vectors than the operator dimension");
+				throw InvalidArgumentException(
+				        "The initial basis cannot contain more vectors than the operator dimension");
 			}
 			if (!initialBasis.allFinite())
 			{
@@ -336,6 +360,10 @@ namespace SecUtility::Math
 			{
 				throw InvalidArgumentException("MaximumIterationCount must be positive");
 			}
+			if (options.AdditionalRestartRitzVectorCount < 0)
+			{
+				throw InvalidArgumentException("AdditionalRestartRitzVectorCount must not be negative");
+			}
 			if (options.InitialSubspaceDimension < options.RootCount
 			    || options.InitialSubspaceDimension > linearOperator.rows())
 			{
@@ -343,21 +371,18 @@ namespace SecUtility::Math
 				        "InitialSubspaceDimension must accommodate every root and not exceed the operator dimension");
 			}
 
-			const Eigen::Index maximumSubspaceDimension = options.MaximumSubspaceDimension == 0
-			                                                        ? linearOperator.rows()
-			                                                        : options.MaximumSubspaceDimension;
+			const Eigen::Index maximumSubspaceDimension =
+			        options.MaximumSubspaceDimension == 0 ? linearOperator.rows() : options.MaximumSubspaceDimension;
 			if (maximumSubspaceDimension < options.InitialSubspaceDimension
-			    || maximumSubspaceDimension < initialBasis.cols()
-			    || maximumSubspaceDimension > linearOperator.rows())
+			    || maximumSubspaceDimension < initialBasis.cols() || maximumSubspaceDimension > linearOperator.rows())
 			{
-				throw InvalidArgumentException(
-				        "MaximumSubspaceDimension must accommodate the initial space and not exceed the operator dimension");
+				throw InvalidArgumentException("MaximumSubspaceDimension must accommodate the initial space and not "
+				                               "exceed the operator dimension");
 			}
 
 			if (!std::isfinite(options.ResidualNormTolerance) || options.ResidualNormTolerance <= 0
 			    || !std::isfinite(options.EigenvalueChangeTolerance) || options.EigenvalueChangeTolerance <= 0
-			    || !std::isfinite(options.PreconditionerDenominatorFloor)
-			    || options.PreconditionerDenominatorFloor <= 0
+			    || !std::isfinite(options.PreconditionerDenominatorFloor) || options.PreconditionerDenominatorFloor <= 0
 			    || !std::isfinite(options.LinearDependenceTolerance) || options.LinearDependenceTolerance <= 0)
 			{
 				throw InvalidArgumentException("All Davidson numerical tolerances must be finite and positive");
@@ -373,10 +398,9 @@ namespace SecUtility::Math
 		using Scalar = LinearOperatorScalar<Operator>;
 		using RealScalar = LinearOperatorRealScalar<Operator>;
 
-		[[nodiscard]] DavidsonEigenSolverStatus Compute(
-		        const Operator& linearOperator,
-		        const Eigen::MatrixX<Scalar>& initialBasis,
-		        const DavidsonEigenSolverOptions<RealScalar>& options)
+		[[nodiscard]] DavidsonEigenSolverStatus Compute(const Operator& linearOperator,
+		                                                const Eigen::MatrixX<Scalar>& initialBasis,
+		                                                const DavidsonEigenSolverOptions<RealScalar>& options)
 		{
 			Reset();
 			Detail::Davidson::ValidateInput(linearOperator, initialBasis, options);
@@ -384,9 +408,8 @@ namespace SecUtility::Math
 			auto subspace = Detail::Davidson::CreateInitialSubspace(
 			        linearOperator, initialBasis, options.LinearDependenceTolerance, m_Statistics);
 			const Eigen::VectorX<RealScalar> diagonal = linearOperator.Diagonal();
-			const Eigen::Index maximumSubspaceDimension = options.MaximumSubspaceDimension == 0
-			                                                        ? linearOperator.rows()
-			                                                        : options.MaximumSubspaceDimension;
+			const Eigen::Index maximumSubspaceDimension =
+			        options.MaximumSubspaceDimension == 0 ? linearOperator.rows() : options.MaximumSubspaceDimension;
 
 			for (Eigen::Index iterationIndex = 0; iterationIndex < options.MaximumIterationCount; iterationIndex++)
 			{
@@ -418,30 +441,47 @@ namespace SecUtility::Math
 
 				const auto generatedCorrections = Detail::Davidson::GenerateDiagonalCorrectionCandidates(
 				        Detail::Davidson::DiagonalCorrectionContext{analysis.Residuals,
-				         analysis.Eigenvalues,
-				         diagonal,
-				         rootConvergenceIndicators,
-				         options.PreconditionerDenominatorFloor},
+				                                                    analysis.Eigenvalues,
+				                                                    diagonal,
+				                                                    rootConvergenceIndicators,
+				                                                    options.PreconditionerDenominatorFloor},
 				        m_Statistics);
 				const auto corrections = Detail::Davidson::OrthogonalizeCorrectionCandidates(
 				        subspace.Vectors, generatedCorrections, options.LinearDependenceTolerance, m_Statistics);
-				if (corrections.Vectors.cols() == 0
-				    || subspace.Vectors.cols() + corrections.Vectors.cols() > maximumSubspaceDimension)
+				if (corrections.Vectors.cols() == 0)
 				{
 					StoreSubspace(std::move(subspace));
 					m_Status = DavidsonEigenSolverStatus::ExpansionSpaceExhausted;
 					return m_Status;
 				}
+				if (subspace.Vectors.cols() + corrections.Vectors.cols() > maximumSubspaceDimension)
+				{
+					subspace = Detail::Davidson::RestartSubspace(subspace,
+					                                             analysis,
+					                                             options.RootCount,
+					                                             options.AdditionalRestartRitzVectorCount,
+					                                             maximumSubspaceDimension);
+					m_Statistics.RestartCount++;
+				}
+
+				const Eigen::Index availableCorrectionCount = maximumSubspaceDimension - subspace.Vectors.cols();
+				if (availableCorrectionCount <= 0)
+				{
+					StoreSubspace(std::move(subspace));
+					m_Status = DavidsonEigenSolverStatus::ExpansionSpaceExhausted;
+					return m_Status;
+				}
+				const Eigen::Index appendedCorrectionCount = Min(availableCorrectionCount, corrections.Vectors.cols());
+				const Eigen::MatrixX<Scalar> appendedCorrections =
+				        corrections.Vectors.leftCols(appendedCorrectionCount);
 
 				const Eigen::MatrixX<Scalar> correctionImages =
-				        Detail::Davidson::ApplyOperator(linearOperator, corrections.Vectors, m_Statistics);
+				        Detail::Davidson::ApplyOperator(linearOperator, appendedCorrections, m_Statistics);
 				const Eigen::Index oldSubspaceDimension = subspace.Vectors.cols();
-				subspace.Vectors.conservativeResize(Eigen::NoChange,
-				                                   oldSubspaceDimension + corrections.Vectors.cols());
-				subspace.Images.conservativeResize(Eigen::NoChange,
-				                                  oldSubspaceDimension + corrections.Vectors.cols());
-				subspace.Vectors.rightCols(corrections.Vectors.cols()) = corrections.Vectors;
-				subspace.Images.rightCols(corrections.Vectors.cols()) = correctionImages;
+				subspace.Vectors.conservativeResize(Eigen::NoChange, oldSubspaceDimension + appendedCorrectionCount);
+				subspace.Images.conservativeResize(Eigen::NoChange, oldSubspaceDimension + appendedCorrectionCount);
+				subspace.Vectors.rightCols(appendedCorrectionCount) = appendedCorrections;
+				subspace.Images.rightCols(appendedCorrectionCount) = correctionImages;
 				subspace.ReducedMatrix = subspace.Vectors.adjoint() * subspace.Images;
 				m_Statistics.MaximumSubspaceDimension =
 				        Max(m_Statistics.MaximumSubspaceDimension, subspace.Vectors.cols());
@@ -450,14 +490,46 @@ namespace SecUtility::Math
 			throw InvariantViolationException("Davidson iteration terminated without a status");
 		}
 
-		[[nodiscard]] DavidsonEigenSolverStatus Status() const noexcept { return m_Status; }
-		[[nodiscard]] const Eigen::VectorX<RealScalar>& Eigenvalues() const noexcept { return m_Eigenvalues; }
-		[[nodiscard]] const Eigen::MatrixX<Scalar>& Eigenvectors() const noexcept { return m_Eigenvectors; }
-		[[nodiscard]] const Eigen::VectorX<RealScalar>& ResidualNorms() const noexcept { return m_ResidualNorms; }
-		[[nodiscard]] const DavidsonEigenSolverStatistics& Statistics() const noexcept { return m_Statistics; }
-		[[nodiscard]] const Eigen::MatrixX<Scalar>& BasisVectors() const noexcept { return m_BasisVectors; }
-		[[nodiscard]] const Eigen::MatrixX<Scalar>& BasisVectorImages() const noexcept { return m_BasisVectorImages; }
-		[[nodiscard]] const Eigen::MatrixX<Scalar>& ReducedMatrix() const noexcept { return m_ReducedMatrix; }
+		[[nodiscard]] DavidsonEigenSolverStatus Status() const noexcept
+		{
+			return m_Status;
+		}
+
+		[[nodiscard]] const Eigen::VectorX<RealScalar>& Eigenvalues() const noexcept
+		{
+			return m_Eigenvalues;
+		}
+
+		[[nodiscard]] const Eigen::MatrixX<Scalar>& Eigenvectors() const noexcept
+		{
+			return m_Eigenvectors;
+		}
+
+		[[nodiscard]] const Eigen::VectorX<RealScalar>& ResidualNorms() const noexcept
+		{
+			return m_ResidualNorms;
+		}
+
+		[[nodiscard]] const DavidsonEigenSolverStatistics& Statistics() const noexcept
+		{
+			return m_Statistics;
+		}
+
+		[[nodiscard]] const Eigen::MatrixX<Scalar>& BasisVectors() const noexcept
+		{
+			return m_BasisVectors;
+		}
+
+		[[nodiscard]] const Eigen::MatrixX<Scalar>& BasisVectorImages() const noexcept
+		{
+			return m_BasisVectorImages;
+		}
+
+		[[nodiscard]] const Eigen::MatrixX<Scalar>& ReducedMatrix() const noexcept
+		{
+			return m_ReducedMatrix;
+		}
+
 		[[nodiscard]] const Eigen::MatrixX<Scalar>& ReducedEigenvectors() const noexcept
 		{
 			return m_ReducedEigenvectors;
