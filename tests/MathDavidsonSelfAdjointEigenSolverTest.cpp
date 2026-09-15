@@ -79,6 +79,43 @@ namespace
 			return Eigen::MatrixXd::Constant(3, vectors.cols(), std::numeric_limits<double>::quiet_NaN());
 		}
 	};
+
+
+	struct MutableAugmentedHessianOperator
+	{
+		using Scalar = double;
+		mutable double GradientScaling = 0.1;
+		mutable Eigen::Index ApplicationCount = 0;
+
+		Eigen::Index rows() const { return 3; }
+		Eigen::Index cols() const { return 3; }
+		Eigen::Vector3d Gradient() const { return Eigen::Vector3d{0, 1, -2}; }
+		Eigen::Matrix3d Matrix() const
+		{
+			Eigen::Matrix3d matrix;
+			matrix << 0, GradientScaling, -2 * GradientScaling, GradientScaling, 2, 0.25,
+			        -2 * GradientScaling, 0.25, 4;
+			return matrix;
+		}
+		Eigen::Vector3d Diagonal() const { return Matrix().diagonal(); }
+		Eigen::MatrixXd ApplyOn(const Eigen::MatrixXd& vectors) const
+		{
+			ApplicationCount++;
+			return Matrix() * vectors;
+		}
+	};
+
+
+	SecUtility::Math::DavidsonSelfAdjointLowRankUpdate<double> AugmentedHessianScalingUpdate(
+	        const MutableAugmentedHessianOperator& linearOperator, const double scalingChange)
+	{
+		Eigen::Matrix<double, 3, 2> factors;
+		factors.col(0) = Eigen::Vector3d::UnitX();
+		factors.col(1) = linearOperator.Gradient();
+		Eigen::Matrix2d core;
+		core << 0, scalingChange, scalingChange, 0;
+		return {factors, core};
+	}
 }
 
 
@@ -1219,6 +1256,172 @@ TEST_CASE("Davidson propagates controller and convergence predicate exceptions",
 }
 
 
+TEST_CASE("A Davidson low-rank operator update exactly tracks changed augmented-Hessian scaling",
+	      "[Math][Davidson]")
+{
+	MutableAugmentedHessianOperator linearOperator;
+	DavidsonSelfAdjointEigenSolver<MutableAugmentedHessianOperator> solver;
+	Eigen::Index controllerCallCount = 0;
+	auto controller = [&linearOperator, &controllerCallCount](const DavidsonIterationInfo<double>& info)
+	{
+		CHECK(info.BasisVectorImages.isApprox(linearOperator.Matrix() * info.BasisVectors, 1e-12));
+		CHECK(info.ReducedMatrix.isApprox(
+		        info.BasisVectors.adjoint() * linearOperator.Matrix() * info.BasisVectors, 1e-12));
+		CHECK(info.StructuredOperatorUpdateCountThisIteration == controllerCallCount);
+		controllerCallCount++;
+		if (info.StructuredOperatorUpdateCountThisIteration == 0)
+		{
+			const double oldScaling = linearOperator.GradientScaling;
+			linearOperator.GradientScaling = 0.4;
+			return DavidsonIterationDecision<double>{
+			        DavidsonIterationAction::ApplyLowRankOperatorUpdate,
+			        AugmentedHessianScalingUpdate(linearOperator, linearOperator.GradientScaling - oldScaling)};
+		}
+		return DavidsonIterationDecision<double>{DavidsonIterationAction::Continue, {}};
+	};
+	DavidsonEigenSolverOptions<double> options{3};
+
+	CHECK(solver.Compute(linearOperator, Eigen::Matrix3d::Identity(), options,
+	                     DiagonalDavidsonCorrection{}, controller, AcceptDavidsonConvergence{})
+	      == DavidsonEigenSolverStatus::Converged);
+	const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> reference(linearOperator.Matrix());
+	CHECK(solver.Eigenvalues().isApprox(reference.eigenvalues(), 1e-12));
+	CHECK(solver.BasisVectorImages().isApprox(linearOperator.Matrix() * solver.BasisVectors(), 1e-12));
+	CHECK(controllerCallCount == 2);
+	CHECK(linearOperator.ApplicationCount == 1);
+	CHECK(solver.Statistics().OperatorApplicationCount == 1);
+	CHECK(solver.Statistics().MultipliedVectorCount == 3);
+	CHECK(solver.Statistics().StructuredOperatorUpdateCount == 1);
+}
+
+
+TEST_CASE("Davidson bounds repeated structured operator updates without additional MVPs", "[Math][Davidson]")
+{
+	MutableAugmentedHessianOperator linearOperator;
+	DavidsonSelfAdjointEigenSolver<MutableAugmentedHessianOperator> solver;
+	Eigen::Index controllerCallCount = 0;
+	auto controller = [&linearOperator, &controllerCallCount](const DavidsonIterationInfo<double>& info)
+	{
+		CHECK(info.StructuredOperatorUpdateCountThisIteration == controllerCallCount);
+		controllerCallCount++;
+		const double scalingChange = 0.1;
+		linearOperator.GradientScaling += scalingChange;
+		return DavidsonIterationDecision<double>{DavidsonIterationAction::ApplyLowRankOperatorUpdate,
+		                                         AugmentedHessianScalingUpdate(linearOperator, scalingChange)};
+	};
+	DavidsonEigenSolverOptions<double> options{3};
+	options.MaximumStructuredOperatorUpdateCountPerIteration = 2;
+
+	CHECK(solver.Compute(linearOperator, Eigen::Matrix3d::Identity(), options,
+	                     DiagonalDavidsonCorrection{}, controller, AcceptDavidsonConvergence{})
+	      == DavidsonEigenSolverStatus::StructuredOperatorUpdateLimitReached);
+	const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> reference(linearOperator.Matrix());
+	CHECK(solver.Eigenvalues().isApprox(reference.eigenvalues(), 1e-12));
+	CHECK(controllerCallCount == 2);
+	CHECK(linearOperator.ApplicationCount == 1);
+	CHECK(solver.Statistics().OperatorApplicationCount == 1);
+	CHECK(solver.Statistics().MultipliedVectorCount == 3);
+	CHECK(solver.Statistics().StructuredOperatorUpdateCount == 2);
+}
+
+
+TEMPLATE_TEST_CASE("Davidson low-rank updates maintain images projection and diagonal",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	using namespace Detail::Davidson;
+	Eigen::MatrixX<TestType> basis = Eigen::MatrixX<TestType>::Identity(3, 2);
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Identity(3, 3);
+	VectorImageSubspace<TestType> subspace{basis, matrix * basis, basis.adjoint() * matrix * basis};
+	Eigen::VectorXd diagonal = matrix.diagonal().real();
+	Eigen::MatrixX<TestType> factors(3, 2);
+	factors << TestType{1}, TestType{0.5}, TestType{0.25}, TestType{-0.5}, TestType{0}, TestType{1};
+	if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+	{
+		factors(1, 0) = TestType{0.25, 0.5};
+	}
+	Eigen::MatrixX<TestType> core(2, 2);
+	core << TestType{0.2}, TestType{0.1}, TestType{0.1}, TestType{-0.3};
+	if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+	{
+		core(0, 1) = TestType{0.1, 0.05};
+		core(1, 0) = TestType{0.1, -0.05};
+	}
+	const Eigen::MatrixX<TestType> updatedMatrix = matrix + factors * core * factors.adjoint();
+
+	ApplyLowRankOperatorUpdate(subspace, diagonal,
+	                           DavidsonSelfAdjointLowRankUpdate<TestType>{factors, core});
+
+	CHECK(subspace.Images.isApprox(updatedMatrix * basis, 1e-12));
+	CHECK(subspace.ReducedMatrix.isApprox(basis.adjoint() * updatedMatrix * basis, 1e-12));
+	CHECK(diagonal.isApprox(updatedMatrix.diagonal().real(), 1e-12));
+}
+
+
+TEST_CASE("Davidson rejects malformed low-rank operator updates", "[Math][Davidson]")
+{
+	using namespace Detail::Davidson;
+	const Eigen::MatrixXd basis = Eigen::MatrixXd::Identity(3, 2);
+	VectorImageSubspace<double> subspace{basis, basis, Eigen::Matrix2d::Identity()};
+	Eigen::VectorXd diagonal = Eigen::Vector3d::Ones();
+
+	CHECK_THROWS_AS(ApplyLowRankOperatorUpdate(
+	                        subspace,
+	                        diagonal,
+	                        DavidsonSelfAdjointLowRankUpdate<double>{Eigen::MatrixXd(0, 0),
+	                                                                  Eigen::MatrixXd(0, 0)}),
+	                SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(ApplyLowRankOperatorUpdate(
+	                        subspace, diagonal,
+	                        DavidsonSelfAdjointLowRankUpdate<double>{Eigen::MatrixXd::Ones(2, 1),
+	                                                                  Eigen::MatrixXd::Ones(1, 1)}),
+	                SecUtility::InvalidArgumentException);
+	CHECK_THROWS_AS(ApplyLowRankOperatorUpdate(
+	                        subspace, diagonal,
+	                        DavidsonSelfAdjointLowRankUpdate<double>{Eigen::MatrixXd::Ones(3, 2),
+	                                                                  Eigen::MatrixXd::Ones(1, 1)}),
+	                SecUtility::InvalidArgumentException);
+	Eigen::Matrix2d nonSelfAdjoint;
+	nonSelfAdjoint << 1, 2, 0, 1;
+	CHECK_THROWS_AS(ApplyLowRankOperatorUpdate(
+	                        subspace, diagonal,
+	                        DavidsonSelfAdjointLowRankUpdate<double>{Eigen::MatrixXd::Ones(3, 2), nonSelfAdjoint}),
+	                SecUtility::InvalidArgumentException);
+	Eigen::MatrixXd nonFinite = Eigen::MatrixXd::Ones(3, 1);
+	nonFinite(0, 0) = std::numeric_limits<double>::quiet_NaN();
+	CHECK_THROWS_AS(ApplyLowRankOperatorUpdate(
+	                        subspace, diagonal,
+	                        DavidsonSelfAdjointLowRankUpdate<double>{nonFinite, Eigen::MatrixXd::Ones(1, 1)}),
+	                SecUtility::InvalidArgumentException);
+	CHECK(subspace.Vectors.isApprox(basis));
+	CHECK(subspace.Images.isApprox(basis));
+	CHECK(subspace.ReducedMatrix.isApprox(Eigen::Matrix2d::Identity()));
+	CHECK(diagonal.isApprox(Eigen::Vector3d::Ones()));
+}
+
+
+TEST_CASE("A rejected Davidson low-rank update clears potentially stale published Ritz results", "[Math][Davidson]")
+{
+	MutableAugmentedHessianOperator linearOperator;
+	DavidsonSelfAdjointEigenSolver<MutableAugmentedHessianOperator> solver;
+	auto controller = [](const DavidsonIterationInfo<double>&)
+	{
+		return DavidsonIterationDecision<double>{
+		        DavidsonIterationAction::ApplyLowRankOperatorUpdate,
+		        DavidsonSelfAdjointLowRankUpdate<double>{Eigen::MatrixXd::Ones(2, 1),
+		                                                   Eigen::MatrixXd::Ones(1, 1)}};
+	};
+	CHECK_THROWS_AS(solver.Compute(linearOperator, Eigen::Matrix3d::Identity(),
+	                               DavidsonEigenSolverOptions<double>{3}, DiagonalDavidsonCorrection{}, controller,
+	                               AcceptDavidsonConvergence{}),
+	                SecUtility::InvalidArgumentException);
+	CHECK(solver.Status() == DavidsonEigenSolverStatus::NotComputed);
+	CHECK(solver.Eigenvalues().size() == 0);
+	CHECK(solver.Eigenvectors().cols() == 0);
+	CHECK(solver.ResidualNorms().size() == 0);
+	CHECK(solver.Statistics().StructuredOperatorUpdateCount == 0);
+}
+
+
 TEST_CASE("Davidson validation accepts boundary dimensions and automatic maximum space", "[Math][Davidson]")
 {
 	const auto linearOperator = IdentityOperator<double>(4, 4);
@@ -1355,6 +1558,10 @@ TEST_CASE("Davidson validation rejects invalid count and subspace options", "[Ma
 
 	options = DavidsonEigenSolverOptions<double>{2};
 	options.AdditionalRestartRitzVectorCount = -1;
+	CHECK_THROWS_AS(solver.Compute(linearOperator, basis, options), SecUtility::InvalidArgumentException);
+
+	options = DavidsonEigenSolverOptions<double>{2};
+	options.MaximumStructuredOperatorUpdateCountPerIteration = 0;
 	CHECK_THROWS_AS(solver.Compute(linearOperator, basis, options), SecUtility::InvalidArgumentException);
 
 	options = DavidsonEigenSolverOptions<double>{1};

@@ -43,8 +43,8 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 7 | Thick restart and bounded storage | Complete |
 | 8 | Typed correction customization and Olsen correction | Complete |
 | 9 | Immutable iteration controller and custom convergence | Complete |
-| 10 | Controlled operator mutation for future TRAH use | In progress |
-| 11 | Initial-guess policies and dense convenience adapter | Not started |
+| 10 | Controlled operator mutation for future TRAH use | Complete |
+| 11 | Initial-guess policies and dense convenience adapter | In progress |
 | 12 | Validation, documentation, and stabilization | Not started |
 
 ## Intended public architecture
@@ -244,19 +244,21 @@ Phase 9 complete.
 
 ## Phase 10 — Controlled operator mutation for future TRAH use
 
-Extend the controller response with an explicit `OperatorChanged` action. The controller may update state captured by
-the operator, but it may not edit the reduced matrix. In response, the solver must reapply the operator to the entire
-current basis, rebuild the reduced matrix, rerun Rayleigh-Ritz analysis, and only then evaluate convergence or form
-corrections.
+Extend the controller response with an explicit self-adjoint low-rank operator update
+`delta(A) = U C U.adjoint()`. The controller may update state captured by the operator, but it may not edit solver
+storage. The solver must apply the same update algebraically to its cached basis images, reduced matrix, and operator
+diagonal, then rerun Rayleigh-Ritz analysis before evaluating convergence or forming corrections. No operator
+application is permitted for this update path.
 
-Prevent an infinite same-iteration refresh loop with a documented per-iteration refresh limit or an equivalent
-deterministic rule. Account separately for refreshes, operator calls, and multiplied vectors. Preserve a coherent
-partial result if refresh fails numerically or throws.
+Prevent an infinite same-iteration update loop with a documented per-iteration limit. Account separately for
+structured updates, operator calls, and multiplied vectors. Reject malformed, non-finite, and non-self-adjoint update
+representations without partially changing cached solver state.
 
 Use a small parameterized augmented-Hessian test operator modeled on the needs of TRAH, but do not implement or port
-TRAH. Tests must verify that changing its coupling parameter agrees with a fresh dense solve; stale images are never
-used; multiple allowed refreshes behave deterministically; refresh limits terminate precisely; block and column-wise
-operators agree; exceptions and numerical failures preserve invariants; and all refresh statistics are exact.
+TRAH. Tests must verify that changing its gradient-scaling parameter agrees with a fresh dense solve; cached images,
+projection, and diagonal are updated exactly; multiple updates and their limit behave deterministically; real and
+complex arithmetic agree; malformed updates preserve invariants; and operator-call statistics prove that the update
+path performs no additional MVPs.
 
 **Gate:** ask the user to run the operator-mutation and augmented-Hessian tests. Phase 11 may begin only after the user
 marks Phase 10 complete.
