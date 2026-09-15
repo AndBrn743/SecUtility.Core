@@ -147,7 +147,7 @@ TEST_CASE("Davidson option and statistic defaults are stable", "[Math][Davidson]
 	CHECK(statistics.RestartCount == 0);
 	CHECK(statistics.GeneratedCorrectionVectorCount == 0);
 	CHECK(statistics.RetainedCorrectionVectorCount == 0);
-	CHECK(statistics.OperatorRefreshCount == 0);
+	CHECK(statistics.StructuredOperatorUpdateCount == 0);
 }
 
 
@@ -612,7 +612,6 @@ TEMPLATE_TEST_CASE("A controlled two-dimensional Davidson solve has exact iterat
 	CHECK(solver.Statistics().GeneratedCorrectionVectorCount == 1);
 	CHECK(solver.Statistics().RetainedCorrectionVectorCount == 1);
 	CHECK(solver.Statistics().RestartCount == 0);
-	CHECK(solver.Statistics().OperatorRefreshCount == 0);
 }
 
 
@@ -1553,6 +1552,48 @@ TEST_CASE("Dense-adapted and matrix-free Davidson solves are equivalent", "[Math
 	CHECK(denseSolver.Eigenvalues().isApprox(matrixFreeSolver.Eigenvalues(), 1e-12));
 	CHECK(denseSolver.Eigenvectors().cwiseAbs().isApprox(matrixFreeSolver.Eigenvectors().cwiseAbs(), 1e-10));
 	CHECK(denseSolver.ResidualNorms().isApprox(matrixFreeSolver.ResidualNorms(), 1e-12));
+}
+
+
+TEMPLATE_TEST_CASE("Davidson agrees with dense references across rotated spectral families and sizes",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	for (const Eigen::Index dimension : {Eigen::Index{2}, Eigen::Index{5}, Eigen::Index{8}})
+	{
+		std::vector<Eigen::VectorXd> spectra;
+		spectra.push_back(Eigen::VectorXd::LinSpaced(dimension, -3.0, 4.0));
+		Eigen::VectorXd clustered = Eigen::VectorXd::Ones(dimension);
+		if (dimension > 2)
+		{
+			clustered.tail(dimension - 2) = Eigen::VectorXd::LinSpaced(dimension - 2, 1.0 + 1e-10, 2.0);
+		}
+		spectra.push_back(clustered);
+		Eigen::VectorXd illScaled = Eigen::VectorXd::LinSpaced(dimension, -1.0, 1.0);
+		illScaled[0] = -1e8;
+		illScaled[dimension - 1] = 1e8;
+		spectra.push_back(illScaled);
+
+		for (Eigen::Index familyIndex = 0; familyIndex < static_cast<Eigen::Index>(spectra.size()); familyIndex++)
+		{
+			const auto rotation = SeededRandomDavidsonInitialBasis<TestType>(
+			        dimension, dimension, static_cast<std::uint64_t>(100 * dimension + familyIndex));
+			const Eigen::MatrixX<TestType> matrix =
+			        rotation * spectra[static_cast<std::size_t>(familyIndex)].template cast<TestType>().asDiagonal()
+			        * rotation.adjoint();
+			const DenseSelfAdjointLinearOperator linearOperator(matrix);
+			DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+			DavidsonEigenSolverOptions<double> options{dimension};
+			options.ResidualNormTolerance = 1e-5;
+			const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> reference(matrix);
+
+			REQUIRE(solver.Compute(linearOperator, Eigen::MatrixX<TestType>::Identity(dimension, dimension), options)
+			        == DavidsonEigenSolverStatus::Converged);
+			CHECK(solver.Eigenvalues().isApprox(reference.eigenvalues(), 1e-8));
+			CHECK(solver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+			CHECK(solver.Eigenvectors().adjoint().operator*(solver.Eigenvectors())
+			              .isApprox(Eigen::MatrixX<TestType>::Identity(dimension, dimension), 1e-10));
+		}
+	}
 }
 
 

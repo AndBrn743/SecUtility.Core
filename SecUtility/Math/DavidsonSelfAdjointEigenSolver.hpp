@@ -38,7 +38,7 @@ namespace SecUtility::Math
 
 		Eigen::Index RootCount;
 		Eigen::Index MaximumIterationCount = 256;
-		// The supplied basis may contain fewer columns; a later phase will provide explicit augmentation helpers.
+		// The supplied basis may contain fewer columns; use AugmentDavidsonInitialBasis when augmentation is desired.
 		Eigen::Index InitialSubspaceDimension;
 		// Zero selects the operator dimension.
 		Eigen::Index MaximumSubspaceDimension = 0;
@@ -73,7 +73,6 @@ namespace SecUtility::Math
 		Eigen::Index RestartCount = 0;
 		Eigen::Index GeneratedCorrectionVectorCount = 0;
 		Eigen::Index RetainedCorrectionVectorCount = 0;
-		Eigen::Index OperatorRefreshCount = 0;
 		Eigen::Index StructuredOperatorUpdateCount = 0;
 	};
 

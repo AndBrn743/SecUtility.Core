@@ -45,7 +45,7 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 9 | Immutable iteration controller and custom convergence | Complete |
 | 10 | Controlled operator mutation for future TRAH use | Complete |
 | 11 | Initial-guess policies and dense convenience adapter | Complete |
-| 12 | Validation, documentation, and stabilization | In progress |
+| 12 | Validation, documentation, and stabilization | Complete |
 
 ## Intended public architecture
 
@@ -70,7 +70,8 @@ Customization is divided into typed responsibilities:
 - restart selection determines which Ritz directions survive a collapse;
 - convergence may add an immutable application-specific criterion;
 - an iteration controller observes immutable state and returns typed actions;
-- a controller-induced operator change invalidates images explicitly and forces a consistent refresh.
+- a controller may describe an exact self-adjoint low-rank operator change, allowing the solver to update cached
+  images, projection, and diagonal consistently without another operator application.
 
 The initial implementation targets the lowest algebraic eigenpairs. Extension points should be designed early, but
 additional built-in selectors and a true Jacobi-Davidson inner solve are deferred until the Davidson core is stable.
@@ -286,7 +287,7 @@ Phase 11 complete.
 
 Perform the final public-API and naming review. Document algorithm scope, operator requirements, status semantics,
 statistics, result ordering, subspace invariants, restart behavior, correction customization, controller timing,
-operator refresh, lifetime rules, and a future TRAH integration sketch. Clearly state that arbitrary reduced-matrix
+structured operator updates, lifetime rules, and a future TRAH integration sketch. Clearly state that arbitrary reduced-matrix
 mutation is unsupported.
 
 Add broad validation cases comparing against dense Eigen references across matrix families and sizes, including
