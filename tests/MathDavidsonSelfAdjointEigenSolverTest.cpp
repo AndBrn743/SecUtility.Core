@@ -8,6 +8,7 @@
 
 #include <complex>
 #include <limits>
+#include <vector>
 
 
 namespace
@@ -362,6 +363,144 @@ TEST_CASE("Davidson reports a numerical failure without publishing invalid Ritz 
 	CHECK(solver.Eigenvectors().cols() == 0);
 	CHECK(solver.ResidualNorms().size() == 0);
 	CHECK(solver.ReducedEigenvectors().size() == 0);
+}
+
+
+TEST_CASE("Davidson signed denominator regularization preserves sign including signed zero", "[Math][Davidson]")
+{
+	using Detail::Davidson::RegularizeSignedDenominator;
+	CHECK(RegularizeSignedDenominator(2.0, 0.5) == 2.0);
+	CHECK(RegularizeSignedDenominator(-2.0, 0.5) == -2.0);
+	CHECK(RegularizeSignedDenominator(0.1, 0.5) == 0.5);
+	CHECK(RegularizeSignedDenominator(-0.1, 0.5) == -0.5);
+	CHECK(RegularizeSignedDenominator(0.0, 0.5) == 0.5);
+	CHECK(RegularizeSignedDenominator(-0.0, 0.5) == -0.5);
+	CHECK_FALSE(std::signbit(RegularizeSignedDenominator(0.0, 0.5)));
+	CHECK(std::signbit(RegularizeSignedDenominator(-0.0, 0.5)));
+	CHECK(RegularizeSignedDenominator(0.5, 0.5) == 0.5);
+	CHECK(RegularizeSignedDenominator(-0.5, 0.5) == -0.5);
+}
+
+
+TEMPLATE_TEST_CASE("Diagonal Davidson corrections follow r divided by theta minus D",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	using namespace Detail::Davidson;
+	Eigen::MatrixX<TestType> residuals(4, 2);
+	residuals.col(0) << TestType{2}, TestType{4}, TestType{6}, TestType{8};
+	residuals.col(1) << TestType{1}, TestType{3}, TestType{5}, TestType{7};
+	const Eigen::Vector2d ritzValues{3, 10};
+	const Eigen::Vector4d diagonal{1, 3, 5, 7};
+	const Eigen::Array2i convergedRoots{0, 1};
+	DavidsonEigenSolverStatistics statistics;
+	const DiagonalCorrectionContext<TestType> context{
+	        residuals, ritzValues, diagonal, convergedRoots, 0.5};
+
+	const auto candidates = GenerateDiagonalCorrectionCandidates(context, statistics);
+
+	REQUIRE(candidates.Vectors.rows() == 4);
+	REQUIRE(candidates.Vectors.cols() == 1);
+	CHECK(candidates.Vectors(0, 0) == residuals(0, 0) / 2.0);
+	CHECK(candidates.Vectors(1, 0) == residuals(1, 0) / 0.5);
+	CHECK(candidates.Vectors(2, 0) == residuals(2, 0) / -2.0);
+	CHECK(candidates.Vectors(3, 0) == residuals(3, 0) / -4.0);
+	REQUIRE(candidates.SourceRootIndices.size() == 1);
+	CHECK(candidates.SourceRootIndices[0] == 0);
+	CHECK(statistics.GeneratedCorrectionVectorCount == 1);
+	CHECK(statistics.RetainedCorrectionVectorCount == 0);
+	CHECK(candidates.Vectors.allFinite());
+}
+
+
+TEST_CASE("Diagonal Davidson correction generation skips every converged root", "[Math][Davidson]")
+{
+	using namespace Detail::Davidson;
+	const Eigen::MatrixXd residuals = Eigen::MatrixXd::Ones(3, 2);
+	const Eigen::Vector2d ritzValues{1, 2};
+	const Eigen::Vector3d diagonal{0, 1, 2};
+	const Eigen::Array2i convergedRoots{1, 1};
+	DavidsonEigenSolverStatistics statistics;
+
+	const auto candidates = GenerateDiagonalCorrectionCandidates(
+	        DiagonalCorrectionContext<double>{residuals, ritzValues, diagonal, convergedRoots, 1e-3}, statistics);
+
+	CHECK(candidates.Vectors.rows() == 3);
+	CHECK(candidates.Vectors.cols() == 0);
+	CHECK(candidates.SourceRootIndices.empty());
+	CHECK(statistics.GeneratedCorrectionVectorCount == 0);
+}
+
+
+TEST_CASE("Complex Davidson corrections preserve the residual phase", "[Math][Davidson]")
+{
+	using namespace Detail::Davidson;
+	using Scalar = std::complex<double>;
+	Eigen::MatrixXcd residuals(2, 1);
+	residuals << Scalar{1, 2}, Scalar{-3, 1};
+	const Eigen::VectorXd ritzValues = Eigen::VectorXd::Constant(1, 2.0);
+	const Eigen::Vector2d diagonal{0, 4};
+	const Eigen::ArrayXi convergedRoots = Eigen::ArrayXi::Zero(1);
+	DavidsonEigenSolverStatistics statistics;
+	const auto original = GenerateDiagonalCorrectionCandidates(
+	        DiagonalCorrectionContext<Scalar>{residuals, ritzValues, diagonal, convergedRoots, 1e-3}, statistics);
+	const Scalar phase{0, 1};
+	residuals *= phase;
+	const auto rotated = GenerateDiagonalCorrectionCandidates(
+	        DiagonalCorrectionContext<Scalar>{residuals, ritzValues, diagonal, convergedRoots, 1e-3}, statistics);
+
+	CHECK(rotated.Vectors.isApprox(phase * original.Vectors));
+	CHECK(statistics.GeneratedCorrectionVectorCount == 2);
+}
+
+
+TEMPLATE_TEST_CASE("Davidson correction filtering projects twice and removes cross-correction dependence",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	using namespace Detail::Davidson;
+	const Eigen::MatrixX<TestType> basis = Eigen::MatrixX<TestType>::Identity(4, 1);
+	CorrectionCandidates<TestType> candidates{Eigen::MatrixX<TestType>::Zero(4, 3), {10, 11, 12}};
+	candidates.Vectors(0, 0) = TestType{1};
+	candidates.Vectors(1, 1) = TestType{1};
+	candidates.Vectors(1, 2) = TestType{3};
+	DavidsonEigenSolverStatistics statistics;
+
+	const auto retained = OrthogonalizeCorrectionCandidates(basis, candidates, 1e-10, statistics);
+
+	REQUIRE(retained.Vectors.cols() == 1);
+	CHECK((basis.adjoint() * retained.Vectors).norm() < 1e-14);
+	CHECK((retained.Vectors.adjoint() * retained.Vectors)
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(1, 1), 1e-14));
+	REQUIRE(retained.SourceRootIndices.size() == 1);
+	CHECK(retained.SourceRootIndices[0] == 12);
+	CHECK(statistics.RetainedCorrectionVectorCount == 1);
+}
+
+
+TEST_CASE("Davidson correction filtering handles zero and near-dependent candidates", "[Math][Davidson]")
+{
+	using namespace Detail::Davidson;
+	const Eigen::MatrixXd basis = Eigen::MatrixXd::Identity(3, 1);
+	DavidsonEigenSolverStatistics statistics;
+
+	SECTION("Zero corrections are discarded")
+	{
+		const CorrectionCandidates<double> candidates{Eigen::MatrixXd::Zero(3, 2), {0, 1}};
+		const auto retained = OrthogonalizeCorrectionCandidates(basis, candidates, 1e-8, statistics);
+		CHECK(retained.Vectors.cols() == 0);
+		CHECK(retained.SourceRootIndices.empty());
+		CHECK(statistics.RetainedCorrectionVectorCount == 0);
+	}
+
+	SECTION("The relative QR threshold controls a small independent pivot")
+	{
+		CorrectionCandidates<double> candidates{Eigen::MatrixXd::Zero(3, 2), {0, 1}};
+		candidates.Vectors(1, 0) = 1;
+		candidates.Vectors(2, 1) = 1e-9;
+		const auto retained = OrthogonalizeCorrectionCandidates(basis, candidates, 1e-8, statistics);
+		CHECK(retained.Vectors.cols() == 1);
+		CHECK(retained.SourceRootIndices == std::vector<Eigen::Index>{0});
+		CHECK(statistics.RetainedCorrectionVectorCount == 1);
+	}
 }
 
 

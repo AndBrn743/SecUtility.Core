@@ -38,8 +38,8 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 2 | Public Davidson contracts and input validation | Complete |
 | 3 | Initial subspace and vector-image invariants | Complete |
 | 4 | Rayleigh-Ritz analysis and inspectable partial results | Complete |
-| 5 | Diagonal Davidson correction kernel | In progress |
-| 6 | Basic Davidson iteration and terminal semantics | Not started |
+| 5 | Diagonal Davidson correction kernel | Complete |
+| 6 | Basic Davidson iteration and terminal semantics | In progress |
 | 7 | Thick restart and bounded storage | Not started |
 | 8 | Typed correction customization and Olsen correction | Not started |
 | 9 | Immutable iteration controller and custom convergence | Not started |

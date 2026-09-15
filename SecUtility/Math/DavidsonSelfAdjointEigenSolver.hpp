@@ -8,6 +8,7 @@
 #endif
 
 #include <SecUtility/Diagnostic/Exception.hpp>
+#include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/SelfAdjointLinearOperator.hpp>
 
 #include <Eigen/Core>
@@ -15,8 +16,10 @@
 #include <Eigen/QR>
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <utility>
+#include <vector>
 
 
 namespace SecUtility::Math
@@ -90,6 +93,25 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
+		struct DiagonalCorrectionContext
+		{
+			const Eigen::MatrixX<Scalar>& Residuals;
+			const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& RitzValues;
+			const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& OperatorDiagonal;
+			const Eigen::ArrayXi& ConvergedRoots;
+			const Eigen::NumTraits<Scalar>::Real DenominatorFloor;
+		};
+
+
+		template <typename Scalar>
+		struct CorrectionCandidates
+		{
+			Eigen::MatrixX<Scalar> Vectors;
+			std::vector<Eigen::Index> SourceRootIndices;
+		};
+
+
+		template <typename Scalar>
 		Eigen::MatrixX<Scalar> OrthonormalizeAndRemoveLinearDependence(
 		        const Eigen::MatrixX<Scalar>& vectors,
 		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
@@ -102,6 +124,89 @@ namespace SecUtility::Math
 				return Eigen::MatrixX<Scalar>(vectors.rows(), 0);
 			}
 			return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(vectors.rows(), rank);
+		}
+
+
+		template <typename RealScalar>
+		RealScalar RegularizeSignedDenominator(const RealScalar denominator, const RealScalar denominatorFloor)
+		{
+			assert(denominatorFloor > RealScalar{0});
+			if (Abs(denominator) >= denominatorFloor)
+			{
+				return denominator;
+			}
+			return CopySignToTheLeft(denominatorFloor, denominator);
+		}
+
+
+		template <typename Scalar>
+		CorrectionCandidates<Scalar> GenerateDiagonalCorrectionCandidates(
+		        const DiagonalCorrectionContext<Scalar>& context,
+		        DavidsonEigenSolverStatistics& ref_statistics)
+		{
+			const Eigen::Index unconvergedRootCount =
+			        (context.ConvergedRoots == 0).template cast<Eigen::Index>().sum();
+			CorrectionCandidates<Scalar> candidates{
+			        Eigen::MatrixX<Scalar>(context.Residuals.rows(), unconvergedRootCount), {}};
+			candidates.SourceRootIndices.reserve(static_cast<std::size_t>(unconvergedRootCount));
+			Eigen::Index candidateIndex = 0;
+			for (Eigen::Index rootIndex = 0; rootIndex < context.RitzValues.size(); rootIndex++)
+			{
+				if (context.ConvergedRoots[rootIndex] != 0)
+				{
+					continue;
+				}
+				for (Eigen::Index rowIndex = 0; rowIndex < context.Residuals.rows(); rowIndex++)
+				{
+					const auto denominator = RegularizeSignedDenominator(
+					        context.RitzValues[rootIndex] - context.OperatorDiagonal[rowIndex],
+					        context.DenominatorFloor);
+					// t = -(D - theta I)^-1 r = r / (theta - D).
+					candidates.Vectors(rowIndex, candidateIndex) =
+					        context.Residuals(rowIndex, rootIndex) / denominator;
+				}
+				candidates.SourceRootIndices.push_back(rootIndex);
+				candidateIndex++;
+			}
+			ref_statistics.GeneratedCorrectionVectorCount += unconvergedRootCount;
+			return candidates;
+		}
+
+
+		template <typename Scalar>
+		CorrectionCandidates<Scalar> OrthogonalizeCorrectionCandidates(
+		        const Eigen::MatrixX<Scalar>& basis,
+		        const CorrectionCandidates<Scalar>& candidates,
+		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance,
+		        DavidsonEigenSolverStatistics& ref_statistics)
+		{
+			if (candidates.Vectors.cols() == 0)
+			{
+				return {Eigen::MatrixX<Scalar>(basis.rows(), 0), {}};
+			}
+
+			Eigen::MatrixX<Scalar> projected =
+			        candidates.Vectors - basis * (basis.adjoint() * candidates.Vectors);
+			projected -= basis * (basis.adjoint() * projected);
+			Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(projected);
+			qr.setThreshold(relativeLinearDependenceTolerance);
+			const Eigen::Index rank = qr.rank();
+			if (rank == 0)
+			{
+				return {Eigen::MatrixX<Scalar>(basis.rows(), 0), {}};
+			}
+
+			CorrectionCandidates<Scalar> orthonormalized{
+			        qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(projected.rows(), rank), {}};
+			orthonormalized.SourceRootIndices.reserve(static_cast<std::size_t>(rank));
+			for (Eigen::Index pivotIndex = 0; pivotIndex < rank; pivotIndex++)
+			{
+				const Eigen::Index sourceCandidateIndex = qr.colsPermutation().indices()[pivotIndex];
+				orthonormalized.SourceRootIndices.push_back(
+				        candidates.SourceRootIndices[static_cast<std::size_t>(sourceCandidateIndex)]);
+			}
+			ref_statistics.RetainedCorrectionVectorCount += rank;
+			return orthonormalized;
 		}
 
 
