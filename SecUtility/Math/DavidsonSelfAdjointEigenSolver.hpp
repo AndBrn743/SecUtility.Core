@@ -10,6 +10,7 @@
 #include <SecUtility/Diagnostic/Exception.hpp>
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Math/SelfAdjointLinearOperator.hpp>
+#include <SecUtility/Raw/Int.hpp>
 
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
@@ -87,6 +88,7 @@ namespace SecUtility::Math
 			Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> Eigenvalues;
 			Eigen::MatrixX<Scalar> Eigenvectors;
 			Eigen::MatrixX<Scalar> EigenvectorImages;
+			Eigen::MatrixX<Scalar> Residuals;
 			Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> ResidualNorms;
 			Eigen::MatrixX<Scalar> ReducedEigenvectors;
 		};
@@ -98,7 +100,7 @@ namespace SecUtility::Math
 			const Eigen::MatrixX<Scalar>& Residuals;
 			const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& RitzValues;
 			const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& OperatorDiagonal;
-			const Eigen::ArrayXi& ConvergedRoots;
+			const Eigen::ArrayX<Int8>& RootConvergenceIndicators;
 			const Eigen::NumTraits<Scalar>::Real DenominatorFloor;
 		};
 
@@ -144,15 +146,18 @@ namespace SecUtility::Math
 		        const DiagonalCorrectionContext<Scalar>& context,
 		        DavidsonEigenSolverStatistics& ref_statistics)
 		{
+			assert(context.Residuals.cols() == context.RitzValues.size());
+			assert(context.Residuals.rows() == context.OperatorDiagonal.size());
+			assert(context.RootConvergenceIndicators.size() == context.RitzValues.size());
 			const Eigen::Index unconvergedRootCount =
-			        (context.ConvergedRoots == 0).template cast<Eigen::Index>().sum();
+			        (context.RootConvergenceIndicators == 0).template cast<Eigen::Index>().sum();
 			CorrectionCandidates<Scalar> candidates{
 			        Eigen::MatrixX<Scalar>(context.Residuals.rows(), unconvergedRootCount), {}};
 			candidates.SourceRootIndices.reserve(static_cast<std::size_t>(unconvergedRootCount));
 			Eigen::Index candidateIndex = 0;
 			for (Eigen::Index rootIndex = 0; rootIndex < context.RitzValues.size(); rootIndex++)
 			{
-				if (context.ConvergedRoots[rootIndex] != 0)
+				if (context.RootConvergenceIndicators[rootIndex] != 0)
 				{
 					continue;
 				}
@@ -258,11 +263,28 @@ namespace SecUtility::Math
 			analysis.ReducedEigenvectors = reducedSolver.eigenvectors().leftCols(rootCount);
 			analysis.Eigenvectors = subspace.Vectors * analysis.ReducedEigenvectors;
 			analysis.EigenvectorImages = subspace.Images * analysis.ReducedEigenvectors;
-			const Eigen::MatrixX<Scalar> residuals =
+			analysis.Residuals =
 			        analysis.EigenvectorImages
 			        - analysis.Eigenvectors * analysis.Eigenvalues.template cast<Scalar>().asDiagonal();
-			analysis.ResidualNorms = residuals.colwise().norm().transpose();
+			analysis.ResidualNorms = analysis.Residuals.colwise().norm().transpose();
 			return analysis;
+		}
+
+
+		template <SelfAdjointLinearOperator Operator>
+		Eigen::MatrixX<LinearOperatorScalar<Operator>> ApplyOperator(
+		        const Operator& linearOperator,
+		        const Eigen::MatrixX<LinearOperatorScalar<Operator>>& vectors,
+		        DavidsonEigenSolverStatistics& ref_statistics)
+		{
+			const auto images = ApplySelfAdjointLinearOperator(linearOperator, vectors);
+			if (vectors.cols() > 0)
+			{
+				ref_statistics.OperatorApplicationCount +=
+				        BlockSelfAdjointLinearOperator<Operator> ? 1 : vectors.cols();
+				ref_statistics.MultipliedVectorCount += vectors.cols();
+			}
+			return images;
 		}
 
 
@@ -359,29 +381,73 @@ namespace SecUtility::Math
 			Reset();
 			Detail::Davidson::ValidateInput(linearOperator, initialBasis, options);
 			ResetResultRows(linearOperator.rows());
-			auto initialSubspace = Detail::Davidson::CreateInitialSubspace(
+			auto subspace = Detail::Davidson::CreateInitialSubspace(
 			        linearOperator, initialBasis, options.LinearDependenceTolerance, m_Statistics);
-			m_Statistics.CompletedIterationCount = 1;
-			const auto analysis = Detail::Davidson::AnalyzeSubspace(initialSubspace, options.RootCount);
-			m_BasisVectors = std::move(initialSubspace.Vectors);
-			m_BasisVectorImages = std::move(initialSubspace.Images);
-			m_ReducedMatrix = std::move(initialSubspace.ReducedMatrix);
-			if (analysis.ComputationInfo != Eigen::Success)
+			const Eigen::VectorX<RealScalar> diagonal = linearOperator.Diagonal();
+			const Eigen::Index maximumSubspaceDimension = options.MaximumSubspaceDimension == 0
+			                                                        ? linearOperator.rows()
+			                                                        : options.MaximumSubspaceDimension;
+
+			for (Eigen::Index iterationIndex = 0; iterationIndex < options.MaximumIterationCount; iterationIndex++)
 			{
-				m_Status = DavidsonEigenSolverStatus::NumericalFailure;
-				return m_Status;
+				m_Statistics.CompletedIterationCount = iterationIndex + 1;
+				const auto analysis = Detail::Davidson::AnalyzeSubspace(subspace, options.RootCount);
+				if (analysis.ComputationInfo != Eigen::Success)
+				{
+					StoreSubspace(std::move(subspace));
+					m_Status = DavidsonEigenSolverStatus::NumericalFailure;
+					return m_Status;
+				}
+
+				PublishRitzResults(analysis);
+				const bool hasEveryRequestedRoot = m_Eigenvalues.size() == options.RootCount;
+				const Eigen::ArrayX<Int8> rootConvergenceIndicators =
+				        (m_ResidualNorms.array() <= options.ResidualNormTolerance).template cast<Int8>();
+				if (hasEveryRequestedRoot && (rootConvergenceIndicators != 0).all())
+				{
+					StoreSubspace(std::move(subspace));
+					m_Status = DavidsonEigenSolverStatus::Converged;
+					return m_Status;
+				}
+				if (iterationIndex + 1 == options.MaximumIterationCount)
+				{
+					StoreSubspace(std::move(subspace));
+					m_Status = DavidsonEigenSolverStatus::IterationLimitReached;
+					return m_Status;
+				}
+
+				const auto generatedCorrections = Detail::Davidson::GenerateDiagonalCorrectionCandidates(
+				        Detail::Davidson::DiagonalCorrectionContext{analysis.Residuals,
+				         analysis.Eigenvalues,
+				         diagonal,
+				         rootConvergenceIndicators,
+				         options.PreconditionerDenominatorFloor},
+				        m_Statistics);
+				const auto corrections = Detail::Davidson::OrthogonalizeCorrectionCandidates(
+				        subspace.Vectors, generatedCorrections, options.LinearDependenceTolerance, m_Statistics);
+				if (corrections.Vectors.cols() == 0
+				    || subspace.Vectors.cols() + corrections.Vectors.cols() > maximumSubspaceDimension)
+				{
+					StoreSubspace(std::move(subspace));
+					m_Status = DavidsonEigenSolverStatus::ExpansionSpaceExhausted;
+					return m_Status;
+				}
+
+				const Eigen::MatrixX<Scalar> correctionImages =
+				        Detail::Davidson::ApplyOperator(linearOperator, corrections.Vectors, m_Statistics);
+				const Eigen::Index oldSubspaceDimension = subspace.Vectors.cols();
+				subspace.Vectors.conservativeResize(Eigen::NoChange,
+				                                   oldSubspaceDimension + corrections.Vectors.cols());
+				subspace.Images.conservativeResize(Eigen::NoChange,
+				                                  oldSubspaceDimension + corrections.Vectors.cols());
+				subspace.Vectors.rightCols(corrections.Vectors.cols()) = corrections.Vectors;
+				subspace.Images.rightCols(corrections.Vectors.cols()) = correctionImages;
+				subspace.ReducedMatrix = subspace.Vectors.adjoint() * subspace.Images;
+				m_Statistics.MaximumSubspaceDimension =
+				        Max(m_Statistics.MaximumSubspaceDimension, subspace.Vectors.cols());
 			}
 
-			m_Eigenvalues = analysis.Eigenvalues;
-			m_Eigenvectors = analysis.Eigenvectors;
-			m_ResidualNorms = analysis.ResidualNorms;
-			m_ReducedEigenvectors = analysis.ReducedEigenvectors;
-			const bool hasEveryRequestedRoot = m_Eigenvalues.size() == options.RootCount;
-			const bool hasResidualConverged =
-			        hasEveryRequestedRoot && (m_ResidualNorms.array() <= options.ResidualNormTolerance).all();
-			m_Status = hasResidualConverged ? DavidsonEigenSolverStatus::Converged
-			                                : DavidsonEigenSolverStatus::IterationLimitReached;
-			return m_Status;
+			throw InvariantViolationException("Davidson iteration terminated without a status");
 		}
 
 		[[nodiscard]] DavidsonEigenSolverStatus Status() const noexcept { return m_Status; }
@@ -398,6 +464,21 @@ namespace SecUtility::Math
 		}
 
 	private:
+		void PublishRitzResults(const Detail::Davidson::RitzAnalysis<Scalar>& analysis)
+		{
+			m_Eigenvalues = analysis.Eigenvalues;
+			m_Eigenvectors = analysis.Eigenvectors;
+			m_ResidualNorms = analysis.ResidualNorms;
+			m_ReducedEigenvectors = analysis.ReducedEigenvectors;
+		}
+
+		void StoreSubspace(Detail::Davidson::VectorImageSubspace<Scalar>&& subspace)
+		{
+			m_BasisVectors = std::move(subspace.Vectors);
+			m_BasisVectorImages = std::move(subspace.Images);
+			m_ReducedMatrix = std::move(subspace.ReducedMatrix);
+		}
+
 		void Reset()
 		{
 			m_Status = DavidsonEigenSolverStatus::NotComputed;
