@@ -8,6 +8,8 @@
 
 #include <complex>
 #include <limits>
+#include <memory>
+#include <stdexcept>
 #include <vector>
 
 
@@ -788,6 +790,241 @@ TEMPLATE_TEST_CASE("Additional restart Ritz vectors preserve convergence and the
 	CHECK(solver.Statistics().RestartCount > 0);
 	CHECK(solver.Statistics().MaximumSubspaceDimension <= 4);
 	CHECK(solver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+}
+
+
+TEMPLATE_TEST_CASE("The explicit diagonal Davidson strategy matches the default solver path",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> matrix(3, 3);
+	matrix << TestType{1}, TestType{0.2}, TestType{0}, TestType{0.2}, TestType{2}, TestType{0.3}, TestType{0},
+	        TestType{0.3}, TestType{4};
+	const DenseOperator<TestType> linearOperator{matrix, {}};
+	const Eigen::MatrixX<TestType> basis = Eigen::MatrixX<TestType>::Identity(3, 1);
+	DavidsonEigenSolverOptions<double> options{1};
+	options.ResidualNormTolerance = 1e-10;
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> defaultSolver;
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> explicitSolver;
+
+	REQUIRE(defaultSolver.Compute(linearOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
+	REQUIRE(explicitSolver.Compute(linearOperator, basis, options, DiagonalDavidsonCorrection{})
+	        == DavidsonEigenSolverStatus::Converged);
+	CHECK(explicitSolver.Eigenvalues().isApprox(defaultSolver.Eigenvalues(), 1e-12));
+	CHECK(explicitSolver.ResidualNorms().isApprox(defaultSolver.ResidualNorms(), 1e-12));
+	CHECK(explicitSolver.Statistics().GeneratedCorrectionVectorCount
+	      == defaultSolver.Statistics().GeneratedCorrectionVectorCount);
+}
+
+
+TEMPLATE_TEST_CASE("A stateful Davidson correction strategy receives an immutable complete context",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> matrix(2, 2);
+	matrix << TestType{1}, TestType{0.2}, TestType{0.2}, TestType{2};
+	const DenseOperator<TestType> linearOperator{matrix, {}};
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	DavidsonEigenSolverOptions<double> options{1};
+	Eigen::Index callCount = 0;
+	auto strategy = [&callCount, &matrix](const DavidsonCorrectionContext<TestType>& context)
+	{
+		callCount++;
+		CHECK(context.RitzVectors.rows() == matrix.rows());
+		CHECK(context.RitzVectors.cols() == context.RitzValues.size());
+		CHECK(context.Residuals.rows() == matrix.rows());
+		CHECK(context.Residuals.cols() == context.RitzValues.size());
+		CHECK(context.OperatorDiagonal.isApprox(matrix.diagonal().real()));
+		CHECK(context.RootConvergenceIndicators.size() == context.RitzValues.size());
+		CHECK((context.RootConvergenceIndicators == 0).all());
+		CHECK(context.BasisVectors.rows() == matrix.rows());
+		CHECK(context.DenominatorFloor > 0);
+		return DiagonalDavidsonCorrection{}(context);
+	};
+
+	REQUIRE(solver.Compute(linearOperator, Eigen::MatrixX<TestType>::Identity(2, 1), options, strategy)
+	        == DavidsonEigenSolverStatus::Converged);
+	CHECK(callCount == 1);
+}
+
+
+TEST_CASE("A temporary Davidson correction strategy remains alive for the whole compute call", "[Math][Davidson]")
+{
+	Eigen::Matrix2d matrix;
+	matrix << 1, 0.2, 0.2, 2;
+	const DenseOperator<double> linearOperator{matrix, {}};
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	const auto callCount = std::make_shared<Eigen::Index>(0);
+
+	struct Strategy
+	{
+		std::shared_ptr<Eigen::Index> CallCount;
+		DavidsonCorrectionCandidates<double> operator()(const DavidsonCorrectionContext<double>& context)
+		{
+			++*CallCount;
+			return DiagonalDavidsonCorrection{}(context);
+		}
+	};
+
+	REQUIRE(solver.Compute(linearOperator,
+	                       Eigen::MatrixXd::Identity(2, 1),
+	                       DavidsonEigenSolverOptions<double>{1},
+	                       Strategy{callCount}) == DavidsonEigenSolverStatus::Converged);
+	CHECK(*callCount == 1);
+}
+
+
+TEMPLATE_TEST_CASE("Olsen Davidson correction follows the reference correction formula",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> ritzVectors = Eigen::MatrixX<TestType>::Zero(3, 1);
+	ritzVectors.col(0) << TestType{0.5}, TestType{0.5}, TestType{0.7071067811865475};
+	Eigen::MatrixX<TestType> residuals(3, 1);
+	residuals.col(0) << TestType{1}, TestType{-2}, TestType{0.5};
+	const Eigen::VectorXd ritzValues = Eigen::VectorXd::Constant(1, 2.0);
+	const Eigen::Vector3d diagonal{0, 3, 5};
+	const Eigen::ArrayX<Int8> indicators{{0}};
+	const Eigen::MatrixX<TestType> basis = ritzVectors;
+	const DavidsonCorrectionContext<TestType> context{
+	        ritzVectors, residuals, ritzValues, diagonal, indicators, basis, 1e-6};
+	Eigen::VectorX<TestType> preconditionedResidual(3);
+	Eigen::VectorX<TestType> preconditionedRitzVector(3);
+	for (Eigen::Index index = 0; index < 3; index++)
+	{
+		const double denominator = ritzValues[0] - diagonal[index];
+		preconditionedResidual[index] = residuals(index, 0) / denominator;
+		preconditionedRitzVector[index] = ritzVectors(index, 0) / denominator;
+	}
+	const TestType epsilon = ritzVectors.col(0).dot(preconditionedResidual)
+	                         / ritzVectors.col(0).dot(preconditionedRitzVector);
+	const Eigen::VectorX<TestType> expected = preconditionedResidual + epsilon * ritzVectors.col(0);
+
+	const auto candidates = OlsenDavidsonCorrection{}(context);
+
+	REQUIRE(candidates.Vectors.cols() == 1);
+	CHECK(candidates.Vectors.col(0).isApprox(expected, 1e-12));
+	CHECK(candidates.SourceRootIndices == std::vector<Eigen::Index>{0});
+	const TestType phase = []
+	{
+		if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+		{
+			return TestType{0, 1};
+		}
+		return TestType{-1};
+	}();
+	const Eigen::MatrixX<TestType> rotatedRitzVectors = phase * ritzVectors;
+	const Eigen::MatrixX<TestType> rotatedResiduals = phase * residuals;
+	const DavidsonCorrectionContext<TestType> rotatedContext{rotatedRitzVectors,
+	                                                         rotatedResiduals,
+	                                                         ritzValues,
+	                                                         diagonal,
+	                                                         indicators,
+	                                                         basis,
+	                                                         1e-6};
+	const auto rotatedCandidates = OlsenDavidsonCorrection{}(rotatedContext);
+	CHECK(rotatedCandidates.Vectors.isApprox(phase * candidates.Vectors, 1e-12));
+}
+
+
+TEST_CASE("Olsen Davidson correction regularizes a vanishing Olsen denominator", "[Math][Davidson]")
+{
+	const double inverseSqrtTwo = 1 / std::sqrt(2.0);
+	Eigen::MatrixXd ritzVectors(2, 1);
+	ritzVectors << inverseSqrtTwo, inverseSqrtTwo;
+	Eigen::MatrixXd residuals(2, 1);
+	residuals << 1, -1;
+	const Eigen::VectorXd ritzValues = Eigen::VectorXd::Zero(1);
+	const Eigen::Vector2d diagonal{-1, 1};
+	const Eigen::ArrayX<Int8> indicators{{0}};
+	const DavidsonCorrectionContext<double> context{
+	        ritzVectors, residuals, ritzValues, diagonal, indicators, ritzVectors, 1e-6};
+
+	const auto candidates = OlsenDavidsonCorrection{}(context);
+
+	REQUIRE(candidates.Vectors.cols() == 1);
+	CHECK(candidates.Vectors.allFinite());
+}
+
+
+TEMPLATE_TEST_CASE("Olsen Davidson correction converges end to end",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> matrix(3, 3);
+	matrix << TestType{1}, TestType{0.2}, TestType{0}, TestType{0.2}, TestType{2}, TestType{0.3}, TestType{0},
+	        TestType{0.3}, TestType{4};
+	const DenseOperator<TestType> linearOperator{matrix, {}};
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	DavidsonEigenSolverOptions<double> options{1};
+	options.ResidualNormTolerance = 1e-10;
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> reference(matrix);
+
+	REQUIRE(solver.Compute(
+	                linearOperator, Eigen::MatrixX<TestType>::Identity(3, 1), options, OlsenDavidsonCorrection{})
+	        == DavidsonEigenSolverStatus::Converged);
+	CHECK(solver.Eigenvalues().isApprox(reference.eigenvalues().head(1), 1e-9));
+	CHECK(solver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+}
+
+
+TEST_CASE("Davidson rejects malformed custom correction results", "[Math][Davidson]")
+{
+	Eigen::Matrix2d matrix;
+	matrix << 1, 0.2, 0.2, 2;
+	const DenseOperator<double> linearOperator{matrix, {}};
+	const Eigen::MatrixXd basis = Eigen::MatrixXd::Identity(2, 1);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+
+	SECTION("Row count")
+	{
+		auto strategy = [](const DavidsonCorrectionContext<double>&)
+		{ return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(1, 1), {0}}; };
+		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, strategy),
+		                SecUtility::InvalidArgumentException);
+	}
+	SECTION("Source count")
+	{
+		auto strategy = [](const DavidsonCorrectionContext<double>&)
+		{ return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(2, 1), {}}; };
+		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, strategy),
+		                SecUtility::InvalidArgumentException);
+	}
+	SECTION("Source index")
+	{
+		auto strategy = [](const DavidsonCorrectionContext<double>&)
+		{ return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(2, 1), {1}}; };
+		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, strategy),
+		                SecUtility::InvalidArgumentException);
+	}
+	SECTION("Finite values")
+	{
+		auto strategy = [](const DavidsonCorrectionContext<double>&)
+		{
+			return DavidsonCorrectionCandidates<double>{
+			        Eigen::MatrixXd::Constant(2, 1, std::numeric_limits<double>::quiet_NaN()), {0}};
+		};
+		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, strategy),
+		                SecUtility::InvalidArgumentException);
+	}
+}
+
+
+TEST_CASE("Davidson propagates custom correction exceptions and handles valid zero output", "[Math][Davidson]")
+{
+	Eigen::Matrix2d matrix;
+	matrix << 1, 0.2, 0.2, 2;
+	const DenseOperator<double> linearOperator{matrix, {}};
+	const Eigen::MatrixXd basis = Eigen::MatrixXd::Identity(2, 1);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+
+	auto throwing = [](const DavidsonCorrectionContext<double>&) -> DavidsonCorrectionCandidates<double>
+	{ throw std::runtime_error("custom correction failure"); };
+	CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, throwing),
+	                std::runtime_error);
+
+	auto zero = [](const DavidsonCorrectionContext<double>& context)
+	{
+		return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(context.Residuals.rows(), 1), {0}};
+	};
+	CHECK(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, zero)
+	      == DavidsonEigenSolverStatus::ExpansionSpaceExhausted);
 }
 
 

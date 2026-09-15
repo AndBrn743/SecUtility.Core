@@ -19,6 +19,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <functional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -71,6 +73,43 @@ namespace SecUtility::Math
 	};
 
 
+	template <typename Scalar>
+	struct DavidsonCorrectionContext
+	{
+		const Eigen::MatrixX<Scalar>& RitzVectors;
+		const Eigen::MatrixX<Scalar>& Residuals;
+		const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& RitzValues;
+		const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& OperatorDiagonal;
+		const Eigen::ArrayX<Int8>& RootConvergenceIndicators;
+		const Eigen::MatrixX<Scalar>& BasisVectors;
+		const Eigen::NumTraits<Scalar>::Real DenominatorFloor;
+	};
+
+
+	template <typename Scalar>
+	struct DavidsonCorrectionCandidates
+	{
+		Eigen::MatrixX<Scalar> Vectors;
+		std::vector<Eigen::Index> SourceRootIndices;
+	};
+
+
+	struct DiagonalDavidsonCorrection
+	{
+		template <typename Scalar>
+		[[nodiscard]] DavidsonCorrectionCandidates<Scalar> operator()(
+		        const DavidsonCorrectionContext<Scalar>& context) const;
+	};
+
+
+	struct OlsenDavidsonCorrection
+	{
+		template <typename Scalar>
+		[[nodiscard]] DavidsonCorrectionCandidates<Scalar> operator()(
+		        const DavidsonCorrectionContext<Scalar>& context) const;
+	};
+
+
 	namespace Detail::Davidson
 	{
 		template <typename Scalar>
@@ -109,11 +148,7 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
-		struct CorrectionCandidates
-		{
-			Eigen::MatrixX<Scalar> Vectors;
-			std::vector<Eigen::Index> SourceRootIndices;
-		};
+		using CorrectionCandidates = DavidsonCorrectionCandidates<Scalar>;
 
 
 		template <typename Scalar>
@@ -146,7 +181,7 @@ namespace SecUtility::Math
 
 		template <typename Scalar>
 		CorrectionCandidates<Scalar> GenerateDiagonalCorrectionCandidates(
-		        const DiagonalCorrectionContext<Scalar>& context, DavidsonEigenSolverStatistics& ref_statistics)
+		        const DiagonalCorrectionContext<Scalar>& context)
 		{
 			assert(context.Residuals.cols() == context.RitzValues.size());
 			assert(context.Residuals.rows() == context.OperatorDiagonal.size());
@@ -174,8 +209,40 @@ namespace SecUtility::Math
 				candidates.SourceRootIndices.push_back(rootIndex);
 				candidateIndex++;
 			}
-			ref_statistics.GeneratedCorrectionVectorCount += unconvergedRootCount;
 			return candidates;
+		}
+
+
+		template <typename Scalar>
+		CorrectionCandidates<Scalar> GenerateDiagonalCorrectionCandidates(
+		        const DiagonalCorrectionContext<Scalar>& context, DavidsonEigenSolverStatistics& ref_statistics)
+		{
+			auto candidates = GenerateDiagonalCorrectionCandidates(context);
+			ref_statistics.GeneratedCorrectionVectorCount += candidates.Vectors.cols();
+			return candidates;
+		}
+
+
+		template <typename Scalar>
+		void ValidateCorrectionCandidates(const DavidsonCorrectionCandidates<Scalar>& candidates,
+		                                  const DavidsonCorrectionContext<Scalar>& context)
+		{
+			if (candidates.Vectors.rows() != context.Residuals.rows()
+			    || candidates.Vectors.cols() != static_cast<Eigen::Index>(candidates.SourceRootIndices.size()))
+			{
+				throw InvalidArgumentException("A correction strategy returned inconsistent candidate dimensions");
+			}
+			if (!candidates.Vectors.allFinite())
+			{
+				throw InvalidArgumentException("A correction strategy returned a non-finite candidate");
+			}
+			for (const Eigen::Index sourceRootIndex : candidates.SourceRootIndices)
+			{
+				if (sourceRootIndex < 0 || sourceRootIndex >= context.RitzValues.size())
+				{
+					throw InvalidArgumentException("A correction strategy returned an invalid source-root index");
+				}
+			}
 		}
 
 
@@ -390,6 +457,64 @@ namespace SecUtility::Math
 		}
 	}
 
+	template <typename Scalar>
+	DavidsonCorrectionCandidates<Scalar> DiagonalDavidsonCorrection::operator()(
+	        const DavidsonCorrectionContext<Scalar>& context) const
+	{
+		return Detail::Davidson::GenerateDiagonalCorrectionCandidates(
+		        Detail::Davidson::DiagonalCorrectionContext<Scalar>{context.Residuals,
+		                                                            context.RitzValues,
+		                                                            context.OperatorDiagonal,
+		                                                            context.RootConvergenceIndicators,
+		                                                            context.DenominatorFloor});
+	}
+
+
+	template <typename Scalar>
+	DavidsonCorrectionCandidates<Scalar> OlsenDavidsonCorrection::operator()(
+	        const DavidsonCorrectionContext<Scalar>& context) const
+	{
+		using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+		DavidsonCorrectionCandidates<Scalar> candidates{
+		        Eigen::MatrixX<Scalar>(context.Residuals.rows(),
+		                               (context.RootConvergenceIndicators == 0).template cast<Eigen::Index>().sum()),
+		        {}};
+		candidates.SourceRootIndices.reserve(static_cast<std::size_t>(candidates.Vectors.cols()));
+		Eigen::Index candidateIndex = 0;
+		for (Eigen::Index rootIndex = 0; rootIndex < context.RitzValues.size(); rootIndex++)
+		{
+			if (context.RootConvergenceIndicators[rootIndex] != 0)
+			{
+				continue;
+			}
+
+			Eigen::VectorX<Scalar> preconditionedResidual(context.Residuals.rows());
+			Eigen::VectorX<Scalar> preconditionedRitzVector(context.Residuals.rows());
+			for (Eigen::Index rowIndex = 0; rowIndex < context.Residuals.rows(); rowIndex++)
+			{
+				const RealScalar denominator = Detail::Davidson::RegularizeSignedDenominator(
+				        context.RitzValues[rootIndex] - context.OperatorDiagonal[rowIndex], context.DenominatorFloor);
+				preconditionedResidual[rowIndex] = context.Residuals(rowIndex, rootIndex) / denominator;
+				preconditionedRitzVector[rowIndex] = context.RitzVectors(rowIndex, rootIndex) / denominator;
+			}
+
+			const Scalar numerator = context.RitzVectors.col(rootIndex).dot(preconditionedResidual);
+			Scalar denominator = context.RitzVectors.col(rootIndex).dot(preconditionedRitzVector);
+			const RealScalar denominatorMagnitude = Abs(denominator);
+			if (denominatorMagnitude < context.DenominatorFloor)
+			{
+				denominator = denominatorMagnitude == RealScalar{0}
+				                      ? Scalar{context.DenominatorFloor}
+				                      : denominator * (context.DenominatorFloor / denominatorMagnitude);
+			}
+			candidates.Vectors.col(candidateIndex) =
+			        preconditionedResidual + (numerator / denominator) * context.RitzVectors.col(rootIndex);
+			candidates.SourceRootIndices.push_back(rootIndex);
+			candidateIndex++;
+		}
+		return candidates;
+	}
+
 
 	template <SelfAdjointLinearOperator Operator>
 	class DavidsonSelfAdjointEigenSolver
@@ -401,6 +526,15 @@ namespace SecUtility::Math
 		[[nodiscard]] DavidsonEigenSolverStatus Compute(const Operator& linearOperator,
 		                                                const Eigen::MatrixX<Scalar>& initialBasis,
 		                                                const DavidsonEigenSolverOptions<RealScalar>& options)
+		{
+			return Compute(linearOperator, initialBasis, options, DiagonalDavidsonCorrection{});
+		}
+
+		template <typename CorrectionStrategy>
+		[[nodiscard]] DavidsonEigenSolverStatus Compute(const Operator& linearOperator,
+		                                                const Eigen::MatrixX<Scalar>& initialBasis,
+		                                                const DavidsonEigenSolverOptions<RealScalar>& options,
+		                                                CorrectionStrategy&& correctionStrategy)
 		{
 			Reset();
 			Detail::Davidson::ValidateInput(linearOperator, initialBasis, options);
@@ -439,13 +573,20 @@ namespace SecUtility::Math
 					return m_Status;
 				}
 
-				const auto generatedCorrections = Detail::Davidson::GenerateDiagonalCorrectionCandidates(
-				        Detail::Davidson::DiagonalCorrectionContext{analysis.Residuals,
-				                                                    analysis.Eigenvalues,
-				                                                    diagonal,
-				                                                    rootConvergenceIndicators,
-				                                                    options.PreconditionerDenominatorFloor},
-				        m_Statistics);
+				const DavidsonCorrectionContext<Scalar> correctionContext{analysis.Eigenvectors,
+				                                                          analysis.Residuals,
+				                                                          analysis.Eigenvalues,
+				                                                          diagonal,
+				                                                          rootConvergenceIndicators,
+				                                                          subspace.Vectors,
+				                                                          options.PreconditionerDenominatorFloor};
+				using CorrectionResult =
+				        std::remove_cvref_t<decltype(std::invoke(correctionStrategy, correctionContext))>;
+				static_assert(std::same_as<CorrectionResult, DavidsonCorrectionCandidates<Scalar>>,
+				              "A Davidson correction strategy must return DavidsonCorrectionCandidates<Scalar>");
+				auto generatedCorrections = std::invoke(correctionStrategy, correctionContext);
+				Detail::Davidson::ValidateCorrectionCandidates(generatedCorrections, correctionContext);
+				m_Statistics.GeneratedCorrectionVectorCount += generatedCorrections.Vectors.cols();
 				const auto corrections = Detail::Davidson::OrthogonalizeCorrectionCandidates(
 				        subspace.Vectors, generatedCorrections, options.LinearDependenceTolerance, m_Statistics);
 				if (corrections.Vectors.cols() == 0)

@@ -41,8 +41,8 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 5 | Diagonal Davidson correction kernel | Complete |
 | 6 | Basic Davidson iteration and terminal semantics | Complete |
 | 7 | Thick restart and bounded storage | Complete |
-| 8 | Typed correction customization and Olsen correction | In progress |
-| 9 | Immutable iteration controller and custom convergence | Not started |
+| 8 | Typed correction customization and Olsen correction | Complete |
+| 9 | Immutable iteration controller and custom convergence | In progress |
 | 10 | Controlled operator mutation for future TRAH use | Not started |
 | 11 | Initial-guess policies and dense convenience adapter | Not started |
 | 12 | Validation, documentation, and stabilization | Not started |
