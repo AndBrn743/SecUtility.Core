@@ -104,9 +104,8 @@ Introduce the public solver shell and its foundational value types:
 
 Use an explicit `Compute` call; constructors must not execute a solve. Establish reset semantics so every `Compute`
 starts cleanly and failed validation cannot expose stale results. Use exceptions for invalid caller input and statuses
-for algorithmic terminal outcomes. Initial options should include root count, iteration limit, initial and maximum
-subspace dimensions, residual and eigenvalue-change tolerances, preconditioner denominator floor, and linear-
-dependence tolerance.
+for algorithmic terminal outcomes. Initial options should include root count, iteration limit, maximum subspace
+dimension, residual tolerance, preconditioner denominator floor, and linear-dependence tolerance.
 
 Tests must cover defaults, valid construction, every validation boundary, non-square and inconsistent-diagonal
 operators, invalid basis dimensions, non-finite or non-positive tolerances, root/subspace dimension relationships,
@@ -155,8 +154,7 @@ Phase 4 complete.
 Add the default diagonal-preconditioned residual correction as a standalone internal strategy with a typed,
 batch-oriented context. Define and document the sign convention consistently. Regularize denominators whose
 magnitude is below the configured floor without discarding their vector components. Orthogonalize candidates
-against the retained basis and each other, remove dependent columns, and preserve correspondence to their source
-roots for statistics and future policies.
+against the retained basis and each other, and remove dependent columns.
 
 Converged roots must not generate corrections. Zero and dependent corrections must be handled as normal algorithmic
 outcomes rather than normalized into NaNs.
@@ -176,12 +174,12 @@ corrections and their operator images while maintaining `(V, W)` alignment. Impl
 iteration-limit termination, correction-space exhaustion, numerical-failure propagation, and publication of the
 latest Ritz approximations for every non-validation terminal outcome.
 
-Eigenvalue-change checks may supplement residual convergence but must never allow one root's behavior to stand in
-for all requested roots. Iteration and operator statistics must have documented, deterministic meanings.
+Expose eigenvalue changes for observation and custom convergence vetoes, while keeping residual convergence
+authoritative. Iteration and operator statistics must have documented, deterministic meanings.
 
 Tests must cover one- and multiple-root convergence; real and complex matrices; diagonal, diagonally dominant,
 clustered, and degenerate spectra; exact initial guesses; iteration limits at boundary values; exhausted correction
-spaces; repeat `Compute` calls; residual and eigenvalue-change criteria; result ordering and alignment; and exact
+spaces; repeat `Compute` calls; residual criteria and eigenvalue-change observations; result ordering and alignment; and exact
 statistics on controlled problems.
 
 **Gate:** ask the user to run the basic end-to-end Davidson tests. Phase 7 may begin only after the user marks Phase 6
@@ -209,7 +207,7 @@ peak-space statistics.
 ## Phase 8 — Typed correction customization and Olsen correction
 
 Promote correction generation to the public customization model without exposing mutable solver state. A custom
-correction strategy receives an immutable context and returns candidate vectors plus source metadata. Keep the
+correction strategy receives an immutable context and returns candidate vectors. Keep the
 diagonal correction as the default and implement Olsen correction as a built-in strategy using the same denominator
 regularization and batch conventions.
 

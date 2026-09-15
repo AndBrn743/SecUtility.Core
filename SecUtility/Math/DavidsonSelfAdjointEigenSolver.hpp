@@ -23,7 +23,6 @@
 #include <limits>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 
 namespace SecUtility::Math
@@ -32,21 +31,18 @@ namespace SecUtility::Math
 	struct DavidsonEigenSolverOptions
 	{
 		explicit constexpr DavidsonEigenSolverOptions(const Eigen::Index rootCount) noexcept
-		    : RootCount(rootCount), InitialSubspaceDimension(rootCount)
+		    : RootCount(rootCount)
 		{
 		}
 
 		Eigen::Index RootCount;
 		Eigen::Index MaximumIterationCount = 256;
-		// The supplied basis may contain fewer columns; use AugmentDavidsonInitialBasis when augmentation is desired.
-		Eigen::Index InitialSubspaceDimension;
 		// Zero selects the operator dimension.
 		Eigen::Index MaximumSubspaceDimension = 0;
 		Eigen::Index AdditionalRestartRitzVectorCount = 0;
 		// The last permitted update is analyzed and published before the solver reports the limit.
 		Eigen::Index MaximumStructuredOperatorUpdateCountPerIteration = 8;
 		RealScalar ResidualNormTolerance = static_cast<RealScalar>(1e-7);
-		RealScalar EigenvalueChangeTolerance = static_cast<RealScalar>(1e-7);
 		RealScalar PreconditionerDenominatorFloor = static_cast<RealScalar>(1e-12);
 		RealScalar LinearDependenceTolerance = static_cast<RealScalar>(1e-10);
 	};
@@ -94,7 +90,6 @@ namespace SecUtility::Math
 	struct DavidsonCorrectionCandidates
 	{
 		Eigen::MatrixX<Scalar> Vectors;
-		std::vector<Eigen::Index> SourceRootIndices;
 	};
 
 
@@ -266,8 +261,7 @@ namespace SecUtility::Math
 			const Eigen::Index unconvergedRootCount =
 			        (context.RootConvergenceIndicators == 0).template cast<Eigen::Index>().sum();
 			CorrectionCandidates<Scalar> candidates{
-			        Eigen::MatrixX<Scalar>(context.Residuals.rows(), unconvergedRootCount), {}};
-			candidates.SourceRootIndices.reserve(static_cast<std::size_t>(unconvergedRootCount));
+			        Eigen::MatrixX<Scalar>(context.Residuals.rows(), unconvergedRootCount)};
 			Eigen::Index candidateIndex = 0;
 			for (Eigen::Index rootIndex = 0; rootIndex < context.RitzValues.size(); rootIndex++)
 			{
@@ -283,7 +277,6 @@ namespace SecUtility::Math
 					// t = -(D - theta I)^-1 r = r / (theta - D).
 					candidates.Vectors(rowIndex, candidateIndex) = context.Residuals(rowIndex, rootIndex) / denominator;
 				}
-				candidates.SourceRootIndices.push_back(rootIndex);
 				candidateIndex++;
 			}
 			return candidates;
@@ -304,21 +297,13 @@ namespace SecUtility::Math
 		void ValidateCorrectionCandidates(const DavidsonCorrectionCandidates<Scalar>& candidates,
 		                                  const DavidsonCorrectionContext<Scalar>& context)
 		{
-			if (candidates.Vectors.rows() != context.Residuals.rows()
-			    || candidates.Vectors.cols() != static_cast<Eigen::Index>(candidates.SourceRootIndices.size()))
+			if (candidates.Vectors.rows() != context.Residuals.rows())
 			{
 				throw InvalidArgumentException("A correction strategy returned inconsistent candidate dimensions");
 			}
 			if (!candidates.Vectors.allFinite())
 			{
 				throw InvalidArgumentException("A correction strategy returned a non-finite candidate");
-			}
-			for (const Eigen::Index sourceRootIndex : candidates.SourceRootIndices)
-			{
-				if (sourceRootIndex < 0 || sourceRootIndex >= context.RitzValues.size())
-				{
-					throw InvalidArgumentException("A correction strategy returned an invalid source-root index");
-				}
 			}
 		}
 
@@ -332,7 +317,7 @@ namespace SecUtility::Math
 		{
 			if (candidates.Vectors.cols() == 0)
 			{
-				return {Eigen::MatrixX<Scalar>(basis.rows(), 0), {}};
+				return {Eigen::MatrixX<Scalar>(basis.rows(), 0)};
 			}
 
 			Eigen::MatrixX<Scalar> projected = candidates.Vectors - basis * (basis.adjoint() * candidates.Vectors);
@@ -342,18 +327,11 @@ namespace SecUtility::Math
 			const Eigen::Index rank = qr.rank();
 			if (rank == 0)
 			{
-				return {Eigen::MatrixX<Scalar>(basis.rows(), 0), {}};
+				return {Eigen::MatrixX<Scalar>(basis.rows(), 0)};
 			}
 
 			CorrectionCandidates<Scalar> orthonormalized{
-			        qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(projected.rows(), rank), {}};
-			orthonormalized.SourceRootIndices.reserve(static_cast<std::size_t>(rank));
-			for (Eigen::Index pivotIndex = 0; pivotIndex < rank; pivotIndex++)
-			{
-				const Eigen::Index sourceCandidateIndex = qr.colsPermutation().indices()[pivotIndex];
-				orthonormalized.SourceRootIndices.push_back(
-				        candidates.SourceRootIndices[static_cast<std::size_t>(sourceCandidateIndex)]);
-			}
+			        qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(projected.rows(), rank)};
 			ref_statistics.RetainedCorrectionVectorCount += rank;
 			return orthonormalized;
 		}
@@ -541,24 +519,15 @@ namespace SecUtility::Math
 			{
 				throw InvalidArgumentException("MaximumStructuredOperatorUpdateCountPerIteration must be positive");
 			}
-			if (options.InitialSubspaceDimension < options.RootCount
-			    || options.InitialSubspaceDimension > linearOperator.rows())
-			{
-				throw InvalidArgumentException(
-				        "InitialSubspaceDimension must accommodate every root and not exceed the operator dimension");
-			}
-
 			const Eigen::Index maximumSubspaceDimension =
 			        options.MaximumSubspaceDimension == 0 ? linearOperator.rows() : options.MaximumSubspaceDimension;
-			if (maximumSubspaceDimension < options.InitialSubspaceDimension
-			    || maximumSubspaceDimension < initialBasis.cols() || maximumSubspaceDimension > linearOperator.rows())
+			if (maximumSubspaceDimension < initialBasis.cols() || maximumSubspaceDimension > linearOperator.rows())
 			{
 				throw InvalidArgumentException("MaximumSubspaceDimension must accommodate the initial space and not "
 				                               "exceed the operator dimension");
 			}
 
 			if (!std::isfinite(options.ResidualNormTolerance) || options.ResidualNormTolerance <= 0
-			    || !std::isfinite(options.EigenvalueChangeTolerance) || options.EigenvalueChangeTolerance <= 0
 			    || !std::isfinite(options.PreconditionerDenominatorFloor) || options.PreconditionerDenominatorFloor <= 0
 			    || !std::isfinite(options.LinearDependenceTolerance) || options.LinearDependenceTolerance <= 0)
 			{
@@ -587,9 +556,7 @@ namespace SecUtility::Math
 		using RealScalar = Eigen::NumTraits<Scalar>::Real;
 		DavidsonCorrectionCandidates<Scalar> candidates{
 		        Eigen::MatrixX<Scalar>(context.Residuals.rows(),
-		                               (context.RootConvergenceIndicators == 0).template cast<Eigen::Index>().sum()),
-		        {}};
-		candidates.SourceRootIndices.reserve(static_cast<std::size_t>(candidates.Vectors.cols()));
+		                               (context.RootConvergenceIndicators == 0).template cast<Eigen::Index>().sum())};
 		Eigen::Index candidateIndex = 0;
 		for (Eigen::Index rootIndex = 0; rootIndex < context.RitzValues.size(); rootIndex++)
 		{
@@ -619,7 +586,6 @@ namespace SecUtility::Math
 			}
 			candidates.Vectors.col(candidateIndex) =
 			        preconditionedResidual + (numerator / denominator) * context.RitzVectors.col(rootIndex);
-			candidates.SourceRootIndices.push_back(rootIndex);
 			candidateIndex++;
 		}
 		return candidates;
@@ -668,6 +634,8 @@ namespace SecUtility::Math
 		                                                ConvergencePredicate&& convergencePredicate)
 		{
 			Reset();
+			try
+			{
 			Detail::Davidson::ValidateInput(linearOperator, initialBasis, options);
 			ResetResultRows(linearOperator.rows());
 			auto subspace = Detail::Davidson::CreateInitialSubspace(
@@ -676,7 +644,7 @@ namespace SecUtility::Math
 			const Eigen::Index maximumSubspaceDimension =
 			        options.MaximumSubspaceDimension == 0 ? linearOperator.rows() : options.MaximumSubspaceDimension;
 			Eigen::VectorX<RealScalar> previousEigenvalues;
-			bool previousIterationRestarted = false;
+			bool wasPreviousIterationRestarted = false;
 
 			for (Eigen::Index iterationIndex = 0; iterationIndex < options.MaximumIterationCount; iterationIndex++)
 			{
@@ -722,7 +690,7 @@ namespace SecUtility::Math
 					                                                  rootConvergenceIndicators,
 					                                                  eigenvalueChanges,
 					                                                  hasEveryRequestedRoot,
-					                                                  previousIterationRestarted,
+				                                                  wasPreviousIterationRestarted,
 					                                                  m_Statistics.RestartCount,
 					                                                  updateCount,
 					                                                  maximumSubspaceDimension};
@@ -768,7 +736,7 @@ namespace SecUtility::Math
 						                                             maximumSubspaceDimension);
 						m_Statistics.RestartCount++;
 						previousEigenvalues = m_Eigenvalues;
-						previousIterationRestarted = true;
+						wasPreviousIterationRestarted = true;
 						isRestartRequested = true;
 						break;
 					}
@@ -864,10 +832,16 @@ namespace SecUtility::Math
 				m_Statistics.MaximumSubspaceDimension =
 				        Max(m_Statistics.MaximumSubspaceDimension, subspace.Vectors.cols());
 				previousEigenvalues = m_Eigenvalues;
-				previousIterationRestarted = false;
+				wasPreviousIterationRestarted = false;
 			}
 
 			throw InvariantViolationException("Davidson iteration terminated without a status");
+			}
+			catch (...)
+			{
+				Reset();
+				throw;
+			}
 		}
 
 		[[nodiscard]] DavidsonEigenSolverStatus Status() const noexcept

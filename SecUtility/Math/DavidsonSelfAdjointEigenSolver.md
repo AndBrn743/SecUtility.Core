@@ -31,14 +31,12 @@ eigenvalue `i`. Every algorithmic terminal status retains the latest coherent ap
 - `StructuredOperatorUpdateLimitReached`: the final allowed same-iteration update was applied and reanalyzed.
 - `NotComputed`: no solve has completed or the solver was reset by a new call.
 
-Invalid input clears all previous observable state before throwing. Exceptions from user callbacks propagate; the
-status remains `NotComputed`. A callback exception may leave the most recently published coherent analysis available
-for diagnosis. A rejected structured update clears Ritz results because the callback may already have changed its
-captured operator, making the preceding analysis potentially stale.
+Every exception clears all observable solver state before propagating, including exceptions from operators and user
+callbacks. The status is therefore `NotComputed` after an exceptional return.
 
 Residual convergence is authoritative. `EigenvalueChanges` is exposed to controllers and custom convergence
-predicates as diagnostic/application-specific information; `EigenvalueChangeTolerance` does not override residual
-convergence. A custom convergence predicate is consulted only after all requested roots satisfy the built-in residual
+predicates as diagnostic/application-specific information. A custom convergence predicate is consulted only after
+all requested roots satisfy the built-in residual
 criterion, so it may veto convergence but cannot accept an unconverged result.
 
 ## Subspace and restart invariants
@@ -55,8 +53,8 @@ transforms vectors and cached images with identical coefficients, preserving `W 
 
 The default `DiagonalDavidsonCorrection` uses the supplied operator diagonal. `OlsenDavidsonCorrection` is also
 provided. A custom correction callable receives an immutable `DavidsonCorrectionContext` and returns
-`DavidsonCorrectionCandidates`; returned source indices, dimensions, and finite values are validated before the
-candidates are orthogonalized.
+`DavidsonCorrectionCandidates`; returned dimensions and finite values are validated before the candidates are
+orthogonalized.
 
 The iteration controller runs after a coherent Rayleigh–Ritz analysis and before convergence, restart, or expansion
 decisions. `DavidsonIterationInfo` references are immutable and valid only for that callback invocation. Controllers

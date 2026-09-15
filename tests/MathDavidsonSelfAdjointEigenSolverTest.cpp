@@ -50,6 +50,21 @@ namespace
 	}
 
 
+	template <typename Solver>
+	void CheckDavidsonSolverIsReset(const Solver& solver)
+	{
+		CHECK(solver.Status() == SecUtility::Math::DavidsonEigenSolverStatus::NotComputed);
+		CHECK(solver.Eigenvalues().size() == 0);
+		CHECK(solver.Eigenvectors().size() == 0);
+		CHECK(solver.ResidualNorms().size() == 0);
+		CHECK(solver.BasisVectors().size() == 0);
+		CHECK(solver.BasisVectorImages().size() == 0);
+		CHECK(solver.ReducedMatrix().size() == 0);
+		CHECK(solver.ReducedEigenvectors().size() == 0);
+		CHECK(solver.Statistics().CompletedIterationCount == 0);
+	}
+
+
 	template <typename T>
 	struct VectorOnlyCountingOperator
 	{
@@ -131,11 +146,10 @@ TEST_CASE("Davidson option and statistic defaults are stable", "[Math][Davidson]
 	const DavidsonEigenSolverOptions<double> options{3};
 	CHECK(options.RootCount == 3);
 	CHECK(options.MaximumIterationCount == 256);
-	CHECK(options.InitialSubspaceDimension == 3);
 	CHECK(options.MaximumSubspaceDimension == 0);
 	CHECK(options.AdditionalRestartRitzVectorCount == 0);
+	CHECK(options.MaximumStructuredOperatorUpdateCountPerIteration == 8);
 	CHECK(options.ResidualNormTolerance == 1e-7);
-	CHECK(options.EigenvalueChangeTolerance == 1e-7);
 	CHECK(options.PreconditionerDenominatorFloor == 1e-12);
 	CHECK(options.LinearDependenceTolerance == 1e-10);
 
@@ -205,7 +219,6 @@ TEMPLATE_TEST_CASE("Davidson initial-subspace preparation orthonormalizes and re
 	const Eigen::MatrixX<TestType> originalBasis = initialBasis;
 	DavidsonSelfAdjointEigenSolver<Operator> solver;
 	DavidsonEigenSolverOptions<double> options{1};
-	options.InitialSubspaceDimension = 3;
 
 	CHECK(solver.Compute(linearOperator, initialBasis, options) == DavidsonEigenSolverStatus::Converged);
 
@@ -224,7 +237,6 @@ TEST_CASE("Davidson initial-subspace rank detection respects the configured rela
 	const auto linearOperator = IdentityOperator<double>(3, 3);
 	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
 	DavidsonEigenSolverOptions<double> options{1};
-	options.InitialSubspaceDimension = 2;
 	options.LinearDependenceTolerance = 1e-8;
 	Eigen::MatrixXd basis = Eigen::MatrixXd::Zero(3, 2);
 	basis(0, 0) = 1;
@@ -264,7 +276,6 @@ TEMPLATE_TEST_CASE("Davidson initial vector images and projection remain aligned
 	Eigen::MatrixX<TestType> initialBasis = Eigen::MatrixX<TestType>::Random(4, 3);
 	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
 	DavidsonEigenSolverOptions<double> options{2};
-	options.InitialSubspaceDimension = 3;
 	options.MaximumIterationCount = 1;
 
 	CHECK(solver.Compute(linearOperator, initialBasis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
@@ -287,7 +298,6 @@ TEMPLATE_TEST_CASE("Davidson initial-subspace accounting distinguishes block and
 	DavidsonSelfAdjointEigenSolver<decltype(blockOperator)> blockSolver;
 	DavidsonSelfAdjointEigenSolver<decltype(vectorOperator)> vectorSolver;
 	DavidsonEigenSolverOptions<double> options{2};
-	options.InitialSubspaceDimension = 3;
 
 	CHECK(blockSolver.Compute(blockOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
 	CHECK(vectorSolver.Compute(vectorOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
@@ -306,7 +316,6 @@ TEST_CASE("Davidson rejects an initial basis with no surviving direction", "[Mat
 	const auto linearOperator = IdentityOperator<double>(3, 3);
 	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
 	DavidsonEigenSolverOptions<double> options{1};
-	options.InitialSubspaceDimension = 2;
 
 	CHECK_THROWS_AS(solver.Compute(linearOperator, Eigen::MatrixXd::Zero(3, 2), options),
 	                SecUtility::InvalidArgumentException);
@@ -340,7 +349,6 @@ TEMPLATE_TEST_CASE("Davidson Rayleigh-Ritz results match a dense reference in a 
 	        qr.householderQ() * Eigen::MatrixX<TestType>::Identity(4, 4);
 	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
 	DavidsonEigenSolverOptions<RealScalar> options{3};
-	options.InitialSubspaceDimension = 4;
 	options.ResidualNormTolerance = 1e-10;
 	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> reference(matrix);
 
@@ -386,7 +394,6 @@ TEST_CASE("Davidson retains every available Ritz pair when fewer than the reques
 	const auto linearOperator = IdentityOperator<double>(4, 4);
 	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
 	DavidsonEigenSolverOptions<double> options{3};
-	options.InitialSubspaceDimension = 3;
 	options.MaximumIterationCount = 1;
 
 	REQUIRE(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(4, 2), options)
@@ -452,8 +459,6 @@ TEMPLATE_TEST_CASE("Diagonal Davidson corrections follow r divided by theta minu
 	CHECK(candidates.Vectors(1, 0) == residuals(1, 0) / 0.5);
 	CHECK(candidates.Vectors(2, 0) == residuals(2, 0) / -2.0);
 	CHECK(candidates.Vectors(3, 0) == residuals(3, 0) / -4.0);
-	REQUIRE(candidates.SourceRootIndices.size() == 1);
-	CHECK(candidates.SourceRootIndices[0] == 0);
 	CHECK(statistics.GeneratedCorrectionVectorCount == 1);
 	CHECK(statistics.RetainedCorrectionVectorCount == 0);
 	CHECK(candidates.Vectors.allFinite());
@@ -474,7 +479,6 @@ TEST_CASE("Diagonal Davidson correction generation skips every converged root", 
 
 	CHECK(candidates.Vectors.rows() == 3);
 	CHECK(candidates.Vectors.cols() == 0);
-	CHECK(candidates.SourceRootIndices.empty());
 	CHECK(statistics.GeneratedCorrectionVectorCount == 0);
 }
 
@@ -506,7 +510,7 @@ TEMPLATE_TEST_CASE("Davidson correction filtering projects twice and removes cro
 {
 	using namespace Detail::Davidson;
 	const Eigen::MatrixX<TestType> basis = Eigen::MatrixX<TestType>::Identity(4, 1);
-	CorrectionCandidates<TestType> candidates{Eigen::MatrixX<TestType>::Zero(4, 3), {10, 11, 12}};
+	CorrectionCandidates<TestType> candidates{Eigen::MatrixX<TestType>::Zero(4, 3)};
 	candidates.Vectors(0, 0) = TestType{1};
 	candidates.Vectors(1, 1) = TestType{1};
 	candidates.Vectors(1, 2) = TestType{3};
@@ -518,8 +522,6 @@ TEMPLATE_TEST_CASE("Davidson correction filtering projects twice and removes cro
 	CHECK((basis.adjoint() * retained.Vectors).norm() < 1e-14);
 	CHECK((retained.Vectors.adjoint() * retained.Vectors)
 	              .isApprox(Eigen::MatrixX<TestType>::Identity(1, 1), 1e-14));
-	REQUIRE(retained.SourceRootIndices.size() == 1);
-	CHECK(retained.SourceRootIndices[0] == 12);
 	CHECK(statistics.RetainedCorrectionVectorCount == 1);
 }
 
@@ -532,21 +534,19 @@ TEST_CASE("Davidson correction filtering handles zero and near-dependent candida
 
 	SECTION("Zero corrections are discarded")
 	{
-		const CorrectionCandidates<double> candidates{Eigen::MatrixXd::Zero(3, 2), {0, 1}};
+		const CorrectionCandidates<double> candidates{Eigen::MatrixXd::Zero(3, 2)};
 		const auto retained = OrthogonalizeCorrectionCandidates(basis, candidates, 1e-8, statistics);
 		CHECK(retained.Vectors.cols() == 0);
-		CHECK(retained.SourceRootIndices.empty());
 		CHECK(statistics.RetainedCorrectionVectorCount == 0);
 	}
 
 	SECTION("The relative QR threshold controls a small independent pivot")
 	{
-		CorrectionCandidates<double> candidates{Eigen::MatrixXd::Zero(3, 2), {0, 1}};
+		CorrectionCandidates<double> candidates{Eigen::MatrixXd::Zero(3, 2)};
 		candidates.Vectors(1, 0) = 1;
 		candidates.Vectors(2, 1) = 1e-9;
 		const auto retained = OrthogonalizeCorrectionCandidates(basis, candidates, 1e-8, statistics);
 		CHECK(retained.Vectors.cols() == 1);
-		CHECK(retained.SourceRootIndices == std::vector<Eigen::Index>{0});
 		CHECK(statistics.RetainedCorrectionVectorCount == 1);
 	}
 }
@@ -640,7 +640,6 @@ TEST_CASE("Basic Davidson iteration exposes its latest Ritz result at the iterat
 	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
 	DavidsonEigenSolverOptions<double> options{1};
 	options.MaximumIterationCount = 1;
-	options.EigenvalueChangeTolerance = 1e100;
 
 	REQUIRE(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(3, 1), options)
 	        == DavidsonEigenSolverStatus::IterationLimitReached);
@@ -688,26 +687,6 @@ TEST_CASE("Basic Davidson iteration reports bounded and dependent expansion exha
 		CHECK(solver.Statistics().GeneratedCorrectionVectorCount == 0);
 		CHECK(solver.Statistics().RetainedCorrectionVectorCount == 0);
 	}
-}
-
-
-TEST_CASE("Eigenvalue-change tolerance neither overrides nor blocks residual convergence", "[Math][Davidson]")
-{
-	Eigen::Matrix2d matrix;
-	matrix << 1, 0.2, 0.2, 2;
-	const DenseOperator<double> linearOperator{matrix, {}};
-	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
-
-	DavidsonEigenSolverOptions<double> looseOptions{1};
-	looseOptions.MaximumIterationCount = 1;
-	looseOptions.EigenvalueChangeTolerance = 1e100;
-	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1), looseOptions)
-	      == DavidsonEigenSolverStatus::IterationLimitReached);
-
-	DavidsonEigenSolverOptions<double> strictOptions{1};
-	strictOptions.EigenvalueChangeTolerance = 1e-100;
-	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 2), strictOptions)
-	      == DavidsonEigenSolverStatus::Converged);
 }
 
 
@@ -942,7 +921,6 @@ TEMPLATE_TEST_CASE("Olsen Davidson correction follows the reference correction f
 
 	REQUIRE(candidates.Vectors.cols() == 1);
 	CHECK(candidates.Vectors.col(0).isApprox(expected, 1e-12));
-	CHECK(candidates.SourceRootIndices == std::vector<Eigen::Index>{0});
 	const TestType phase = []
 	{
 		if constexpr (Eigen::NumTraits<TestType>::IsComplex)
@@ -1016,33 +994,21 @@ TEST_CASE("Davidson rejects malformed custom correction results", "[Math][Davids
 	SECTION("Row count")
 	{
 		auto strategy = [](const DavidsonCorrectionContext<double>&)
-		{ return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(1, 1), {0}}; };
+		{ return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(1, 1)}; };
 		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, strategy),
 		                SecUtility::InvalidArgumentException);
-	}
-	SECTION("Source count")
-	{
-		auto strategy = [](const DavidsonCorrectionContext<double>&)
-		{ return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(2, 1), {}}; };
-		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, strategy),
-		                SecUtility::InvalidArgumentException);
-	}
-	SECTION("Source index")
-	{
-		auto strategy = [](const DavidsonCorrectionContext<double>&)
-		{ return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(2, 1), {1}}; };
-		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, strategy),
-		                SecUtility::InvalidArgumentException);
+		CheckDavidsonSolverIsReset(solver);
 	}
 	SECTION("Finite values")
 	{
 		auto strategy = [](const DavidsonCorrectionContext<double>&)
 		{
 			return DavidsonCorrectionCandidates<double>{
-			        Eigen::MatrixXd::Constant(2, 1, std::numeric_limits<double>::quiet_NaN()), {0}};
+			        Eigen::MatrixXd::Constant(2, 1, std::numeric_limits<double>::quiet_NaN())};
 		};
 		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, strategy),
 		                SecUtility::InvalidArgumentException);
+		CheckDavidsonSolverIsReset(solver);
 	}
 }
 
@@ -1059,10 +1025,11 @@ TEST_CASE("Davidson propagates custom correction exceptions and handles valid ze
 	{ throw std::runtime_error("custom correction failure"); };
 	CHECK_THROWS_AS(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, throwing),
 	                std::runtime_error);
+	CheckDavidsonSolverIsReset(solver);
 
 	auto zero = [](const DavidsonCorrectionContext<double>& context)
 	{
-		return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(context.Residuals.rows(), 1), {0}};
+		return DavidsonCorrectionCandidates<double>{Eigen::MatrixXd::Zero(context.Residuals.rows(), 1)};
 	};
 	CHECK(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, zero)
 	      == DavidsonEigenSolverStatus::ExpansionSpaceExhausted);
@@ -1249,6 +1216,7 @@ TEST_CASE("Davidson propagates controller and convergence predicate exceptions",
 	                               DavidsonEigenSolverOptions<double>{1}, DiagonalDavidsonCorrection{},
 	                               throwingController, AcceptDavidsonConvergence{}),
 	                std::runtime_error);
+	CheckDavidsonSolverIsReset(solver);
 
 	auto throwingPredicate = [](const DavidsonIterationInfo<double>&) -> bool
 	{ throw std::runtime_error("predicate failure"); };
@@ -1256,6 +1224,7 @@ TEST_CASE("Davidson propagates controller and convergence predicate exceptions",
 	                               DavidsonEigenSolverOptions<double>{1}, DiagonalDavidsonCorrection{},
 	                               ContinueDavidsonIteration{}, throwingPredicate),
 	                std::runtime_error);
+	CheckDavidsonSolverIsReset(solver);
 }
 
 
@@ -1615,10 +1584,9 @@ TEST_CASE("Davidson validation accepts boundary dimensions and automatic maximum
 		CHECK_NOTHROW(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(4, 4), options));
 	}
 
-	SECTION("A supplied seed may be smaller than the requested initial space")
+	SECTION("A supplied seed may contain fewer vectors than the requested root count")
 	{
 		DavidsonEigenSolverOptions<double> options{2};
-		options.InitialSubspaceDimension = 3;
 		options.MaximumSubspaceDimension = 4;
 		CHECK_NOTHROW(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(4, 1), options));
 	}
@@ -1717,13 +1685,6 @@ TEST_CASE("Davidson validation rejects invalid count and subspace options", "[Ma
 		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, options), SecUtility::InvalidArgumentException);
 	}
 
-	for (const Eigen::Index initialSubspaceDimension : {Eigen::Index{-1}, Eigen::Index{0}, Eigen::Index{1}, Eigen::Index{5}})
-	{
-		options = DavidsonEigenSolverOptions<double>{2};
-		options.InitialSubspaceDimension = initialSubspaceDimension;
-		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, options), SecUtility::InvalidArgumentException);
-	}
-
 	for (const Eigen::Index maximumSubspaceDimension : {Eigen::Index{-1}, Eigen::Index{1}, Eigen::Index{5}})
 	{
 		options = DavidsonEigenSolverOptions<double>{2};
@@ -1740,7 +1701,6 @@ TEST_CASE("Davidson validation rejects invalid count and subspace options", "[Ma
 	CHECK_THROWS_AS(solver.Compute(linearOperator, basis, options), SecUtility::InvalidArgumentException);
 
 	options = DavidsonEigenSolverOptions<double>{1};
-	options.InitialSubspaceDimension = 1;
 	options.MaximumSubspaceDimension = 1;
 	CHECK_THROWS_AS(solver.Compute(linearOperator, basis, options), SecUtility::InvalidArgumentException);
 }
@@ -1758,10 +1718,6 @@ TEST_CASE("Davidson validation rejects every invalid numerical tolerance", "[Mat
 	{
 		DavidsonEigenSolverOptions<double> options{1};
 		options.ResidualNormTolerance = invalid;
-		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, options), SecUtility::InvalidArgumentException);
-
-		options = DavidsonEigenSolverOptions<double>{1};
-		options.EigenvalueChangeTolerance = invalid;
 		CHECK_THROWS_AS(solver.Compute(linearOperator, basis, options), SecUtility::InvalidArgumentException);
 
 		options = DavidsonEigenSolverOptions<double>{1};
