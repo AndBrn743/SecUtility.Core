@@ -11,6 +11,7 @@
 #include <SecUtility/Math/SelfAdjointLinearOperator.hpp>
 
 #include <Eigen/Core>
+#include <Eigen/Eigenvalues>
 #include <Eigen/QR>
 
 #include <algorithm>
@@ -77,6 +78,18 @@ namespace SecUtility::Math
 
 
 		template <typename Scalar>
+		struct RitzAnalysis
+		{
+			Eigen::ComputationInfo ComputationInfo = Eigen::Success;
+			Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> Eigenvalues;
+			Eigen::MatrixX<Scalar> Eigenvectors;
+			Eigen::MatrixX<Scalar> EigenvectorImages;
+			Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real> ResidualNorms;
+			Eigen::MatrixX<Scalar> ReducedEigenvectors;
+		};
+
+
+		template <typename Scalar>
 		Eigen::MatrixX<Scalar> OrthonormalizeAndRemoveLinearDependence(
 		        const Eigen::MatrixX<Scalar>& vectors,
 		        const typename Eigen::NumTraits<Scalar>::Real relativeLinearDependenceTolerance)
@@ -114,6 +127,37 @@ namespace SecUtility::Math
 			ref_statistics.MaximumSubspaceDimension = vectors.cols();
 			Eigen::MatrixX<Scalar> reducedMatrix = vectors.adjoint() * images;
 			return {std::move(vectors), std::move(images), std::move(reducedMatrix)};
+		}
+
+
+		template <typename Scalar>
+		RitzAnalysis<Scalar> AnalyzeSubspace(const VectorImageSubspace<Scalar>& subspace,
+		                                     const Eigen::Index requestedRootCount)
+		{
+			RitzAnalysis<Scalar> analysis;
+			if (!subspace.ReducedMatrix.allFinite())
+			{
+				analysis.ComputationInfo = Eigen::NumericalIssue;
+				return analysis;
+			}
+
+			Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> reducedSolver(subspace.ReducedMatrix);
+			analysis.ComputationInfo = reducedSolver.info();
+			if (analysis.ComputationInfo != Eigen::Success)
+			{
+				return analysis;
+			}
+
+			const Eigen::Index rootCount = Min(requestedRootCount, subspace.Vectors.cols());
+			analysis.Eigenvalues = reducedSolver.eigenvalues().head(rootCount);
+			analysis.ReducedEigenvectors = reducedSolver.eigenvectors().leftCols(rootCount);
+			analysis.Eigenvectors = subspace.Vectors * analysis.ReducedEigenvectors;
+			analysis.EigenvectorImages = subspace.Images * analysis.ReducedEigenvectors;
+			const Eigen::MatrixX<Scalar> residuals =
+			        analysis.EigenvectorImages
+			        - analysis.Eigenvectors * analysis.Eigenvalues.template cast<Scalar>().asDiagonal();
+			analysis.ResidualNorms = residuals.colwise().norm().transpose();
+			return analysis;
 		}
 
 
@@ -212,12 +256,26 @@ namespace SecUtility::Math
 			ResetResultRows(linearOperator.rows());
 			auto initialSubspace = Detail::Davidson::CreateInitialSubspace(
 			        linearOperator, initialBasis, options.LinearDependenceTolerance, m_Statistics);
+			m_Statistics.CompletedIterationCount = 1;
+			const auto analysis = Detail::Davidson::AnalyzeSubspace(initialSubspace, options.RootCount);
 			m_BasisVectors = std::move(initialSubspace.Vectors);
 			m_BasisVectorImages = std::move(initialSubspace.Images);
 			m_ReducedMatrix = std::move(initialSubspace.ReducedMatrix);
+			if (analysis.ComputationInfo != Eigen::Success)
+			{
+				m_Status = DavidsonEigenSolverStatus::NumericalFailure;
+				return m_Status;
+			}
 
-			// Transitional Phase 3 terminal path. The first algorithmic result is implemented in Phase 4.
-			m_Status = DavidsonEigenSolverStatus::IterationLimitReached;
+			m_Eigenvalues = analysis.Eigenvalues;
+			m_Eigenvectors = analysis.Eigenvectors;
+			m_ResidualNorms = analysis.ResidualNorms;
+			m_ReducedEigenvectors = analysis.ReducedEigenvectors;
+			const bool hasEveryRequestedRoot = m_Eigenvalues.size() == options.RootCount;
+			const bool hasResidualConverged =
+			        hasEveryRequestedRoot && (m_ResidualNorms.array() <= options.ResidualNormTolerance).all();
+			m_Status = hasResidualConverged ? DavidsonEigenSolverStatus::Converged
+			                                : DavidsonEigenSolverStatus::IterationLimitReached;
 			return m_Status;
 		}
 

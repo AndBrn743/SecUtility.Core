@@ -62,6 +62,19 @@ namespace
 			return Matrix * vector;
 		}
 	};
+
+
+	struct NonFiniteImageOperator
+	{
+		using Scalar = double;
+		Eigen::Index rows() const { return 3; }
+		Eigen::Index cols() const { return 3; }
+		Eigen::Vector3d Diagonal() const { return Eigen::Vector3d{1, 2, 3}; }
+		Eigen::MatrixXd ApplyOn(const Eigen::MatrixXd& vectors) const
+		{
+			return Eigen::MatrixXd::Constant(3, vectors.cols(), std::numeric_limits<double>::quiet_NaN());
+		}
+	};
 }
 
 
@@ -92,7 +105,7 @@ TEST_CASE("Davidson option and statistic defaults are stable", "[Math][Davidson]
 }
 
 
-TEMPLATE_TEST_CASE("A Davidson solver publishes an aligned initial subspace and empty Phase 3 Ritz results",
+TEMPLATE_TEST_CASE("A Davidson solver publishes aligned exact initial-space Ritz results",
 	               "[Math][Davidson]", double, (std::complex<double>))
 {
 	using Operator = DenseOperator<TestType>;
@@ -111,12 +124,13 @@ TEMPLATE_TEST_CASE("A Davidson solver publishes an aligned initial subspace and 
 	const Eigen::MatrixX<TestType> initialBasis = Eigen::MatrixX<TestType>::Identity(4, 2);
 	const auto status = solver.Compute(linearOperator, initialBasis, DavidsonEigenSolverOptions<double>{2});
 
-	CHECK(status == DavidsonEigenSolverStatus::IterationLimitReached);
+	CHECK(status == DavidsonEigenSolverStatus::Converged);
 	CHECK(solver.Status() == status);
-	CHECK(solver.Eigenvalues().size() == 0);
+	REQUIRE(solver.Eigenvalues().size() == 2);
+	CHECK(solver.Eigenvalues().isApprox(Eigen::Vector2d::Ones()));
 	CHECK(solver.Eigenvectors().rows() == 4);
-	CHECK(solver.Eigenvectors().cols() == 0);
-	CHECK(solver.ResidualNorms().size() == 0);
+	CHECK(solver.Eigenvectors().cols() == 2);
+	CHECK(solver.ResidualNorms().maxCoeff() < 1e-14);
 	CHECK(solver.BasisVectors().rows() == 4);
 	CHECK(solver.BasisVectors().cols() == 2);
 	CHECK((solver.BasisVectors().adjoint() * solver.BasisVectors())
@@ -125,7 +139,8 @@ TEMPLATE_TEST_CASE("A Davidson solver publishes an aligned initial subspace and 
 	CHECK(solver.BasisVectorImages().cols() == 2);
 	CHECK(solver.BasisVectorImages().isApprox(solver.BasisVectors()));
 	CHECK(solver.ReducedMatrix().isApprox(Eigen::MatrixX<TestType>::Identity(2, 2)));
-	CHECK(solver.ReducedEigenvectors().size() == 0);
+	CHECK(solver.ReducedEigenvectors().rows() == 2);
+	CHECK(solver.ReducedEigenvectors().cols() == 2);
 	CHECK(solver.Statistics().OperatorApplicationCount == 1);
 	CHECK(solver.Statistics().MultipliedVectorCount == 2);
 	CHECK(solver.Statistics().MaximumSubspaceDimension == 2);
@@ -146,7 +161,7 @@ TEMPLATE_TEST_CASE("Davidson initial-subspace preparation orthonormalizes and re
 	DavidsonEigenSolverOptions<double> options{1};
 	options.InitialSubspaceDimension = 3;
 
-	CHECK(solver.Compute(linearOperator, initialBasis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+	CHECK(solver.Compute(linearOperator, initialBasis, options) == DavidsonEigenSolverStatus::Converged);
 
 	REQUIRE(solver.BasisVectors().cols() == 2);
 	CHECK((solver.BasisVectors().adjoint() * solver.BasisVectors())
@@ -171,14 +186,14 @@ TEST_CASE("Davidson initial-subspace rank detection respects the configured rela
 	SECTION("A pivot above the threshold is retained")
 	{
 		basis(1, 1) = 1e-7;
-		CHECK(solver.Compute(linearOperator, basis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+		CHECK(solver.Compute(linearOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
 		CHECK(solver.BasisVectors().cols() == 2);
 	}
 
 	SECTION("A pivot below the threshold is removed")
 	{
 		basis(1, 1) = 1e-9;
-		CHECK(solver.Compute(linearOperator, basis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+		CHECK(solver.Compute(linearOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
 		CHECK(solver.BasisVectors().cols() == 1);
 	}
 }
@@ -227,8 +242,8 @@ TEMPLATE_TEST_CASE("Davidson initial-subspace accounting distinguishes block and
 	DavidsonEigenSolverOptions<double> options{2};
 	options.InitialSubspaceDimension = 3;
 
-	CHECK(blockSolver.Compute(blockOperator, basis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
-	CHECK(vectorSolver.Compute(vectorOperator, basis, options) == DavidsonEigenSolverStatus::IterationLimitReached);
+	CHECK(blockSolver.Compute(blockOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
+	CHECK(vectorSolver.Compute(vectorOperator, basis, options) == DavidsonEigenSolverStatus::Converged);
 
 	CHECK(blockSolver.BasisVectorImages().isApprox(vectorSolver.BasisVectorImages()));
 	CHECK(blockSolver.Statistics().OperatorApplicationCount == 1);
@@ -252,6 +267,101 @@ TEST_CASE("Davidson rejects an initial basis with no surviving direction", "[Mat
 	CHECK(solver.BasisVectors().size() == 0);
 	CHECK(solver.BasisVectorImages().size() == 0);
 	CHECK(solver.ReducedMatrix().size() == 0);
+}
+
+
+TEMPLATE_TEST_CASE("Davidson Rayleigh-Ritz results match a dense reference in a rotated full space",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	using RealScalar = typename Eigen::NumTraits<TestType>::Real;
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(4, 4);
+	matrix.diagonal() << TestType{-2}, TestType{0.5}, TestType{3}, TestType{8};
+	const TestType coupling = []
+	{
+		if constexpr (Eigen::NumTraits<TestType>::IsComplex)
+		{
+			return TestType{0.2, -0.35};
+		}
+		return TestType{0.2};
+	}();
+	matrix(0, 2) = coupling;
+	matrix(2, 0) = Eigen::numext::conj(coupling);
+	const DenseOperator<TestType> linearOperator{matrix, {}};
+	Eigen::MatrixX<TestType> seed = Eigen::MatrixX<TestType>::Random(4, 4);
+	const Eigen::HouseholderQR<Eigen::MatrixX<TestType>> qr(seed);
+	const Eigen::MatrixX<TestType> initialBasis =
+	        qr.householderQ() * Eigen::MatrixX<TestType>::Identity(4, 4);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	DavidsonEigenSolverOptions<RealScalar> options{3};
+	options.InitialSubspaceDimension = 4;
+	options.ResidualNormTolerance = 1e-10;
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> reference(matrix);
+
+	REQUIRE(solver.Compute(linearOperator, initialBasis, options) == DavidsonEigenSolverStatus::Converged);
+	CHECK(solver.Eigenvalues().isApprox(reference.eigenvalues().head(3), 1e-10));
+	CHECK(solver.ResidualNorms().maxCoeff() < 1e-10);
+	CHECK((matrix * solver.Eigenvectors())
+	              .isApprox(solver.Eigenvectors() * solver.Eigenvalues().template cast<TestType>().asDiagonal(), 1e-10));
+	CHECK((solver.Eigenvectors().adjoint() * solver.Eigenvectors())
+	              .isApprox(Eigen::MatrixX<TestType>::Identity(3, 3), 1e-10));
+	CHECK(solver.Statistics().CompletedIterationCount == 1);
+}
+
+
+TEMPLATE_TEST_CASE("Davidson publishes reduced Ritz approximations from a partial non-invariant space",
+	               "[Math][Davidson]", double, (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> matrix = Eigen::MatrixX<TestType>::Zero(4, 4);
+	matrix.diagonal() << TestType{1}, TestType{2}, TestType{4}, TestType{7};
+	matrix(1, 2) = TestType{0.5};
+	matrix(2, 1) = TestType{0.5};
+	const DenseOperator<TestType> linearOperator{matrix, {}};
+	const Eigen::MatrixX<TestType> initialBasis = Eigen::MatrixX<TestType>::Identity(4, 2);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	DavidsonEigenSolverOptions<double> options{2};
+
+	REQUIRE(solver.Compute(linearOperator, initialBasis, options)
+	        == DavidsonEigenSolverStatus::IterationLimitReached);
+	REQUIRE(solver.Eigenvalues().size() == 2);
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<TestType>> reducedReference(solver.ReducedMatrix());
+	CHECK(solver.Eigenvalues().isApprox(reducedReference.eigenvalues(), 1e-12));
+	CHECK(solver.Eigenvectors().cols() == solver.Eigenvalues().size());
+	CHECK(solver.ResidualNorms().size() == solver.Eigenvalues().size());
+	CHECK(solver.ResidualNorms().maxCoeff() > options.ResidualNormTolerance);
+	CHECK(solver.ReducedEigenvectors().rows() == solver.ReducedMatrix().rows());
+	CHECK(solver.ReducedEigenvectors().cols() == solver.Eigenvalues().size());
+}
+
+
+TEST_CASE("Davidson retains every available Ritz pair when fewer than the requested roots exist", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(4, 4);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	DavidsonEigenSolverOptions<double> options{3};
+	options.InitialSubspaceDimension = 3;
+
+	REQUIRE(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(4, 2), options)
+	        == DavidsonEigenSolverStatus::IterationLimitReached);
+	CHECK(solver.Eigenvalues().size() == 2);
+	CHECK(solver.Eigenvectors().cols() == 2);
+	CHECK(solver.ResidualNorms().size() == 2);
+	CHECK(solver.ResidualNorms().maxCoeff() < 1e-14);
+}
+
+
+TEST_CASE("Davidson reports a numerical failure without publishing invalid Ritz results", "[Math][Davidson]")
+{
+	DavidsonSelfAdjointEigenSolver<NonFiniteImageOperator> solver;
+	const auto status = solver.Compute(
+	        NonFiniteImageOperator{}, Eigen::MatrixXd::Identity(3, 2), DavidsonEigenSolverOptions<double>{2});
+
+	CHECK(status == DavidsonEigenSolverStatus::NumericalFailure);
+	CHECK(solver.Status() == status);
+	CHECK(solver.Statistics().CompletedIterationCount == 1);
+	CHECK(solver.Eigenvalues().size() == 0);
+	CHECK(solver.Eigenvectors().cols() == 0);
+	CHECK(solver.ResidualNorms().size() == 0);
+	CHECK(solver.ReducedEigenvectors().size() == 0);
 }
 
 
@@ -430,7 +540,7 @@ TEST_CASE("A failed repeated Davidson compute clears all previous observable sta
 	auto linearOperator = IdentityOperator<double>(3, 3);
 	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
 	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(3, 1), DavidsonEigenSolverOptions<double>{1})
-	      == DavidsonEigenSolverStatus::IterationLimitReached);
+	      == DavidsonEigenSolverStatus::Converged);
 
 	linearOperator.DiagonalOverride = Eigen::VectorXd::Ones(2);
 	CHECK_THROWS_AS(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(3, 1),
