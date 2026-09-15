@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 
@@ -1025,6 +1026,196 @@ TEST_CASE("Davidson propagates custom correction exceptions and handles valid ze
 	};
 	CHECK(solver.Compute(linearOperator, basis, DavidsonEigenSolverOptions<double>{1}, zero)
 	      == DavidsonEigenSolverStatus::ExpansionSpaceExhausted);
+}
+
+
+TEST_CASE("Davidson iteration information is an immutable consistent post-analysis view", "[Math][Davidson]")
+{
+	using Info = DavidsonIterationInfo<double>;
+	static_assert(std::is_const_v<std::remove_reference_t<decltype(std::declval<Info>().BasisVectors)>>);
+	static_assert(std::is_const_v<std::remove_reference_t<decltype(std::declval<Info>().RitzValues)>>);
+	static_assert(std::is_const_v<std::remove_reference_t<decltype(std::declval<Info>().Residuals)>>);
+
+	Eigen::Matrix2d matrix;
+	matrix << 1, 0.2, 0.2, 2;
+	const DenseOperator<double> linearOperator{matrix, {}};
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	Eigen::Index callCount = 0;
+	auto controller = [&callCount](const DavidsonIterationInfo<double>& info)
+	{
+		callCount++;
+		CHECK(info.IterationIndex == 0);
+		CHECK(info.BasisVectors.cols() == 1);
+		CHECK(info.BasisVectorImages.rows() == info.BasisVectors.rows());
+		CHECK(info.BasisVectorImages.cols() == info.BasisVectors.cols());
+		CHECK(info.ReducedMatrix.rows() == info.BasisVectors.cols());
+		CHECK(info.RitzValues.size() == 1);
+		CHECK(info.RitzVectors.cols() == info.RitzValues.size());
+		CHECK(info.RitzVectorImages.cols() == info.RitzValues.size());
+		CHECK(info.Residuals.cols() == info.RitzValues.size());
+		CHECK(info.ResidualNorms.size() == info.RitzValues.size());
+		CHECK(info.RootConvergenceIndicators.size() == info.RitzValues.size());
+		CHECK(info.EigenvalueChanges.size() == info.RitzValues.size());
+		CHECK(!info.EigenvalueChanges.allFinite());
+		CHECK(info.HasEveryRequestedRoot);
+		CHECK_FALSE(info.WasPreviousIterationRestarted);
+		CHECK(info.RestartCount == 0);
+		CHECK(info.MaximumSubspaceDimension == 2);
+		CHECK(info.Residuals.isApprox(info.RitzVectorImages
+		                              - info.RitzVectors * info.RitzValues.asDiagonal()));
+		return DavidsonIterationAction::StopRequested;
+	};
+
+	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1), DavidsonEigenSolverOptions<double>{1},
+	                     DiagonalDavidsonCorrection{}, controller, AcceptDavidsonConvergence{})
+	      == DavidsonEigenSolverStatus::StoppedByController);
+	CHECK(callCount == 1);
+	CHECK(solver.Eigenvalues().size() == 1);
+	CHECK(solver.BasisVectors().cols() == 1);
+}
+
+
+TEST_CASE("Davidson controller can request a restart and observes it on the next iteration", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(3, 3);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	std::vector<Eigen::Index> observedIterations;
+	auto controller = [&observedIterations](const DavidsonIterationInfo<double>& info)
+	{
+		observedIterations.push_back(info.IterationIndex);
+		if (info.IterationIndex == 0)
+		{
+			CHECK_FALSE(info.WasPreviousIterationRestarted);
+			return DavidsonIterationAction::Restart;
+		}
+		CHECK(info.WasPreviousIterationRestarted);
+		CHECK(info.RestartCount == 1);
+		CHECK(info.EigenvalueChanges.isZero());
+		return DavidsonIterationAction::Continue;
+	};
+
+	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(3, 2), DavidsonEigenSolverOptions<double>{1},
+	                     DiagonalDavidsonCorrection{}, controller, AcceptDavidsonConvergence{})
+	      == DavidsonEigenSolverStatus::Converged);
+	CHECK(observedIterations == std::vector<Eigen::Index>{0, 1});
+	CHECK(solver.Statistics().RestartCount == 1);
+}
+
+
+TEST_CASE("A restart requested on the final Davidson iteration retains a valid terminal state", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(2, 2);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	auto restart = [](const DavidsonIterationInfo<double>&) { return DavidsonIterationAction::Restart; };
+	DavidsonEigenSolverOptions<double> options{1};
+	options.MaximumIterationCount = 1;
+
+	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1), options,
+	                     DiagonalDavidsonCorrection{}, restart, AcceptDavidsonConvergence{})
+	      == DavidsonEigenSolverStatus::IterationLimitReached);
+	CHECK(solver.Statistics().RestartCount == 1);
+	CHECK(solver.BasisVectors().cols() == 1);
+	CHECK(solver.Eigenvalues().size() == 1);
+}
+
+
+TEST_CASE("Davidson rejects an invalid controller action", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(2, 2);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	auto invalid = [](const DavidsonIterationInfo<double>&)
+	{ return static_cast<DavidsonIterationAction>(99); };
+	CHECK_THROWS_AS(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1),
+	                               DavidsonEigenSolverOptions<double>{1}, DiagonalDavidsonCorrection{}, invalid,
+	                               AcceptDavidsonConvergence{}),
+	                SecUtility::InvalidArgumentException);
+}
+
+
+TEST_CASE("A custom Davidson convergence predicate may veto but not bypass residual convergence", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(2, 2);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	Eigen::Index predicateCallCount = 0;
+	auto veto = [&predicateCallCount](const DavidsonIterationInfo<double>& info)
+	{
+		predicateCallCount++;
+		CHECK((info.RootConvergenceIndicators != 0).all());
+		return false;
+	};
+	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1), DavidsonEigenSolverOptions<double>{1},
+	                     DiagonalDavidsonCorrection{}, ContinueDavidsonIteration{}, veto)
+	      == DavidsonEigenSolverStatus::ExpansionSpaceExhausted);
+	CHECK(predicateCallCount == 1);
+
+	auto accept = [&predicateCallCount](const DavidsonIterationInfo<double>&)
+	{
+		predicateCallCount++;
+		return true;
+	};
+	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1), DavidsonEigenSolverOptions<double>{1},
+	                     DiagonalDavidsonCorrection{}, ContinueDavidsonIteration{}, accept)
+	      == DavidsonEigenSolverStatus::Converged);
+	CHECK(predicateCallCount == 2);
+
+	Eigen::Matrix2d matrix;
+	matrix << 1, 0.2, 0.2, 2;
+	const DenseOperator<double> nonConvergedOperator{matrix, {}};
+	predicateCallCount = 0;
+	DavidsonEigenSolverOptions<double> options{1};
+	options.MaximumIterationCount = 1;
+	CHECK(solver.Compute(nonConvergedOperator, Eigen::MatrixXd::Identity(2, 1), options,
+	                     DiagonalDavidsonCorrection{}, ContinueDavidsonIteration{}, veto)
+	      == DavidsonEigenSolverStatus::IterationLimitReached);
+	CHECK(predicateCallCount == 0);
+}
+
+
+TEST_CASE("Davidson controller terminal decisions suppress later callbacks", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(2, 2);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	Eigen::Index controllerCallCount = 0;
+	Eigen::Index predicateCallCount = 0;
+	auto stop = [&controllerCallCount](const DavidsonIterationInfo<double>&)
+	{
+		controllerCallCount++;
+		return DavidsonIterationAction::StopRequested;
+	};
+	auto predicate = [&predicateCallCount](const DavidsonIterationInfo<double>&)
+	{
+		predicateCallCount++;
+		return true;
+	};
+	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1), DavidsonEigenSolverOptions<double>{1},
+	                     DiagonalDavidsonCorrection{}, stop, predicate)
+	      == DavidsonEigenSolverStatus::StoppedByController);
+	CHECK(controllerCallCount == 1);
+	CHECK(predicateCallCount == 0);
+
+	CHECK(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1), DavidsonEigenSolverOptions<double>{1})
+	      == DavidsonEigenSolverStatus::Converged);
+	CHECK(controllerCallCount == 1);
+}
+
+
+TEST_CASE("Davidson propagates controller and convergence predicate exceptions", "[Math][Davidson]")
+{
+	const auto linearOperator = IdentityOperator<double>(2, 2);
+	DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+	auto throwingController = [](const DavidsonIterationInfo<double>&) -> DavidsonIterationAction
+	{ throw std::runtime_error("controller failure"); };
+	CHECK_THROWS_AS(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1),
+	                               DavidsonEigenSolverOptions<double>{1}, DiagonalDavidsonCorrection{},
+	                               throwingController, AcceptDavidsonConvergence{}),
+	                std::runtime_error);
+
+	auto throwingPredicate = [](const DavidsonIterationInfo<double>&) -> bool
+	{ throw std::runtime_error("predicate failure"); };
+	CHECK_THROWS_AS(solver.Compute(linearOperator, Eigen::MatrixXd::Identity(2, 1),
+	                               DavidsonEigenSolverOptions<double>{1}, DiagonalDavidsonCorrection{},
+	                               ContinueDavidsonIteration{}, throwingPredicate),
+	                std::runtime_error);
 }
 
 
