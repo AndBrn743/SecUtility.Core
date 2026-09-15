@@ -9,6 +9,7 @@
 
 #include <SecUtility/Diagnostic/Exception.hpp>
 #include <SecUtility/Math/Core.hpp>
+#include <SecUtility/Math/SelfAdjointLinearOperator.hpp>
 #include <SecUtility/Misc/Bitflag.hpp>
 
 #include <Eigen/Core>
@@ -56,16 +57,6 @@ struct SecUtility::is_bitmask<SecUtility::Math::IterativeVectorInteractionSubspa
 
 namespace SecUtility::Math
 {
-	namespace Detail
-	{
-		template <typename T>
-		inline constexpr bool IsSupportedEigenSolverScalar = std::floating_point<T>;
-
-		template <std::floating_point T>
-		inline constexpr bool IsSupportedEigenSolverScalar<std::complex<T>> = true;
-	}
-
-
 	template <typename RealScalar>
 	struct EigenvalueInterval
 	{
@@ -208,57 +199,6 @@ namespace SecUtility::Math
 			Eigen::MatrixX<Scalar> Eigenvectors;
 		};
 	}
-
-
-	template <typename Operator>
-	using LinearOperatorScalar = std::remove_cvref_t<Operator>::Scalar;
-
-	template <typename Operator>
-	using LinearOperatorRealScalar = Eigen::NumTraits<LinearOperatorScalar<Operator>>::Real;
-
-
-	template <typename Operator>
-	concept SelfAdjointLinearOperatorBase = requires(const std::remove_reference_t<Operator>& linearOperator) {
-		typename LinearOperatorScalar<Operator>;
-		typename LinearOperatorRealScalar<Operator>;
-		requires Detail::IsSupportedEigenSolverScalar<LinearOperatorScalar<Operator>>;
-
-		{ linearOperator.rows() } -> std::convertible_to<Eigen::Index>;
-		{ linearOperator.cols() } -> std::convertible_to<Eigen::Index>;
-
-		{ linearOperator.Diagonal().size() } -> std::convertible_to<Eigen::Index>;
-		{ linearOperator.Diagonal()[Eigen::Index{}] } -> std::convertible_to<LinearOperatorRealScalar<Operator>>;
-	};
-
-
-	template <typename Operator>
-	concept ScalarSelfAdjointLinearOperator =
-	        SelfAdjointLinearOperatorBase<Operator>
-	        && requires(const std::remove_reference_t<Operator>& linearOperator,
-	                    const Eigen::VectorX<LinearOperatorScalar<Operator>>& vector) {
-		           { linearOperator.ApplyOn(vector).size() } -> std::convertible_to<Eigen::Index>;
-		           {
-			           linearOperator.ApplyOn(vector)[Eigen::Index{}]
-		           } -> std::convertible_to<LinearOperatorScalar<Operator>>;
-	           };
-
-
-	template <typename Operator>
-	concept BlockSelfAdjointLinearOperator =
-	        SelfAdjointLinearOperatorBase<Operator>
-	        && requires(const std::remove_reference_t<Operator>& linearOperator,
-	                    const Eigen::MatrixX<LinearOperatorScalar<Operator>>& vectors) {
-		           { linearOperator.ApplyOn(vectors).rows() } -> std::convertible_to<Eigen::Index>;
-		           { linearOperator.ApplyOn(vectors).cols() } -> std::convertible_to<Eigen::Index>;
-		           {
-			           linearOperator.ApplyOn(vectors)(Eigen::Index{}, Eigen::Index{})
-		           } -> std::convertible_to<LinearOperatorScalar<Operator>>;
-	           };
-
-
-	template <typename Operator>
-	concept SelfAdjointLinearOperator =
-	        ScalarSelfAdjointLinearOperator<Operator> || BlockSelfAdjointLinearOperator<Operator>;
 
 
 	namespace Detail::IterativeVectorInteraction
@@ -713,28 +653,10 @@ namespace SecUtility::Math
 		        const Eigen::MatrixX<LinearOperatorScalar<Operator>>& vectors,
 		        InteriorEigenSolverStatistics& ref_statistics)
 		{
-			using Scalar = LinearOperatorScalar<Operator>;
-			Eigen::MatrixX<Scalar> images(linearOperator.rows(), vectors.cols());
-
-			if (vectors.cols() == 0)
-			{
-				return images;
-			}
-
-			if constexpr (BlockSelfAdjointLinearOperator<Operator>)
-			{
-				images = linearOperator.ApplyOn(vectors);
-				ref_statistics.OperatorApplicationCount++;
-			}
-			else
-			{
-				for (Eigen::Index columnIndex = 0; columnIndex < vectors.cols(); columnIndex++)
-				{
-					images.col(columnIndex) = linearOperator.ApplyOn(vectors.col(columnIndex));
-					ref_statistics.OperatorApplicationCount++;
-				}
-			}
-
+			const Eigen::MatrixX<LinearOperatorScalar<Operator>> images =
+			        ApplySelfAdjointLinearOperator(linearOperator, vectors);
+			ref_statistics.OperatorApplicationCount +=
+			        vectors.cols() == 0 ? 0 : (BlockSelfAdjointLinearOperator<Operator> ? 1 : vectors.cols());
 			ref_statistics.MultipliedVectorCount += vectors.cols();
 			return images;
 		}
