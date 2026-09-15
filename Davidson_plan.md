@@ -35,8 +35,8 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | Phase | Scope | Status |
 |---:|---|---|
 | 1 | Shared self-adjoint operator protocol | Complete |
-| 2 | Public Davidson contracts and input validation | In progress |
-| 3 | Initial subspace and vector-image invariants | Not started |
+| 2 | Public Davidson contracts and input validation | Complete |
+| 3 | Initial subspace and vector-image invariants | In progress |
 | 4 | Rayleigh-Ritz analysis and inspectable partial results | Not started |
 | 5 | Diagonal Davidson correction kernel | Not started |
 | 6 | Basic Davidson iteration and terminal semantics | Not started |
