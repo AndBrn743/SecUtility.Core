@@ -13,6 +13,7 @@
 #include <complex>
 #include <limits>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -135,10 +136,85 @@ namespace
 		core << 0, scalingChange, scalingChange, 0;
 		return {factors, core};
 	}
+
+
+	Eigen::MatrixXd SeededRandomSymmetricMatrix(const Eigen::Index dimension, const std::uint64_t seed)
+	{
+		std::mt19937_64 engine(seed);
+		std::uniform_real_distribution<double> distribution(-1, 1);
+		Eigen::MatrixXd matrix = Eigen::MatrixXd::NullaryExpr(
+		        dimension, dimension, [&engine, &distribution]() { return distribution(engine); });
+		matrix += matrix.transpose().eval();
+		return matrix;
+	}
+
+
+	void CheckLowestDavidsonRoots(const Eigen::MatrixXd& matrix,
+	                              const Eigen::Index rootCount,
+	                              const Eigen::Index maximumSubspaceDimension)
+	{
+		using namespace SecUtility::Math;
+		const DenseSelfAdjointLinearOperator linearOperator(matrix);
+		const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> reference(matrix);
+		const Eigen::VectorXd diagonal = matrix.diagonal();
+		const Eigen::MatrixXd initialBasis = CoordinateDavidsonInitialBasis<double>(diagonal, rootCount);
+		DavidsonEigenSolverOptions<double> options{rootCount};
+		options.MaximumSubspaceDimension = maximumSubspaceDimension;
+		options.AdditionalRestartRitzVectorCount = rootCount;
+		options.ResidualNormTolerance = 1e-7;
+		DavidsonSelfAdjointEigenSolver<decltype(linearOperator)> solver;
+
+		REQUIRE(solver.Compute(linearOperator, initialBasis, options) == DavidsonEigenSolverStatus::Converged);
+		CHECK((solver.Eigenvalues() - reference.eigenvalues().head(rootCount)).cwiseAbs().maxCoeff() <= 1e-7);
+		CHECK(solver.ResidualNorms().maxCoeff() <= options.ResidualNormTolerance);
+		CHECK((matrix * solver.Eigenvectors())
+		              .isApprox(solver.Eigenvectors() * solver.Eigenvalues().asDiagonal(), 1e-7));
+		CHECK(solver.Eigenvectors().adjoint().operator*(solver.Eigenvectors())
+		              .isApprox(Eigen::MatrixXd::Identity(rootCount, rootCount), 1e-10));
+	}
 }
 
 
 using namespace SecUtility::Math;
+
+
+TEST_CASE("Davidson converges for large diagonally dominated definite matrices", "[Math][Davidson][EndToEnd]")
+{
+	SECTION("Positive definite")
+	{
+		Eigen::MatrixXd matrix = SeededRandomSymmetricMatrix(100, 1202024);
+		matrix.diagonal().array() += 64;
+		const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> reference(matrix);
+		REQUIRE(reference.eigenvalues().minCoeff() > 1e-3);
+
+		CheckLowestDavidsonRoots(matrix, 5, 30);
+	}
+
+	SECTION("Negative definite")
+	{
+		Eigen::MatrixXd matrix = SeededRandomSymmetricMatrix(100, 1202024);
+		matrix.diagonal().array() -= 64;
+		const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> reference(matrix);
+		REQUIRE(reference.eigenvalues().maxCoeff() < -1e-3);
+
+		CheckLowestDavidsonRoots(matrix, 5, 30);
+	}
+}
+
+
+TEST_CASE("Davidson finds isolated negative modes in a large positive matrix", "[Math][Davidson][EndToEnd]")
+{
+	Eigen::MatrixXd matrix = SeededRandomSymmetricMatrix(100, 1202024);
+	matrix.diagonal().array() += 64;
+	matrix.diagonal()[42] = -42;
+	matrix.diagonal()[69] = -69;
+	const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> reference(matrix);
+	REQUIRE(reference.eigenvalues()[0] < -1e-3);
+	REQUIRE(reference.eigenvalues()[1] < -1e-3);
+	REQUIRE(reference.eigenvalues()[2] > 1e-3);
+
+	CheckLowestDavidsonRoots(matrix, 5, 30);
+}
 
 
 TEST_CASE("Davidson option and statistic defaults are stable", "[Math][Davidson]")
