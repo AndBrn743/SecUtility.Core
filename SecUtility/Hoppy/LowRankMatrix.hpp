@@ -17,6 +17,15 @@
 
 namespace Hoppy
 {
+	namespace Detail
+	{
+		struct SymmetricLowRankStructure;
+		struct SelfAdjointLowRankStructure;
+
+		template <typename Scalar_, typename StructurePolicy_, int DimensionAtCompileTime_>
+		class SingleFactorLowRankMatrix;
+	}
+
 	template <typename Derived>
 	class LowRankMatrixBase;
 
@@ -29,6 +38,24 @@ namespace Hoppy
 
 	template <typename Scalar>
 	using LowRankMatrixX = LowRankMatrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+
+	template <typename Scalar, int DimensionAtCompileTime>
+	using LowRankSymmetricMatrix =
+	        Detail::SingleFactorLowRankMatrix<Scalar, Detail::SymmetricLowRankStructure, DimensionAtCompileTime>;
+
+	template <typename Scalar>
+	using LowRankSymmetricMatrixX = LowRankSymmetricMatrix<Scalar, Eigen::Dynamic>;
+
+	template <typename Scalar, int DimensionAtCompileTime>
+	using LowRankSelfAdjointMatrix = Detail::SingleFactorLowRankMatrix<
+	        Scalar,
+	        std::conditional_t<Eigen::NumTraits<Scalar>::IsComplex,
+	                           Detail::SelfAdjointLowRankStructure,
+	                           Detail::SymmetricLowRankStructure>,
+	        DimensionAtCompileTime>;
+
+	template <typename Scalar>
+	using LowRankSelfAdjointMatrixX = LowRankSelfAdjointMatrix<Scalar, Eigen::Dynamic>;
 }
 
 
@@ -44,6 +71,23 @@ struct Eigen::internal::traits<Hoppy::LowRankMatrix<Scalar_, RowsAtCompileTime_,
 	static constexpr int ColsAtCompileTime = ColsAtCompileTime_;
 	static constexpr int MaxRowsAtCompileTime = RowsAtCompileTime_;
 	static constexpr int MaxColsAtCompileTime = ColsAtCompileTime_;
+	static constexpr int Flags = 0;
+};
+
+
+template <typename Scalar_, typename StructurePolicy_, int DimensionAtCompileTime_>
+struct Eigen::internal::traits<
+        Hoppy::Detail::SingleFactorLowRankMatrix<Scalar_, StructurePolicy_, DimensionAtCompileTime_>>
+{
+	using Scalar = Scalar_;
+	using StorageKind = Hoppy::LowRankStorage;
+	using StorageIndex = Eigen::Index;
+	using XprKind = Eigen::MatrixXpr;
+
+	static constexpr int RowsAtCompileTime = DimensionAtCompileTime_;
+	static constexpr int ColsAtCompileTime = DimensionAtCompileTime_;
+	static constexpr int MaxRowsAtCompileTime = DimensionAtCompileTime_;
+	static constexpr int MaxColsAtCompileTime = DimensionAtCompileTime_;
 	static constexpr int Flags = 0;
 };
 
@@ -113,6 +157,30 @@ private:
 
 namespace Hoppy::Detail
 {
+	struct SymmetricLowRankStructure
+	{
+		template <typename Scalar>
+		using CoefficientScalar = Scalar;
+
+		template <typename Vectors>
+		[[nodiscard]] static auto RightFactor(Vectors&& vectors)
+		{
+			return std::forward<Vectors>(vectors).conjugate();
+		}
+	};
+
+	struct SelfAdjointLowRankStructure
+	{
+		template <typename Scalar>
+		using CoefficientScalar = typename Eigen::NumTraits<Scalar>::Real;
+
+		template <typename Vectors>
+		[[nodiscard]] static auto RightFactor(Vectors&& vectors)
+		{
+			return std::forward<Vectors>(vectors);
+		}
+	};
+
 	inline std::size_t CheckedBufferSize(const Eigen::Index dimension, const std::size_t termCount)
 	{
 		eigen_assert(dimension >= 0 && "A matrix dimension cannot be negative");
@@ -350,4 +418,212 @@ private:
 	std::vector<Scalar> m_Coefficients{};
 	std::vector<Scalar> m_LeftVectorBuffer{};
 	std::vector<Scalar> m_RightVectorBuffer{};
+};
+
+
+template <typename Scalar_, typename StructurePolicy_, int DimensionAtCompileTime_>
+class Hoppy::Detail::SingleFactorLowRankMatrix
+    : public LowRankMatrixBase<SingleFactorLowRankMatrix<Scalar_, StructurePolicy_, DimensionAtCompileTime_>>
+{
+	static_assert(DimensionAtCompileTime_ == Eigen::Dynamic || DimensionAtCompileTime_ >= 0);
+
+public:
+	using Base = LowRankMatrixBase<SingleFactorLowRankMatrix>;
+	friend Base;
+	using Base::cols;
+	using Base::rows;
+	using Base::termCount;
+
+	using Scalar = Scalar_;
+	using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+	using StructurePolicy = StructurePolicy_;
+	using CoefficientScalar = typename StructurePolicy::template CoefficientScalar<Scalar>;
+	using StorageIndex = Eigen::Index;
+	using CoefficientVector = Eigen::VectorX<CoefficientScalar>;
+	using Vector = Eigen::Vector<Scalar, DimensionAtCompileTime_>;
+	using Vectors = Eigen::Matrix<Scalar, DimensionAtCompileTime_, Eigen::Dynamic>;
+
+	static constexpr int RowsAtCompileTime = DimensionAtCompileTime_;
+	static constexpr int ColsAtCompileTime = DimensionAtCompileTime_;
+	static constexpr int MaxRowsAtCompileTime = DimensionAtCompileTime_;
+	static constexpr int MaxColsAtCompileTime = DimensionAtCompileTime_;
+	static constexpr int IsRowMajor = false;
+	static constexpr int Flags = 0;
+
+	constexpr SingleFactorLowRankMatrix() noexcept = default;
+	SingleFactorLowRankMatrix(const SingleFactorLowRankMatrix&) = default;
+	SingleFactorLowRankMatrix(SingleFactorLowRankMatrix&&) noexcept = default;
+	SingleFactorLowRankMatrix& operator=(const SingleFactorLowRankMatrix&) = default;
+	SingleFactorLowRankMatrix& operator=(SingleFactorLowRankMatrix&&) noexcept = default;
+	~SingleFactorLowRankMatrix() = default;
+
+	explicit SingleFactorLowRankMatrix(const Eigen::Index dimension) : m_Dimension(dimension)
+	{
+		eigen_assert(dimension >= 0);
+	}
+
+	template <typename VectorDerived>
+	SingleFactorLowRankMatrix(const CoefficientScalar& coefficient, const Eigen::MatrixBase<VectorDerived>& vector)
+	    : m_Dimension(vector.size())
+	{
+		addTerm(coefficient, vector);
+	}
+
+	template <typename CoefficientsDerived,
+	          typename VectorsDerived,
+	          std::enable_if_t<std::is_convertible_v<typename CoefficientsDerived::Scalar, CoefficientScalar>, int> = 0>
+	SingleFactorLowRankMatrix(const Eigen::MatrixBase<CoefficientsDerived>& coefficients,
+	                          const Eigen::MatrixBase<VectorsDerived>& vectors)
+	    : m_Dimension(vectors.rows())
+	{
+		addTerms(coefficients, vectors);
+	}
+
+	[[nodiscard]] std::size_t capacity() const noexcept { return m_Coefficients.capacity(); }
+
+	void reserve(const Eigen::Index termCapacity)
+	{
+		eigen_assert(termCapacity >= 0 && "A term capacity cannot be negative");
+		const auto capacity = static_cast<std::size_t>(termCapacity);
+		m_Coefficients.reserve(capacity);
+		m_VectorBuffer.reserve(Detail::CheckedBufferSize(rows(), capacity));
+	}
+
+	void clear() noexcept
+	{
+		m_Coefficients.clear();
+		m_VectorBuffer.clear();
+	}
+
+	template <typename VectorDerived>
+	SingleFactorLowRankMatrix& addTerm(const CoefficientScalar& coefficient,
+	                                   const Eigen::MatrixBase<VectorDerived>& vector)
+	{
+		if (coefficient == CoefficientScalar{})
+		{
+			return *this;
+		}
+
+		validateVector(vector);
+		const CoefficientScalar evaluatedCoefficient = coefficient;
+		const Eigen::VectorX<Scalar> evaluatedVector = vector.reshaped();
+		reserve(termCount() + 1);
+		m_Coefficients.push_back(evaluatedCoefficient);
+		appendBuffer(m_VectorBuffer, evaluatedVector.data(), evaluatedVector.size());
+		return *this;
+	}
+
+	template <typename CoefficientsDerived,
+	          typename VectorsDerived,
+	          std::enable_if_t<std::is_convertible_v<typename CoefficientsDerived::Scalar, CoefficientScalar>, int> = 0>
+	SingleFactorLowRankMatrix& addTerms(const Eigen::MatrixBase<CoefficientsDerived>& coefficients,
+	                                    const Eigen::MatrixBase<VectorsDerived>& vectors)
+	{
+		eigen_assert((coefficients.rows() == 1 || coefficients.cols() == 1)
+		             && "Low-rank coefficients must be a vector");
+		eigen_assert(coefficients.size() == vectors.cols()
+		             && "Low-rank coefficient and vector term counts do not agree");
+		eigen_assert(vectors.rows() == rows() && "Low-rank term vectors do not match the matrix dimension");
+
+		const CoefficientVector evaluatedCoefficients = coefficients.reshaped();
+		Eigen::Index nonzeroCount = 0;
+		for (Eigen::Index index = 0; index < evaluatedCoefficients.size(); index++)
+		{
+			nonzeroCount += evaluatedCoefficients[index] == CoefficientScalar{} ? 0 : 1;
+		}
+		if (nonzeroCount == 0)
+		{
+			return *this;
+		}
+
+		CoefficientVector filteredCoefficients(nonzeroCount);
+		Eigen::MatrixX<Scalar> filteredVectors(rows(), nonzeroCount);
+		Eigen::Index destinationIndex = 0;
+		for (Eigen::Index sourceIndex = 0; sourceIndex < evaluatedCoefficients.size(); sourceIndex++)
+		{
+			if (evaluatedCoefficients[sourceIndex] != CoefficientScalar{})
+			{
+				filteredCoefficients[destinationIndex] = evaluatedCoefficients[sourceIndex];
+				filteredVectors.col(destinationIndex) = vectors.col(sourceIndex);
+				destinationIndex++;
+			}
+		}
+
+		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
+		reserve(static_cast<Eigen::Index>(finalCount));
+		m_Coefficients.insert(m_Coefficients.end(), filteredCoefficients.data(),
+		                      filteredCoefficients.data() + filteredCoefficients.size());
+		appendBuffer(m_VectorBuffer, filteredVectors.data(), filteredVectors.size());
+		return *this;
+	}
+
+	[[nodiscard]] LowRankMatrix<Scalar, DimensionAtCompileTime_, DimensionAtCompileTime_> toGeneral() const
+	{
+		return {this->coefficients(), this->leftVectors(), StructurePolicy::RightFactor(this->leftVectors())};
+	}
+
+private:
+	[[nodiscard]] constexpr Eigen::Index rowsImpl() const noexcept { return m_Dimension.value(); }
+	[[nodiscard]] constexpr Eigen::Index colsImpl() const noexcept { return m_Dimension.value(); }
+	[[nodiscard]] Eigen::Index termCountImpl() const noexcept
+	{
+		return static_cast<Eigen::Index>(m_Coefficients.size());
+	}
+
+	[[nodiscard]] auto coefficientsImpl() const noexcept
+	{
+		return Eigen::Map<const CoefficientVector>{m_Coefficients.data(), termCount()};
+	}
+
+	[[nodiscard]] auto leftVectorsImpl() const noexcept
+	{
+		return Eigen::Map<const Vectors>{m_VectorBuffer.data(), rows(), termCount()};
+	}
+
+	[[nodiscard]] auto rightVectorsImpl() const noexcept
+	{
+		return StructurePolicy::RightFactor(leftVectorsImpl());
+	}
+
+	[[nodiscard]] const CoefficientScalar& coefficientOfTermImpl(const Eigen::Index index) const
+	{
+		validateTermIndex(index);
+		return m_Coefficients[static_cast<std::size_t>(index)];
+	}
+
+	[[nodiscard]] auto leftVectorOfTermImpl(const Eigen::Index index) const
+	{
+		validateTermIndex(index);
+		return Eigen::Map<const Vector>{m_VectorBuffer.data() + rows() * index, rows()};
+	}
+
+	[[nodiscard]] auto rightVectorOfTermImpl(const Eigen::Index index) const
+	{
+		return StructurePolicy::RightFactor(leftVectorOfTermImpl(index));
+	}
+
+	template <typename Derived>
+	void validateVector(const Eigen::MatrixBase<Derived>& vector) const
+	{
+		eigen_assert((vector.rows() == 1 || vector.cols() == 1) && vector.size() == rows()
+		             && "A low-rank term vector has the wrong shape or dimension");
+	}
+
+	void validateTermIndex(const Eigen::Index index) const
+	{
+		eigen_assert(index >= 0 && index < termCount() && "Low-rank term index is out of range");
+	}
+
+	static void appendBuffer(std::vector<Scalar>& destination, const Scalar* const source, const Eigen::Index size)
+	{
+		if (size != 0)
+		{
+			destination.insert(destination.end(), source, source + size);
+		}
+	}
+
+private:
+	Eigen::internal::variable_if_dynamic<Eigen::Index, DimensionAtCompileTime_> m_Dimension{};
+	std::vector<CoefficientScalar> m_Coefficients{};
+	std::vector<Scalar> m_VectorBuffer{};
 };
