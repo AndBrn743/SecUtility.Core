@@ -6,6 +6,7 @@
 #include <Eigen/Core>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
@@ -93,6 +94,47 @@ struct Eigen::internal::traits<
 
 
 template <typename Derived>
+struct Eigen::internal::traits<Hoppy::LowRankMatrixBase<Derived>> : traits<Derived>
+{
+	static constexpr int Flags = traits<Derived>::Flags | Eigen::NestByRefBit;
+};
+
+
+template <>
+struct Eigen::internal::storage_kind_to_shape<Hoppy::LowRankStorage>
+{
+	using Shape = Eigen::SparseShape;
+};
+
+
+template <typename Derived, typename Rhs, int ProductType>
+struct Eigen::internal::generic_product_impl<Hoppy::LowRankMatrixBase<Derived>,
+                                             Rhs,
+                                             Eigen::SparseShape,
+                                             Eigen::DenseShape,
+                                             ProductType>
+    : generic_product_impl_base<Hoppy::LowRankMatrixBase<Derived>,
+                                Rhs,
+                                generic_product_impl<Hoppy::LowRankMatrixBase<Derived>, Rhs>>
+{
+	template <typename Dest>
+	static void scaleAndAddTo(
+	        Dest& destination,
+	        const Hoppy::LowRankMatrixBase<Derived>& lowRank,
+	        const Rhs& rhs,
+	        const std::common_type_t<typename traits<Derived>::Scalar, typename traits<Rhs>::Scalar>& alpha)
+	{
+		using ProductScalar = std::common_type_t<typename traits<Derived>::Scalar, typename traits<Rhs>::Scalar>;
+		using Intermediate = Eigen::Matrix<ProductScalar, Eigen::Dynamic, traits<Rhs>::ColsAtCompileTime>;
+
+		const Intermediate projected = lowRank.rightVectors().adjoint() * rhs;
+		const Intermediate weighted = lowRank.coefficients().template cast<ProductScalar>().asDiagonal() * projected;
+		destination.noalias() += alpha * lowRank.leftVectors() * weighted;
+	}
+};
+
+
+template <typename Derived>
 class Hoppy::LowRankMatrixBase : public Eigen::EigenBase<Derived>
 {
 public:
@@ -141,6 +183,78 @@ public:
 
 		return Term{leftVectorOfTerm(index), coefficientOfTerm(index), rightVectorOfTerm(index)};
 	}
+
+	template <typename Rhs>
+	[[nodiscard]] auto operator*(const Eigen::MatrixBase<Rhs>& rhs) const
+	{
+		return Eigen::Product<LowRankMatrixBase, Rhs, Eigen::DefaultProduct>{*this, rhs.derived()};
+	}
+
+	[[nodiscard]] Eigen::Matrix<Scalar, RowsAtCompileTime, ColsAtCompileTime> toDense() const
+	{
+		using DenseMatrix = Eigen::Matrix<Scalar, RowsAtCompileTime, ColsAtCompileTime>;
+		if (termCount() == 0)
+		{
+			return DenseMatrix::Zero(rows(), cols());
+		}
+		return leftVectors() * coefficients().template cast<Scalar>().asDiagonal() * rightVectors().adjoint();
+	}
+
+	[[nodiscard]] Eigen::Matrix<Scalar, 1, ColsAtCompileTime> row(const Eigen::Index index) const
+	{
+		eigen_assert(index >= 0 && index < rows() && "Low-rank matrix row index is out of range");
+		if (termCount() == 0)
+		{
+			return Eigen::Matrix<Scalar, 1, ColsAtCompileTime>::Zero(1, cols());
+		}
+		return leftVectors().row(index) * coefficients().template cast<Scalar>().asDiagonal()
+		       * rightVectors().adjoint();
+	}
+
+	[[nodiscard]] Eigen::Matrix<Scalar, RowsAtCompileTime, 1> col(const Eigen::Index index) const
+	{
+		eigen_assert(index >= 0 && index < cols() && "Low-rank matrix column index is out of range");
+		if (termCount() == 0)
+		{
+			return Eigen::Matrix<Scalar, RowsAtCompileTime, 1>::Zero(rows());
+		}
+		return leftVectors() * (coefficients().template cast<Scalar>().asDiagonal()
+		       * rightVectors().row(index).conjugate().transpose());
+	}
+
+	[[nodiscard]] Eigen::Vector<Scalar,
+	                            Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime)>
+	diagonal() const
+	{
+		constexpr int DiagonalSize =
+		        Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime);
+		using DiagonalVector = Eigen::Vector<Scalar, DiagonalSize>;
+		const Eigen::Index size = (std::min)(rows(), cols());
+		if (termCount() == 0)
+		{
+			return DiagonalVector::Zero(size);
+		}
+		return (leftVectors().topRows(size).array() * rightVectors().topRows(size).conjugate().array()).matrix()
+		       * coefficients().template cast<Scalar>();
+	}
+
+	[[nodiscard]] RealScalar squaredNorm() const
+	{
+		if (termCount() == 0)
+		{
+			return RealScalar{};
+		}
+
+		const Eigen::MatrixX<Scalar> coefficients = this->coefficients().template cast<Scalar>();
+		const Eigen::MatrixX<Scalar> coefficientProducts = coefficients.conjugate() * coefficients.transpose();
+		const Eigen::MatrixX<Scalar> leftGram = leftVectors().adjoint() * leftVectors();
+		const Eigen::MatrixX<Scalar> rightGram = rightVectors().adjoint() * rightVectors();
+		const RealScalar result = Eigen::numext::real(
+		        coefficientProducts.cwiseProduct(leftGram).cwiseProduct(rightGram.conjugate()).sum());
+		return (std::max)(RealScalar{0}, result);
+	}
+
+	[[nodiscard]] RealScalar norm() const { return std::sqrt(squaredNorm()); }
 
 protected:
 	constexpr LowRankMatrixBase() noexcept = default;

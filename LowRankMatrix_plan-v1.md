@@ -37,7 +37,7 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 |---:|---|---|
 | 1 | General low-rank value type, storage, and invariants | Complete |
 | 2 | Symmetric and self-adjoint low-rank value types and structural guarantees | Complete |
-| 3 | Eigen products, dense inspection, and numerical queries | Not started |
+| 3 | Eigen products, dense inspection, and numerical queries | Complete |
 | 4 | Transpose, conjugate, adjoint, and scalar expressions | Not started |
 | 5 | Low-rank arithmetic and controlled mutation | Not started |
 | 6 | Lazy dense/low-rank sums and Eigen iterative-solver integration | Not started |

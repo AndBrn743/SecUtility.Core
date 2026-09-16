@@ -50,6 +50,16 @@ TEST_CASE("Low-rank term access follows Eigen assertion contracts", "[Hoppy][Low
 }
 
 
+TEST_CASE("Low-rank row and column access follows Eigen assertion contracts", "[Hoppy][LowRankMatrix][assert]")
+{
+	DynamicMatrix matrix(2, 3);
+	CHECK_THROWS_AS(matrix.row(-1), Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(matrix.row(2), Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(matrix.col(-1), Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(matrix.col(3), Hoppy::Test::EigenAssertionFailure);
+}
+
+
 TEST_CASE("Low-rank insertion assertions precede mutation", "[Hoppy][LowRankMatrix][assert]")
 {
 	DynamicMatrix matrix(2, 3);
