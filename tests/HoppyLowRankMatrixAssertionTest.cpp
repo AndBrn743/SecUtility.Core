@@ -60,6 +60,19 @@ TEST_CASE("Low-rank row and column access follows Eigen assertion contracts", "[
 }
 
 
+TEST_CASE("Low-rank unary expressions preserve assertion contracts", "[Hoppy][LowRankMatrix][assert]")
+{
+	DynamicMatrix matrix(2, 3);
+	matrix.addTerm(2, Eigen::Vector2d::Ones(), Eigen::Vector3d::Ones());
+	const auto adjoint = matrix.adjoint();
+
+	CHECK_THROWS_AS(adjoint.coefficientOfTerm(1), Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(adjoint.leftVectorOfTerm(-1), Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(adjoint.row(3), Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(adjoint.col(2), Hoppy::Test::EigenAssertionFailure);
+}
+
+
 TEST_CASE("Low-rank insertion assertions precede mutation", "[Hoppy][LowRankMatrix][assert]")
 {
 	DynamicMatrix matrix(2, 3);

@@ -20,11 +20,31 @@ namespace Hoppy
 {
 	namespace Detail
 	{
+		struct IdentityLowRankOperation;
+		struct TransposeLowRankOperation;
+		struct ConjugateLowRankOperation;
+		struct AdjointLowRankOperation;
+
 		struct SymmetricLowRankStructure;
 		struct SelfAdjointLowRankStructure;
 
 		template <typename Scalar_, typename StructurePolicy_, int DimensionAtCompileTime_>
 		class SingleFactorLowRankMatrix;
+
+		template <typename Nested_, typename Operation_>
+		class LowRankUnaryExpr;
+
+		template <typename Matrix>
+		struct UnaryExpressionTraits;
+
+		template <typename Matrix>
+		[[nodiscard]] auto MakeTranspose(Matrix&& matrix);
+
+		template <typename Matrix>
+		[[nodiscard]] auto MakeConjugate(Matrix&& matrix);
+
+		template <typename Matrix>
+		[[nodiscard]] auto MakeAdjoint(Matrix&& matrix);
 	}
 
 	template <typename Derived>
@@ -89,6 +109,28 @@ struct Eigen::internal::traits<
 	static constexpr int ColsAtCompileTime = DimensionAtCompileTime_;
 	static constexpr int MaxRowsAtCompileTime = DimensionAtCompileTime_;
 	static constexpr int MaxColsAtCompileTime = DimensionAtCompileTime_;
+	static constexpr int Flags = 0;
+};
+
+
+template <typename Nested_, typename Operation_>
+struct Eigen::internal::traits<Hoppy::Detail::LowRankUnaryExpr<Nested_, Operation_>>
+{
+	using Nested = std::remove_reference_t<Nested_>;
+	using Scalar = typename traits<Nested>::Scalar;
+	using StorageKind = Hoppy::LowRankStorage;
+	using StorageIndex = Eigen::Index;
+	using XprKind = Eigen::MatrixXpr;
+
+	static constexpr bool SwapsDimensions = Operation_::SwapsDimensions;
+	static constexpr int RowsAtCompileTime =
+	        SwapsDimensions ? traits<Nested>::ColsAtCompileTime : traits<Nested>::RowsAtCompileTime;
+	static constexpr int ColsAtCompileTime =
+	        SwapsDimensions ? traits<Nested>::RowsAtCompileTime : traits<Nested>::ColsAtCompileTime;
+	static constexpr int MaxRowsAtCompileTime =
+	        SwapsDimensions ? traits<Nested>::MaxColsAtCompileTime : traits<Nested>::MaxRowsAtCompileTime;
+	static constexpr int MaxColsAtCompileTime =
+	        SwapsDimensions ? traits<Nested>::MaxRowsAtCompileTime : traits<Nested>::MaxColsAtCompileTime;
 	static constexpr int Flags = 0;
 };
 
@@ -256,6 +298,18 @@ public:
 
 	[[nodiscard]] RealScalar norm() const { return std::sqrt(squaredNorm()); }
 
+	[[nodiscard]] auto transpose() const & { return Detail::MakeTranspose(asDerived()); }
+	[[nodiscard]] auto transpose() && { return Detail::MakeTranspose(std::move(asDerived())); }
+	[[nodiscard]] auto transpose() const && { return Detail::MakeTranspose(Derived{asDerived()}); }
+
+	[[nodiscard]] auto conjugate() const & { return Detail::MakeConjugate(asDerived()); }
+	[[nodiscard]] auto conjugate() && { return Detail::MakeConjugate(std::move(asDerived())); }
+	[[nodiscard]] auto conjugate() const && { return Detail::MakeConjugate(Derived{asDerived()}); }
+
+	[[nodiscard]] auto adjoint() const & { return Detail::MakeAdjoint(asDerived()); }
+	[[nodiscard]] auto adjoint() && { return Detail::MakeAdjoint(std::move(asDerived())); }
+	[[nodiscard]] auto adjoint() const && { return Detail::MakeAdjoint(Derived{asDerived()}); }
+
 protected:
 	constexpr LowRankMatrixBase() noexcept = default;
 	LowRankMatrixBase(const LowRankMatrixBase&) = default;
@@ -266,15 +320,127 @@ protected:
 
 private:
 	[[nodiscard]] constexpr const Derived& asDerived() const noexcept { return static_cast<const Derived&>(*this); }
+	[[nodiscard]] constexpr Derived& asDerived() noexcept { return static_cast<Derived&>(*this); }
 };
 
 
 namespace Hoppy::Detail
 {
+	struct IdentityLowRankOperation
+	{
+		static constexpr bool SwapsDimensions = false;
+
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) Coefficients(const Matrix& matrix) { return matrix.coefficients(); }
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) LeftVectors(const Matrix& matrix) { return matrix.leftVectors(); }
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) RightVectors(const Matrix& matrix) { return matrix.rightVectors(); }
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) CoefficientOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.coefficientOfTerm(index);
+		}
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) LeftVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.leftVectorOfTerm(index);
+		}
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) RightVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.rightVectorOfTerm(index);
+		}
+	};
+
+	struct TransposeLowRankOperation
+	{
+		static constexpr bool SwapsDimensions = true;
+
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) Coefficients(const Matrix& matrix) { return matrix.coefficients(); }
+		template <typename Matrix>
+		[[nodiscard]] static auto LeftVectors(const Matrix& matrix) { return matrix.rightVectors().conjugate(); }
+		template <typename Matrix>
+		[[nodiscard]] static auto RightVectors(const Matrix& matrix) { return matrix.leftVectors().conjugate(); }
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) CoefficientOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.coefficientOfTerm(index);
+		}
+		template <typename Matrix>
+		[[nodiscard]] static auto LeftVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.rightVectorOfTerm(index).conjugate();
+		}
+		template <typename Matrix>
+		[[nodiscard]] static auto RightVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.leftVectorOfTerm(index).conjugate();
+		}
+	};
+
+	struct ConjugateLowRankOperation
+	{
+		static constexpr bool SwapsDimensions = false;
+
+		template <typename Matrix>
+		[[nodiscard]] static auto Coefficients(const Matrix& matrix) { return matrix.coefficients().conjugate(); }
+		template <typename Matrix>
+		[[nodiscard]] static auto LeftVectors(const Matrix& matrix) { return matrix.leftVectors().conjugate(); }
+		template <typename Matrix>
+		[[nodiscard]] static auto RightVectors(const Matrix& matrix) { return matrix.rightVectors().conjugate(); }
+		template <typename Matrix>
+		[[nodiscard]] static auto CoefficientOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return Eigen::numext::conj(matrix.coefficientOfTerm(index));
+		}
+		template <typename Matrix>
+		[[nodiscard]] static auto LeftVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.leftVectorOfTerm(index).conjugate();
+		}
+		template <typename Matrix>
+		[[nodiscard]] static auto RightVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.rightVectorOfTerm(index).conjugate();
+		}
+	};
+
+	struct AdjointLowRankOperation
+	{
+		static constexpr bool SwapsDimensions = true;
+
+		template <typename Matrix>
+		[[nodiscard]] static auto Coefficients(const Matrix& matrix) { return matrix.coefficients().conjugate(); }
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) LeftVectors(const Matrix& matrix) { return matrix.rightVectors(); }
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) RightVectors(const Matrix& matrix) { return matrix.leftVectors(); }
+		template <typename Matrix>
+		[[nodiscard]] static auto CoefficientOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return Eigen::numext::conj(matrix.coefficientOfTerm(index));
+		}
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) LeftVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.rightVectorOfTerm(index);
+		}
+		template <typename Matrix>
+		[[nodiscard]] static decltype(auto) RightVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
+		{
+			return matrix.leftVectorOfTerm(index);
+		}
+	};
+
 	struct SymmetricLowRankStructure
 	{
 		template <typename Scalar>
 		using CoefficientScalar = Scalar;
+		using TransposeOperation = IdentityLowRankOperation;
+		using ConjugateOperation = ConjugateLowRankOperation;
+		using AdjointOperation = ConjugateLowRankOperation;
 
 		template <typename Vectors>
 		[[nodiscard]] static auto RightFactor(Vectors&& vectors)
@@ -287,6 +453,9 @@ namespace Hoppy::Detail
 	{
 		template <typename Scalar>
 		using CoefficientScalar = typename Eigen::NumTraits<Scalar>::Real;
+		using TransposeOperation = ConjugateLowRankOperation;
+		using ConjugateOperation = ConjugateLowRankOperation;
+		using AdjointOperation = IdentityLowRankOperation;
 
 		template <typename Vectors>
 		[[nodiscard]] static auto RightFactor(Vectors&& vectors)
@@ -349,6 +518,13 @@ public:
 	explicit LowRankMatrix(const Eigen::Index rows, const Eigen::Index cols) : m_Rows(rows), m_Cols(cols)
 	{
 		eigen_assert(rows >= 0 && cols >= 0);
+	}
+
+	template <typename OtherDerived,
+	          std::enable_if_t<std::is_same_v<Scalar, typename OtherDerived::Scalar>, int> = 0>
+	explicit LowRankMatrix(const LowRankMatrixBase<OtherDerived>& other) : LowRankMatrix(other.rows(), other.cols())
+	{
+		addTerms(other.coefficients(), other.leftVectors(), other.rightVectors());
 	}
 
 	template <typename LeftDerived, typename RightDerived>
@@ -576,6 +752,16 @@ public:
 		eigen_assert(dimension >= 0);
 	}
 
+	template <typename OtherDerived,
+	          std::enable_if_t<std::is_same_v<Scalar, typename OtherDerived::Scalar>
+	                                   && std::is_same_v<StructurePolicy, typename OtherDerived::StructurePolicy>,
+	                           int> = 0>
+	explicit SingleFactorLowRankMatrix(const LowRankMatrixBase<OtherDerived>& other)
+	    : SingleFactorLowRankMatrix(other.rows())
+	{
+		addTerms(other.coefficients(), other.leftVectors());
+	}
+
 	template <typename VectorDerived>
 	SingleFactorLowRankMatrix(const CoefficientScalar& coefficient, const Eigen::MatrixBase<VectorDerived>& vector)
 	    : m_Dimension(vector.size())
@@ -741,3 +927,132 @@ private:
 	std::vector<CoefficientScalar> m_Coefficients{};
 	std::vector<Scalar> m_VectorBuffer{};
 };
+
+
+namespace Hoppy::Detail
+{
+	template <typename StructurePolicy>
+	struct UnaryOperationsForStructure
+	{
+		using TransposeOperation = typename StructurePolicy::TransposeOperation;
+		using ConjugateOperation = typename StructurePolicy::ConjugateOperation;
+		using AdjointOperation = typename StructurePolicy::AdjointOperation;
+		using ResultStructurePolicy = StructurePolicy;
+	};
+
+	template <>
+	struct UnaryOperationsForStructure<void>
+	{
+		using TransposeOperation = TransposeLowRankOperation;
+		using ConjugateOperation = ConjugateLowRankOperation;
+		using AdjointOperation = AdjointLowRankOperation;
+		using ResultStructurePolicy = void;
+	};
+
+	template <typename Scalar, int RowsAtCompileTime, int ColsAtCompileTime>
+	struct UnaryExpressionTraits<LowRankMatrix<Scalar, RowsAtCompileTime, ColsAtCompileTime>>
+	    : UnaryOperationsForStructure<void>
+	{
+	};
+
+	template <typename Scalar, typename StructurePolicy, int DimensionAtCompileTime>
+	struct UnaryExpressionTraits<SingleFactorLowRankMatrix<Scalar, StructurePolicy, DimensionAtCompileTime>>
+	    : UnaryOperationsForStructure<StructurePolicy>
+	{
+	};
+
+	template <typename Nested, typename Operation>
+	struct UnaryExpressionTraits<LowRankUnaryExpr<Nested, Operation>>
+	    : UnaryExpressionTraits<std::remove_cv_t<std::remove_reference_t<Nested>>>
+	{
+	};
+}
+
+
+template <typename Nested_, typename Operation_>
+class Hoppy::Detail::LowRankUnaryExpr
+    : public LowRankMatrixBase<LowRankUnaryExpr<Nested_, Operation_>>
+{
+public:
+	using Base = LowRankMatrixBase<LowRankUnaryExpr>;
+	friend Base;
+	using Base::cols;
+	using Base::rows;
+	using Base::termCount;
+
+	using Nested = Nested_;
+	using Operation = Operation_;
+	using Scalar = typename Eigen::internal::traits<LowRankUnaryExpr>::Scalar;
+	using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+	using StorageIndex = Eigen::Index;
+	using StructurePolicy = typename UnaryExpressionTraits<LowRankUnaryExpr>::ResultStructurePolicy;
+
+	static constexpr int RowsAtCompileTime = Eigen::internal::traits<LowRankUnaryExpr>::RowsAtCompileTime;
+	static constexpr int ColsAtCompileTime = Eigen::internal::traits<LowRankUnaryExpr>::ColsAtCompileTime;
+	static constexpr int MaxRowsAtCompileTime = Eigen::internal::traits<LowRankUnaryExpr>::MaxRowsAtCompileTime;
+	static constexpr int MaxColsAtCompileTime = Eigen::internal::traits<LowRankUnaryExpr>::MaxColsAtCompileTime;
+	static constexpr int IsRowMajor = false;
+	static constexpr int Flags = 0;
+
+	explicit LowRankUnaryExpr(Nested nested) : m_Nested(std::forward<Nested>(nested)) {}
+
+private:
+	[[nodiscard]] Eigen::Index rowsImpl() const noexcept
+	{
+		return Operation::SwapsDimensions ? m_Nested.cols() : m_Nested.rows();
+	}
+	[[nodiscard]] Eigen::Index colsImpl() const noexcept
+	{
+		return Operation::SwapsDimensions ? m_Nested.rows() : m_Nested.cols();
+	}
+	[[nodiscard]] Eigen::Index termCountImpl() const noexcept { return m_Nested.termCount(); }
+	[[nodiscard]] decltype(auto) coefficientsImpl() const { return Operation::Coefficients(m_Nested); }
+	[[nodiscard]] decltype(auto) leftVectorsImpl() const { return Operation::LeftVectors(m_Nested); }
+	[[nodiscard]] decltype(auto) rightVectorsImpl() const { return Operation::RightVectors(m_Nested); }
+	[[nodiscard]] decltype(auto) coefficientOfTermImpl(const Eigen::Index index) const
+	{
+		return Operation::CoefficientOfTerm(m_Nested, index);
+	}
+	[[nodiscard]] decltype(auto) leftVectorOfTermImpl(const Eigen::Index index) const
+	{
+		return Operation::LeftVectorOfTerm(m_Nested, index);
+	}
+	[[nodiscard]] decltype(auto) rightVectorOfTermImpl(const Eigen::Index index) const
+	{
+		return Operation::RightVectorOfTerm(m_Nested, index);
+	}
+
+private:
+	Nested m_Nested;
+};
+
+
+namespace Hoppy::Detail
+{
+	template <typename Matrix>
+	using UnaryNested = std::conditional_t<std::is_lvalue_reference_v<Matrix>, Matrix, std::decay_t<Matrix>>;
+
+	template <typename Matrix>
+	[[nodiscard]] auto MakeTranspose(Matrix&& matrix)
+	{
+		using CleanMatrix = std::remove_cv_t<std::remove_reference_t<Matrix>>;
+		using Operation = typename UnaryExpressionTraits<CleanMatrix>::TransposeOperation;
+		return LowRankUnaryExpr<UnaryNested<Matrix&&>, Operation>{std::forward<Matrix>(matrix)};
+	}
+
+	template <typename Matrix>
+	[[nodiscard]] auto MakeConjugate(Matrix&& matrix)
+	{
+		using CleanMatrix = std::remove_cv_t<std::remove_reference_t<Matrix>>;
+		using Operation = typename UnaryExpressionTraits<CleanMatrix>::ConjugateOperation;
+		return LowRankUnaryExpr<UnaryNested<Matrix&&>, Operation>{std::forward<Matrix>(matrix)};
+	}
+
+	template <typename Matrix>
+	[[nodiscard]] auto MakeAdjoint(Matrix&& matrix)
+	{
+		using CleanMatrix = std::remove_cv_t<std::remove_reference_t<Matrix>>;
+		using Operation = typename UnaryExpressionTraits<CleanMatrix>::AdjointOperation;
+		return LowRankUnaryExpr<UnaryNested<Matrix&&>, Operation>{std::forward<Matrix>(matrix)};
+	}
+}

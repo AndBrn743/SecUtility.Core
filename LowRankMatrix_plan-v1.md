@@ -38,7 +38,8 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 1 | General low-rank value type, storage, and invariants | Complete |
 | 2 | Symmetric and self-adjoint low-rank value types and structural guarantees | Complete |
 | 3 | Eigen products, dense inspection, and numerical queries | Complete |
-| 4 | Transpose, conjugate, adjoint, and scalar expressions | Not started |
+| 4.1 | Transpose, conjugate, and adjoint expressions | Complete |
+| 4.2 | Scalar multiplication and division expressions | Not started |
 | 5 | Low-rank arithmetic and controlled mutation | Not started |
 | 6 | Lazy dense/low-rank sums and Eigen iterative-solver integration | Not started |
 | 7 | Optional C++20 SecUtility.Core adapters | Not started |
@@ -162,7 +163,7 @@ fixed and dynamic dimensions, rectangular and square matrices, rank zero, rank o
 vector and block right-hand sides, product scaling, destination aliasing, and row/column/diagonal extraction. Norm
 tests must use two-sided approximate comparisons and include complex general, symmetric, and self-adjoint cases.
 
-## Phase 4 — Transpose, conjugate, adjoint, and scalar expressions
+## Phase 4.1 — Transpose, conjugate, and adjoint expressions
 
 Implement Eigen-style `transpose()`, `conjugate()`, and `adjoint()` without dense materialization. General transforms
 must preserve the canonical `U * diag(c) * V.adjoint()` representation and swap compile-time/runtime dimensions where
@@ -170,20 +171,29 @@ required. Structural policies determine transpose, conjugate, and adjoint behavi
 the single-factor owner. Self-adjoint `adjoint()` remains structurally self-adjoint; self-adjoint transpose and
 conjugate are equivalent structured transformations. Symmetric `transpose()` remains structurally symmetric.
 
+Prefer lazy Eigen-style views/expressions for transformations where their ownership and nesting rules are
+safe. Expressions formed from temporaries must not dangle. Assignment/materialization into the owning low-rank types
+must be available where the represented form remains low rank.
+
+Tests must cover mathematical equivalence to dense transpose/conjugate/adjoint; rectangular dimension swaps; complex
+coefficient conjugation; involutions and identities such as `adjoint().adjoint()`; symmetric and self-adjoint
+structural preservation; lvalue and temporary lifetimes; and expression composition with vector/block products.
+
+## Phase 4.2 — Scalar multiplication and division expressions
+
 Implement `lowRank * scalar`, `scalar * lowRank`, and `lowRank / scalar`. General matrices accept compatible scalar
 scaling with a well-defined promoted result type. Symmetric matrices preserve their structure under compatible scalar
 scaling. Self-adjoint matrices accept only `RealScalar` scaling/division so the invariant cannot be broken; complex
 scaling requires explicit conversion to the general type. Division by zero follows the selected Eigen/scalar
 convention and must be documented rather than silently changing structure.
 
-Prefer lazy Eigen-style views/expressions for transformations and scaling where their ownership and nesting rules are
-safe. Expressions formed from temporaries must not dangle. Assignment/materialization into the owning low-rank types
-must be available where the represented form remains low rank.
+Prefer lazy Eigen-style expressions where their ownership and nesting rules are safe. Expressions formed from
+temporaries must not dangle. Assignment/materialization into the owning low-rank types must be available where the
+represented form remains low rank.
 
-Tests must cover mathematical equivalence to dense transpose/conjugate/adjoint and scaling; rectangular dimension
-swaps; complex coefficient conjugation; involutions and identities such as `adjoint().adjoint()`; symmetric and
-self-adjoint structural preservation; scalar promotion; lvalue and temporary lifetimes; expression composition with
-vector/block products; and compile-time rejection of complex scaling on self-adjoint values.
+Tests must cover scaling equivalence to dense references, scalar promotion, lvalue and temporary lifetimes,
+expression composition with vector/block products, and compile-time rejection of complex scaling on self-adjoint
+values.
 
 ## Phase 5 — Low-rank arithmetic and controlled mutation
 
