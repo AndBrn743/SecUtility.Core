@@ -56,9 +56,9 @@ namespace SecUtility::Math
 	}
 
 
-	template <typename Scalar, typename Derived>
+	template <typename Scalar>
 	[[nodiscard]] Eigen::MatrixX<Scalar> CoordinateDavidsonInitialBasis(
-	        const Eigen::MatrixBase<Derived>& diagonal, const Eigen::Index vectorCount)
+	        const Eigen::VectorX<typename Eigen::NumTraits<Scalar>::Real>& diagonal, const Eigen::Index vectorCount)
 	{
 		Detail::DavidsonInitialGuess::ValidateDimensions(diagonal.size(), vectorCount);
 		if (!diagonal.allFinite())

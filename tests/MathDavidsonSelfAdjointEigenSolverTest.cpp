@@ -162,6 +162,11 @@ TEST_CASE("Davidson option and statistic defaults are stable", "[Math][Davidson]
 	CHECK(statistics.GeneratedCorrectionVectorCount == 0);
 	CHECK(statistics.RetainedCorrectionVectorCount == 0);
 	CHECK(statistics.StructuredOperatorUpdateCount == 0);
+
+	const DavidsonIterationDecision<double> decision;
+	CHECK(decision.Action == DavidsonIterationAction::Continue);
+	CHECK(decision.LowRankOperatorUpdate.Factors.size() == 0);
+	CHECK(decision.LowRankOperatorUpdate.Core.size() == 0);
 }
 
 
@@ -447,11 +452,10 @@ TEMPLATE_TEST_CASE("Diagonal Davidson corrections follow r divided by theta minu
 	const Eigen::Vector2d ritzValues{3, 10};
 	const Eigen::Vector4d diagonal{1, 3, 5, 7};
 	const Eigen::ArrayX<Int8> rootConvergenceIndicators{{0, 1}};
-	DavidsonEigenSolverStatistics statistics;
 	const DiagonalCorrectionContext<TestType> context{
 	        residuals, ritzValues, diagonal, rootConvergenceIndicators, 0.5};
 
-	const auto candidates = GenerateDiagonalCorrectionCandidates(context, statistics);
+	const auto candidates = GenerateDiagonalCorrectionCandidates(context);
 
 	REQUIRE(candidates.Vectors.rows() == 4);
 	REQUIRE(candidates.Vectors.cols() == 1);
@@ -459,8 +463,6 @@ TEMPLATE_TEST_CASE("Diagonal Davidson corrections follow r divided by theta minu
 	CHECK(candidates.Vectors(1, 0) == residuals(1, 0) / 0.5);
 	CHECK(candidates.Vectors(2, 0) == residuals(2, 0) / -2.0);
 	CHECK(candidates.Vectors(3, 0) == residuals(3, 0) / -4.0);
-	CHECK(statistics.GeneratedCorrectionVectorCount == 1);
-	CHECK(statistics.RetainedCorrectionVectorCount == 0);
 	CHECK(candidates.Vectors.allFinite());
 }
 
@@ -472,14 +474,11 @@ TEST_CASE("Diagonal Davidson correction generation skips every converged root", 
 	const Eigen::Vector2d ritzValues{1, 2};
 	const Eigen::Vector3d diagonal{0, 1, 2};
 	const Eigen::ArrayX<Int8> rootConvergenceIndicators{{1, 1}};
-	DavidsonEigenSolverStatistics statistics;
-
 	const auto candidates = GenerateDiagonalCorrectionCandidates(
-	        DiagonalCorrectionContext<double>{residuals, ritzValues, diagonal, rootConvergenceIndicators, 1e-3}, statistics);
+	        DiagonalCorrectionContext<double>{residuals, ritzValues, diagonal, rootConvergenceIndicators, 1e-3});
 
 	CHECK(candidates.Vectors.rows() == 3);
 	CHECK(candidates.Vectors.cols() == 0);
-	CHECK(statistics.GeneratedCorrectionVectorCount == 0);
 }
 
 
@@ -492,16 +491,14 @@ TEST_CASE("Complex Davidson corrections preserve the residual phase", "[Math][Da
 	const Eigen::VectorXd ritzValues = Eigen::VectorXd::Constant(1, 2.0);
 	const Eigen::Vector2d diagonal{0, 4};
 	const Eigen::ArrayX<Int8> rootConvergenceIndicators = Eigen::ArrayX<Int8>::Zero(1);
-	DavidsonEigenSolverStatistics statistics;
 	const auto original = GenerateDiagonalCorrectionCandidates(
-	        DiagonalCorrectionContext<Scalar>{residuals, ritzValues, diagonal, rootConvergenceIndicators, 1e-3}, statistics);
+	        DiagonalCorrectionContext<Scalar>{residuals, ritzValues, diagonal, rootConvergenceIndicators, 1e-3});
 	const Scalar phase{0, 1};
 	residuals *= phase;
 	const auto rotated = GenerateDiagonalCorrectionCandidates(
-	        DiagonalCorrectionContext<Scalar>{residuals, ritzValues, diagonal, rootConvergenceIndicators, 1e-3}, statistics);
+	        DiagonalCorrectionContext<Scalar>{residuals, ritzValues, diagonal, rootConvergenceIndicators, 1e-3});
 
 	CHECK(rotated.Vectors.isApprox(phase * original.Vectors));
-	CHECK(statistics.GeneratedCorrectionVectorCount == 2);
 }
 
 
@@ -1405,7 +1402,9 @@ TEMPLATE_TEST_CASE("Davidson identity-prefix and diagonal-coordinate guesses are
 	const Eigen::VectorXd diagonal{{2, -1, -1, 4, 0}};
 	const auto first = CoordinateDavidsonInitialBasis<TestType>(diagonal, 4);
 	const auto second = CoordinateDavidsonInitialBasis<TestType>(diagonal, 4);
+	const auto fromRowVector = CoordinateDavidsonInitialBasis<TestType>(diagonal.transpose(), 4);
 	CHECK(first.isApprox(second));
+	CHECK(first.isApprox(fromRowVector));
 	CHECK(first.col(0).isApprox(Eigen::VectorX<TestType>::Unit(5, 1)));
 	CHECK(first.col(1).isApprox(Eigen::VectorX<TestType>::Unit(5, 2)));
 	CHECK(first.col(2).isApprox(Eigen::VectorX<TestType>::Unit(5, 4)));
