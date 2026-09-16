@@ -6,7 +6,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <complex>
-#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -43,15 +42,31 @@ using DynamicMatrix = Hoppy::LowRankMatrixX<double>;
 using FixedMatrix = Hoppy::LowRankMatrix<double, 2, 3>;
 using DynamicRowsMatrix = Hoppy::LowRankMatrix<double, Eigen::Dynamic, 3>;
 using DynamicColsMatrix = Hoppy::LowRankMatrix<double, 2, Eigen::Dynamic>;
+using DynamicMatrixTerm = decltype(std::declval<const DynamicMatrix&>().term(0));
 
 static_assert(std::is_base_of_v<Eigen::EigenBase<DynamicMatrix>, DynamicMatrix>);
+static_assert(std::is_base_of_v<Hoppy::LowRankMatrixBase<DynamicMatrix>, DynamicMatrix>);
 static_assert(std::is_same_v<Eigen::internal::traits<DynamicMatrix>::Scalar, double>);
+static_assert(std::is_same_v<Hoppy::LowRankMatrixBase<DynamicMatrix>::Scalar, double>);
+static_assert(Hoppy::LowRankMatrixBase<FixedMatrix>::RowsAtCompileTime == 2);
+static_assert(Hoppy::LowRankMatrixBase<FixedMatrix>::ColsAtCompileTime == 3);
 static_assert(std::is_same_v<Eigen::internal::traits<DynamicMatrix>::StorageKind, Hoppy::LowRankStorage>);
 static_assert(Eigen::internal::traits<FixedMatrix>::RowsAtCompileTime == 2);
 static_assert(Eigen::internal::traits<FixedMatrix>::ColsAtCompileTime == 3);
 static_assert(!HasMutableCoefficients<DynamicMatrix>::value);
 static_assert(!HasMutableLeftVectors<DynamicMatrix>::value);
-static_assert(std::is_const_v<std::remove_reference_t<decltype(std::get<1>(std::declval<const DynamicMatrix&>().term(0)))>>);
+static_assert(std::is_const_v<std::remove_reference_t<decltype(std::declval<DynamicMatrixTerm>().coefficient)>>);
+static_assert(std::is_lvalue_reference_v<decltype(std::declval<DynamicMatrixTerm>().coefficient)>);
+
+
+namespace
+{
+	template <typename Derived>
+	Eigen::Index TermCountThroughBase(const Hoppy::LowRankMatrixBase<Derived>& matrix)
+	{
+		return matrix.termCount();
+	}
+}
 
 
 TEST_CASE("General low-rank matrices preserve dimensions and rank-zero state", "[Hoppy][LowRankMatrix]")
@@ -99,12 +114,29 @@ TEST_CASE("General low-rank matrices add and inspect individual terms", "[Hoppy]
 
 	matrix.addTerm(2.5, left, right);
 	REQUIRE(matrix.termCount() == 1);
+	CHECK(TermCountThroughBase(matrix) == 1);
+	const Hoppy::LowRankMatrixBase<DynamicMatrix>& base = matrix;
+	CHECK(base.rows() == 2);
+	CHECK(base.cols() == 3);
+	CHECK(base.termCount() == 1);
+	CHECK(base.coefficients() == matrix.coefficients());
+	CHECK(base.leftVectors() == matrix.leftVectors());
+	CHECK(base.rightVectors() == matrix.rightVectors());
+	CHECK(base.coefficientOfTerm(0) == 2.5);
+	CHECK(base.leftVectorOfTerm(0) == left);
+	CHECK(base.rightVectorOfTerm(0) == right);
 	CHECK(matrix.coefficientOfTerm(0) == 2.5);
 	CHECK(matrix.leftVectorOfTerm(0) == left);
 	CHECK(matrix.rightVectorOfTerm(0) == right);
 	CHECK(matrix.coefficients() == Eigen::VectorXd::Constant(1, 2.5));
 	CHECK(matrix.leftVectors() == left);
 	CHECK(matrix.rightVectors() == right);
+
+	const auto namedTerm = matrix.term(0);
+	CHECK(namedTerm.leftVector == left);
+	CHECK(namedTerm.coefficient == 2.5);
+	CHECK(namedTerm.rightVector == right);
+	CHECK(&namedTerm.coefficient == &matrix.coefficientOfTerm(0));
 
 	const auto [termLeft, coefficient, termRight] = matrix.term(0);
 	CHECK(termLeft == left);

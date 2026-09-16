@@ -17,6 +17,9 @@
 
 namespace Hoppy
 {
+	template <typename Derived>
+	class LowRankMatrixBase;
+
 	template <typename Scalar_, int RowsAtCompileTime_, int ColsAtCompileTime_>
 	class LowRankMatrix;
 
@@ -45,6 +48,69 @@ struct Eigen::internal::traits<Hoppy::LowRankMatrix<Scalar_, RowsAtCompileTime_,
 };
 
 
+template <typename Derived>
+class Hoppy::LowRankMatrixBase : public Eigen::EigenBase<Derived>
+{
+public:
+	using Scalar = typename Eigen::internal::traits<Derived>::Scalar;
+	using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+	using StorageIndex = typename Eigen::internal::traits<Derived>::StorageIndex;
+
+	static constexpr int RowsAtCompileTime = Eigen::internal::traits<Derived>::RowsAtCompileTime;
+	static constexpr int ColsAtCompileTime = Eigen::internal::traits<Derived>::ColsAtCompileTime;
+	static constexpr int MaxRowsAtCompileTime = Eigen::internal::traits<Derived>::MaxRowsAtCompileTime;
+	static constexpr int MaxColsAtCompileTime = Eigen::internal::traits<Derived>::MaxColsAtCompileTime;
+	static constexpr int IsRowMajor = false;
+	static constexpr int Flags = Eigen::internal::traits<Derived>::Flags;
+
+	[[nodiscard]] constexpr Eigen::Index rows() const noexcept { return asDerived().rowsImpl(); }
+	[[nodiscard]] constexpr Eigen::Index cols() const noexcept { return asDerived().colsImpl(); }
+	[[nodiscard]] Eigen::Index termCount() const noexcept { return asDerived().termCountImpl(); }
+
+	[[nodiscard]] decltype(auto) coefficients() const noexcept { return asDerived().coefficientsImpl(); }
+	[[nodiscard]] decltype(auto) leftVectors() const noexcept { return asDerived().leftVectorsImpl(); }
+	[[nodiscard]] decltype(auto) rightVectors() const noexcept { return asDerived().rightVectorsImpl(); }
+
+	[[nodiscard]] decltype(auto) coefficientOfTerm(const Eigen::Index index) const
+	{
+		return asDerived().coefficientOfTermImpl(index);
+	}
+
+	[[nodiscard]] decltype(auto) leftVectorOfTerm(const Eigen::Index index) const
+	{
+		return asDerived().leftVectorOfTermImpl(index);
+	}
+
+	[[nodiscard]] decltype(auto) rightVectorOfTerm(const Eigen::Index index) const
+	{
+		return asDerived().rightVectorOfTermImpl(index);
+	}
+
+	[[nodiscard]] auto term(const Eigen::Index index) const
+	{
+		struct Term
+		{
+			decltype(std::declval<const LowRankMatrixBase&>().leftVectorOfTerm(index)) leftVector;
+			decltype(std::declval<const LowRankMatrixBase&>().coefficientOfTerm(index)) coefficient;
+			decltype(std::declval<const LowRankMatrixBase&>().rightVectorOfTerm(index)) rightVector;
+		};
+
+		return Term{leftVectorOfTerm(index), coefficientOfTerm(index), rightVectorOfTerm(index)};
+	}
+
+protected:
+	constexpr LowRankMatrixBase() noexcept = default;
+	LowRankMatrixBase(const LowRankMatrixBase&) = default;
+	LowRankMatrixBase(LowRankMatrixBase&&) noexcept = default;
+	LowRankMatrixBase& operator=(const LowRankMatrixBase&) = default;
+	LowRankMatrixBase& operator=(LowRankMatrixBase&&) noexcept = default;
+	~LowRankMatrixBase() = default;
+
+private:
+	[[nodiscard]] constexpr const Derived& asDerived() const noexcept { return static_cast<const Derived&>(*this); }
+};
+
+
 namespace Hoppy::Detail
 {
 	inline std::size_t CheckedBufferSize(const Eigen::Index dimension, const std::size_t termCount)
@@ -63,12 +129,18 @@ namespace Hoppy::Detail
 
 template <typename Scalar_, int RowsAtCompileTime_, int ColsAtCompileTime_>
 class Hoppy::LowRankMatrix
-    : public Eigen::EigenBase<LowRankMatrix<Scalar_, RowsAtCompileTime_, ColsAtCompileTime_>>
+    : public LowRankMatrixBase<LowRankMatrix<Scalar_, RowsAtCompileTime_, ColsAtCompileTime_>>
 {
 	static_assert(RowsAtCompileTime_ == Eigen::Dynamic || RowsAtCompileTime_ >= 0);
 	static_assert(ColsAtCompileTime_ == Eigen::Dynamic || ColsAtCompileTime_ >= 0);
 
 public:
+	using Base = LowRankMatrixBase<LowRankMatrix>;
+	friend Base;
+	using Base::cols;
+	using Base::rows;
+	using Base::termCount;
+
 	using Scalar = Scalar_;
 	using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
 	using StorageIndex = Eigen::Index;
@@ -115,51 +187,7 @@ public:
 		addTerms(coefficients, leftVectors, rightVectors);
 	}
 
-	[[nodiscard]] constexpr Eigen::Index rows() const noexcept { return m_Rows.value(); }
-	[[nodiscard]] constexpr Eigen::Index cols() const noexcept { return m_Cols.value(); }
-	[[nodiscard]] Eigen::Index termCount() const noexcept { return static_cast<Eigen::Index>(m_Coefficients.size()); }
 	[[nodiscard]] std::size_t capacity() const noexcept { return m_Coefficients.capacity(); }
-
-	/// Read-only views into owned storage. Any operation that increases capacity invalidates all existing views.
-	/// `clear` invalidates term views and references but retains the buffers and their capacity.
-	[[nodiscard]] auto coefficients() const noexcept
-	{
-		return Eigen::Map<const CoefficientVector>{m_Coefficients.data(), termCount()};
-	}
-
-	[[nodiscard]] auto leftVectors() const noexcept
-	{
-		return Eigen::Map<const LeftVectors>{m_LeftVectorBuffer.data(), rows(), termCount()};
-	}
-
-	[[nodiscard]] auto rightVectors() const noexcept
-	{
-		return Eigen::Map<const RightVectors>{m_RightVectorBuffer.data(), cols(), termCount()};
-	}
-
-	[[nodiscard]] const Scalar& coefficientOfTerm(const Eigen::Index index) const
-	{
-		validateTermIndex(index);
-		return m_Coefficients[static_cast<std::size_t>(index)];
-	}
-
-	[[nodiscard]] auto leftVectorOfTerm(const Eigen::Index index) const
-	{
-		validateTermIndex(index);
-		return Eigen::Map<const LeftVector>{m_LeftVectorBuffer.data() + rows() * index, rows()};
-	}
-
-	[[nodiscard]] auto rightVectorOfTerm(const Eigen::Index index) const
-	{
-		validateTermIndex(index);
-		return Eigen::Map<const RightVector>{m_RightVectorBuffer.data() + cols() * index, cols()};
-	}
-
-	[[nodiscard]] auto term(const Eigen::Index index) const
-	{
-		return std::tuple<decltype(leftVectorOfTerm(index)), const Scalar&, decltype(rightVectorOfTerm(index))>{
-		        leftVectorOfTerm(index), coefficientOfTerm(index), rightVectorOfTerm(index)};
-	}
 
 	void reserve(const Eigen::Index termCapacity)
 	{
@@ -244,6 +272,48 @@ public:
 	}
 
 private:
+	[[nodiscard]] constexpr Eigen::Index rowsImpl() const noexcept { return m_Rows.value(); }
+	[[nodiscard]] constexpr Eigen::Index colsImpl() const noexcept { return m_Cols.value(); }
+	[[nodiscard]] Eigen::Index termCountImpl() const noexcept
+	{
+		return static_cast<Eigen::Index>(m_Coefficients.size());
+	}
+
+	/// Read-only views into owned storage. Any operation that increases capacity invalidates all existing views.
+	/// `clear` invalidates term views and references but retains the buffers and their capacity.
+	[[nodiscard]] auto coefficientsImpl() const noexcept
+	{
+		return Eigen::Map<const CoefficientVector>{m_Coefficients.data(), termCount()};
+	}
+
+	[[nodiscard]] auto leftVectorsImpl() const noexcept
+	{
+		return Eigen::Map<const LeftVectors>{m_LeftVectorBuffer.data(), rows(), termCount()};
+	}
+
+	[[nodiscard]] auto rightVectorsImpl() const noexcept
+	{
+		return Eigen::Map<const RightVectors>{m_RightVectorBuffer.data(), cols(), termCount()};
+	}
+
+	[[nodiscard]] const Scalar& coefficientOfTermImpl(const Eigen::Index index) const
+	{
+		validateTermIndex(index);
+		return m_Coefficients[static_cast<std::size_t>(index)];
+	}
+
+	[[nodiscard]] auto leftVectorOfTermImpl(const Eigen::Index index) const
+	{
+		validateTermIndex(index);
+		return Eigen::Map<const LeftVector>{m_LeftVectorBuffer.data() + rows() * index, rows()};
+	}
+
+	[[nodiscard]] auto rightVectorOfTermImpl(const Eigen::Index index) const
+	{
+		validateTermIndex(index);
+		return Eigen::Map<const RightVector>{m_RightVectorBuffer.data() + cols() * index, cols()};
+	}
+
 	template <typename Derived>
 	static void validateVector(const Eigen::MatrixBase<Derived>& vector, const Eigen::Index expectedSize)
 	{

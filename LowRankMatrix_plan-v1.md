@@ -35,8 +35,8 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 
 | Phase | Scope | Status |
 |---:|---|---|
-| 1 | General low-rank value type, storage, and invariants | Awaiting user verification |
-| 2 | Hermitian low-rank value type and structural guarantees | Not started |
+| 1 | General low-rank value type, storage, and invariants | Complete |
+| 2 | Hermitian low-rank value type and structural guarantees | In progress |
 | 3 | Eigen products, dense inspection, and numerical queries | Not started |
 | 4 | Transpose, conjugate, adjoint, and scalar expressions | Not started |
 | 5 | Low-rank arithmetic and controlled mutation | Not started |
@@ -106,6 +106,10 @@ Implement the C++17 general rectangular value type and its Eigen traits. Store c
 vectors in contiguous owned buffers, with fixed or dynamic row and column dimensions. Provide default and explicit
 dimension constructors, single-term and batch construction, copy/move operations, read-only coefficient/vector/term
 access, `termCount`, `rows`, `cols`, `reserve`, `clear`, `addTerm`, and `addTerms`.
+
+Introduce `LowRankMatrixBase<Derived>` as the shared CRTP base for owning matrices and later lazy low-rank
+expressions. It derives from `Eigen::EigenBase<Derived>` and owns the common read-only factor/term interface. Storage
+mutation remains on owning derived types so general and Hermitian invariants cannot be bypassed through the base.
 
 Define each term as `coefficient * leftVector * rightVector.adjoint()`. Validate all dimensions before mutating
 storage. Make insertion safe when input expressions alias the destination's current read-only views. Ignore exactly
