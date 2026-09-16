@@ -24,6 +24,8 @@ namespace Hoppy
 		struct TransposeLowRankOperation;
 		struct ConjugateLowRankOperation;
 		struct AdjointLowRankOperation;
+		struct MultiplyLowRankOperation;
+		struct DivideLowRankOperation;
 
 		struct SymmetricLowRankStructure;
 		struct SelfAdjointLowRankStructure;
@@ -34,8 +36,17 @@ namespace Hoppy
 		template <typename Nested_, typename Operation_>
 		class LowRankUnaryExpr;
 
+		template <typename Nested_, typename Factor_, typename Operation_, bool FactorOnLeft_>
+		class LowRankScalarExpr;
+
 		template <typename Matrix>
 		struct UnaryExpressionTraits;
+
+		template <typename LeftScalar, typename RightScalar>
+		struct IsScalarProductCompatible;
+
+		template <typename LeftScalar, typename RightScalar>
+		struct IsScalarQuotientCompatible;
 
 		template <typename Matrix>
 		[[nodiscard]] auto MakeTranspose(Matrix&& matrix);
@@ -45,6 +56,12 @@ namespace Hoppy
 
 		template <typename Matrix>
 		[[nodiscard]] auto MakeAdjoint(Matrix&& matrix);
+
+		template <bool FactorOnLeft, typename Matrix, typename Factor>
+		[[nodiscard]] auto MakeProduct(Matrix&& matrix, Factor&& factor);
+
+		template <typename Matrix, typename Factor>
+		[[nodiscard]] auto MakeQuotient(Matrix&& matrix, Factor&& factor);
 	}
 
 	template <typename Derived>
@@ -131,6 +148,25 @@ struct Eigen::internal::traits<Hoppy::Detail::LowRankUnaryExpr<Nested_, Operatio
 	        SwapsDimensions ? traits<Nested>::MaxColsAtCompileTime : traits<Nested>::MaxRowsAtCompileTime;
 	static constexpr int MaxColsAtCompileTime =
 	        SwapsDimensions ? traits<Nested>::MaxRowsAtCompileTime : traits<Nested>::MaxColsAtCompileTime;
+	static constexpr int Flags = 0;
+};
+
+
+template <typename Nested_, typename Factor_, typename Operation_, bool FactorOnLeft_>
+struct Eigen::internal::traits<
+        Hoppy::Detail::LowRankScalarExpr<Nested_, Factor_, Operation_, FactorOnLeft_>>
+{
+	using Nested = std::remove_reference_t<Nested_>;
+	using NestedScalar = typename traits<Nested>::Scalar;
+	using Scalar = typename Operation_::template ResultScalar<NestedScalar, Factor_, FactorOnLeft_>;
+	using StorageKind = Hoppy::LowRankStorage;
+	using StorageIndex = Eigen::Index;
+	using XprKind = Eigen::MatrixXpr;
+
+	static constexpr int RowsAtCompileTime = traits<Nested>::RowsAtCompileTime;
+	static constexpr int ColsAtCompileTime = traits<Nested>::ColsAtCompileTime;
+	static constexpr int MaxRowsAtCompileTime = traits<Nested>::MaxRowsAtCompileTime;
+	static constexpr int MaxColsAtCompileTime = traits<Nested>::MaxColsAtCompileTime;
 	static constexpr int Flags = 0;
 };
 
@@ -230,6 +266,63 @@ public:
 	[[nodiscard]] auto operator*(const Eigen::MatrixBase<Rhs>& rhs) const
 	{
 		return Eigen::Product<LowRankMatrixBase, Rhs, Eigen::DefaultProduct>{*this, rhs.derived()};
+	}
+
+	template <typename Factor,
+	          std::enable_if_t<Detail::IsScalarProductCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
+	[[nodiscard]] auto operator*(Factor&& factor) const &
+	{
+		return Detail::MakeProduct<false>(asDerived(), std::forward<Factor>(factor));
+	}
+
+	template <typename Factor,
+	          std::enable_if_t<Detail::IsScalarProductCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
+	[[nodiscard]] auto operator*(Factor&& factor) &&
+	{
+		return Detail::MakeProduct<false>(std::move(asDerived()), std::forward<Factor>(factor));
+	}
+
+	template <typename Factor,
+	          std::enable_if_t<Detail::IsScalarProductCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
+	[[nodiscard]] auto operator*(Factor&& factor) const &&
+	{
+		return Detail::MakeProduct<false>(Derived{asDerived()}, std::forward<Factor>(factor));
+	}
+
+	template <typename Factor,
+	          std::enable_if_t<Detail::IsScalarQuotientCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
+	/// Division deliberately follows the underlying scalar's division-by-zero behavior.
+	[[nodiscard]] auto operator/(Factor&& factor) const &
+	{
+		return Detail::MakeQuotient(asDerived(), std::forward<Factor>(factor));
+	}
+
+	template <typename Factor,
+	          std::enable_if_t<Detail::IsScalarQuotientCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
+	[[nodiscard]] auto operator/(Factor&& factor) &&
+	{
+		return Detail::MakeQuotient(std::move(asDerived()), std::forward<Factor>(factor));
+	}
+
+	template <typename Factor,
+	          std::enable_if_t<Detail::IsScalarQuotientCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
+	[[nodiscard]] auto operator/(Factor&& factor) const &&
+	{
+		return Detail::MakeQuotient(Derived{asDerived()}, std::forward<Factor>(factor));
+	}
+
+	template <typename Factor,
+	          std::enable_if_t<Detail::IsScalarProductCompatible<std::decay_t<Factor>, Scalar>::value, int> = 0>
+	friend auto operator*(Factor&& factor, const LowRankMatrixBase& matrix)
+	{
+		return Detail::MakeProduct<true>(matrix.asDerived(), std::forward<Factor>(factor));
+	}
+
+	template <typename Factor,
+	          std::enable_if_t<Detail::IsScalarProductCompatible<std::decay_t<Factor>, Scalar>::value, int> = 0>
+	friend auto operator*(Factor&& factor, LowRankMatrixBase&& matrix)
+	{
+		return Detail::MakeProduct<true>(std::move(matrix.asDerived()), std::forward<Factor>(factor));
 	}
 
 	[[nodiscard]] Eigen::Matrix<Scalar, RowsAtCompileTime, ColsAtCompileTime> toDense() const
@@ -434,6 +527,86 @@ namespace Hoppy::Detail
 		}
 	};
 
+	template <typename LeftScalar, typename RightScalar>
+	struct IsScalarProductCompatible
+	    : Eigen::internal::has_ReturnType<Eigen::ScalarBinaryOpTraits<
+	              LeftScalar,
+	              RightScalar,
+	              Eigen::internal::scalar_product_op<LeftScalar, RightScalar>>>
+	{
+	};
+
+	template <typename LeftScalar, typename RightScalar>
+	struct IsScalarQuotientCompatible
+	    : Eigen::internal::has_ReturnType<Eigen::ScalarBinaryOpTraits<
+	              LeftScalar,
+	              RightScalar,
+	              Eigen::internal::scalar_quotient_op<LeftScalar, RightScalar>>>
+	{
+	};
+
+	struct MultiplyLowRankOperation
+	{
+		template <typename MatrixScalar, typename Factor, bool FactorOnLeft>
+		using ResultScalar = std::conditional_t<
+		        FactorOnLeft,
+		        typename Eigen::ScalarBinaryOpTraits<
+		                Factor,
+		                MatrixScalar,
+		                Eigen::internal::scalar_product_op<Factor, MatrixScalar>>::ReturnType,
+		        typename Eigen::ScalarBinaryOpTraits<
+		                MatrixScalar,
+		                Factor,
+		                Eigen::internal::scalar_product_op<MatrixScalar, Factor>>::ReturnType>;
+
+		template <typename Result, bool IsFactorOnLeft, typename Coefficients, typename Factor>
+		[[nodiscard]] static auto CoefficientsResult(const Coefficients& coefficients, const Factor& factor)
+		{
+			if constexpr (IsFactorOnLeft)
+			{
+				return Result{factor} * coefficients.template cast<Result>();
+			}
+			else
+			{
+				return coefficients.template cast<Result>() * Result{factor};
+			}
+		}
+
+		template <typename Result, bool IsFactorOnLeft, typename Coefficient, typename Factor>
+		[[nodiscard]] static Result CoefficientResult(const Coefficient& coefficient, const Factor& factor)
+		{
+			if constexpr (IsFactorOnLeft)
+			{
+				return Result{factor} * Result{coefficient};
+			}
+			else
+			{
+				return Result{coefficient} * Result{factor};
+			}
+		}
+	};
+
+	struct DivideLowRankOperation
+	{
+		template <typename MatrixScalar, typename Factor, bool>
+		using ResultScalar = typename Eigen::ScalarBinaryOpTraits<
+		        MatrixScalar,
+		        Factor,
+		        Eigen::internal::scalar_quotient_op<MatrixScalar, Factor>>::ReturnType;
+
+		template <typename Result, bool, typename Coefficients, typename Factor>
+		[[nodiscard]] static auto CoefficientsResult(const Coefficients& coefficients, const Factor& factor)
+		{
+			return coefficients.template cast<Result>() / Result{factor};
+		}
+
+		template <typename Result, bool, typename Coefficient, typename Factor>
+		[[nodiscard]] static Result CoefficientResult(const Coefficient& coefficient, const Factor& factor)
+		{
+			return Result{coefficient} / Result{factor};
+		}
+	};
+
 	struct SymmetricLowRankStructure
 	{
 		template <typename Scalar>
@@ -441,6 +614,8 @@ namespace Hoppy::Detail
 		using TransposeOperation = IdentityLowRankOperation;
 		using ConjugateOperation = ConjugateLowRankOperation;
 		using AdjointOperation = ConjugateLowRankOperation;
+		template <typename>
+		using ScaledResultStructure = SymmetricLowRankStructure;
 
 		template <typename Vectors>
 		[[nodiscard]] static auto RightFactor(Vectors&& vectors)
@@ -456,6 +631,9 @@ namespace Hoppy::Detail
 		using TransposeOperation = ConjugateLowRankOperation;
 		using ConjugateOperation = ConjugateLowRankOperation;
 		using AdjointOperation = IdentityLowRankOperation;
+		template <typename Factor>
+		using ScaledResultStructure =
+		        std::conditional_t<Eigen::NumTraits<Factor>::IsComplex, void, SelfAdjointLowRankStructure>;
 
 		template <typename Vectors>
 		[[nodiscard]] static auto RightFactor(Vectors&& vectors)
@@ -1029,6 +1207,100 @@ private:
 
 namespace Hoppy::Detail
 {
+	template <typename StructurePolicy, typename Factor>
+	struct ScaledResultStructure
+	{
+		using Type = typename StructurePolicy::template ScaledResultStructure<Factor>;
+	};
+
+	template <typename Factor>
+	struct ScaledResultStructure<void, Factor>
+	{
+		using Type = void;
+	};
+}
+
+
+template <typename Nested_, typename Factor_, typename Operation_, bool FactorOnLeft_>
+class Hoppy::Detail::LowRankScalarExpr
+    : public LowRankMatrixBase<LowRankScalarExpr<Nested_, Factor_, Operation_, FactorOnLeft_>>
+{
+public:
+	using Base = LowRankMatrixBase<LowRankScalarExpr>;
+	friend Base;
+	using Base::cols;
+	using Base::rows;
+	using Base::termCount;
+
+	using Nested = Nested_;
+	using Factor = Factor_;
+	using Operation = Operation_;
+	using Scalar = typename Eigen::internal::traits<LowRankScalarExpr>::Scalar;
+	using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+	using StorageIndex = Eigen::Index;
+	using NestedMatrix = std::remove_cv_t<std::remove_reference_t<Nested>>;
+	using NestedCoefficientScalar =
+	        std::decay_t<decltype(std::declval<const NestedMatrix&>().coefficientOfTerm(Eigen::Index{}))>;
+	using CoefficientScalar =
+	        typename Operation::template ResultScalar<NestedCoefficientScalar, Factor, FactorOnLeft_>;
+	using NestedStructurePolicy = typename UnaryExpressionTraits<NestedMatrix>::ResultStructurePolicy;
+	using StructurePolicy = typename ScaledResultStructure<NestedStructurePolicy, Factor>::Type;
+
+	static constexpr int RowsAtCompileTime = Eigen::internal::traits<LowRankScalarExpr>::RowsAtCompileTime;
+	static constexpr int ColsAtCompileTime = Eigen::internal::traits<LowRankScalarExpr>::ColsAtCompileTime;
+	static constexpr int MaxRowsAtCompileTime = Eigen::internal::traits<LowRankScalarExpr>::MaxRowsAtCompileTime;
+	static constexpr int MaxColsAtCompileTime = Eigen::internal::traits<LowRankScalarExpr>::MaxColsAtCompileTime;
+	static constexpr int IsRowMajor = false;
+	static constexpr int Flags = 0;
+
+	LowRankScalarExpr(Nested nested, Factor factor)
+	    : m_Nested(std::forward<Nested>(nested)), m_Factor(std::move(factor))
+	{
+	}
+
+private:
+	[[nodiscard]] Eigen::Index rowsImpl() const noexcept { return m_Nested.rows(); }
+	[[nodiscard]] Eigen::Index colsImpl() const noexcept { return m_Nested.cols(); }
+	[[nodiscard]] Eigen::Index termCountImpl() const noexcept { return m_Nested.termCount(); }
+	[[nodiscard]] auto coefficientsImpl() const
+	{
+		return Operation::template CoefficientsResult<CoefficientScalar, FactorOnLeft_>(m_Nested.coefficients(),
+		                                                                                 m_Factor);
+	}
+	[[nodiscard]] auto leftVectorsImpl() const { return m_Nested.leftVectors().template cast<Scalar>(); }
+	[[nodiscard]] auto rightVectorsImpl() const { return m_Nested.rightVectors().template cast<Scalar>(); }
+	[[nodiscard]] CoefficientScalar coefficientOfTermImpl(const Eigen::Index index) const
+	{
+		return Operation::template CoefficientResult<CoefficientScalar, FactorOnLeft_>(
+		        m_Nested.coefficientOfTerm(index), m_Factor);
+	}
+	[[nodiscard]] auto leftVectorOfTermImpl(const Eigen::Index index) const
+	{
+		return m_Nested.leftVectorOfTerm(index).template cast<Scalar>();
+	}
+	[[nodiscard]] auto rightVectorOfTermImpl(const Eigen::Index index) const
+	{
+		return m_Nested.rightVectorOfTerm(index).template cast<Scalar>();
+	}
+
+private:
+	Nested m_Nested;
+	Factor m_Factor;
+};
+
+
+namespace Hoppy::Detail
+{
+	template <typename Nested, typename Factor, typename Operation, bool FactorOnLeft>
+	struct UnaryExpressionTraits<LowRankScalarExpr<Nested, Factor, Operation, FactorOnLeft>>
+	    : UnaryOperationsForStructure<typename LowRankScalarExpr<Nested, Factor, Operation, FactorOnLeft>::StructurePolicy>
+	{
+	};
+}
+
+
+namespace Hoppy::Detail
+{
 	template <typename Matrix>
 	using UnaryNested = std::conditional_t<std::is_lvalue_reference_v<Matrix>, Matrix, std::decay_t<Matrix>>;
 
@@ -1054,5 +1326,21 @@ namespace Hoppy::Detail
 		using CleanMatrix = std::remove_cv_t<std::remove_reference_t<Matrix>>;
 		using Operation = typename UnaryExpressionTraits<CleanMatrix>::AdjointOperation;
 		return LowRankUnaryExpr<UnaryNested<Matrix&&>, Operation>{std::forward<Matrix>(matrix)};
+	}
+
+	template <bool FactorOnLeft, typename Matrix, typename Factor>
+	[[nodiscard]] auto MakeProduct(Matrix&& matrix, Factor&& factor)
+	{
+		using StoredFactor = std::decay_t<Factor>;
+		return LowRankScalarExpr<UnaryNested<Matrix&&>, StoredFactor, MultiplyLowRankOperation, FactorOnLeft>{
+		        std::forward<Matrix>(matrix), std::forward<Factor>(factor)};
+	}
+
+	template <typename Matrix, typename Factor>
+	[[nodiscard]] auto MakeQuotient(Matrix&& matrix, Factor&& factor)
+	{
+		using StoredFactor = std::decay_t<Factor>;
+		return LowRankScalarExpr<UnaryNested<Matrix&&>, StoredFactor, DivideLowRankOperation, false>{
+		        std::forward<Matrix>(matrix), std::forward<Factor>(factor)};
 	}
 }
