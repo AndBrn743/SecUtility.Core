@@ -112,6 +112,28 @@ TEST_CASE("Low-rank reserve follows Eigen assertion contracts", "[Hoppy][LowRank
 }
 
 
+TEST_CASE("Low-rank arithmetic validates dimensions before mutation", "[Hoppy][LowRankMatrix][assert]")
+{
+	DynamicMatrix left(2, 3);
+	DynamicMatrix right(3, 3);
+	left.addTerm(2, Eigen::Vector2d::Ones(), Eigen::Vector3d::Ones());
+	right.addTerm(3, Eigen::Vector3d::Ones(), Eigen::Vector3d::Ones());
+	const Eigen::MatrixXd oldDense = left.toDense();
+
+	CHECK_THROWS_AS(left += right, Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(left -= right, Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(left + right, Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(left - right, Hoppy::Test::EigenAssertionFailure);
+	CHECK(left.toDense() == oldDense);
+
+	DynamicSelfAdjoint structuredLeft(2);
+	DynamicSelfAdjoint structuredRight(3);
+	CHECK_THROWS_AS(structuredLeft += structuredRight, Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(structuredLeft -= structuredRight, Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(structuredLeft + structuredRight, Hoppy::Test::EigenAssertionFailure);
+}
+
+
 TEST_CASE("Self-adjoint low-rank insertion assertions precede mutation", "[Hoppy][LowRankMatrix][assert]")
 {
 	DynamicSelfAdjoint matrix(3);

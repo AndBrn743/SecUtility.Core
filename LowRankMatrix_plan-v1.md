@@ -40,7 +40,7 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 3 | Eigen products, dense inspection, and numerical queries | Complete |
 | 4.1 | Transpose, conjugate, and adjoint expressions | Complete |
 | 4.2 | Scalar multiplication and division expressions | Complete |
-| 5 | Low-rank arithmetic and controlled mutation | Not started |
+| 5 | Low-rank arithmetic and controlled mutation | Complete |
 | 6 | Lazy dense/low-rank sums and Eigen iterative-solver integration | Not started |
 | 7 | Optional C++20 SecUtility.Core adapters | Not started |
 | 8 | Validation, documentation, licensing, and stabilization | Not started |

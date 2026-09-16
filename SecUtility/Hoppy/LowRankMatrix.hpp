@@ -49,6 +49,9 @@ namespace Hoppy
 		struct IsScalarQuotientCompatible;
 
 		template <typename Matrix>
+		struct IsLowRankExpression;
+
+		template <typename Matrix>
 		[[nodiscard]] auto MakeTranspose(Matrix&& matrix);
 
 		template <typename Matrix>
@@ -62,6 +65,9 @@ namespace Hoppy
 
 		template <typename Matrix, typename Factor>
 		[[nodiscard]] auto MakeQuotient(Matrix&& matrix, Factor&& factor);
+
+		template <bool Subtract, typename Left, typename Right>
+		[[nodiscard]] auto AddLowRank(const Left& left, const Right& right);
 	}
 
 	template <typename Derived>
@@ -323,6 +329,24 @@ public:
 	friend auto operator*(Factor&& factor, LowRankMatrixBase&& matrix)
 	{
 		return Detail::MakeProduct<true>(std::move(matrix.asDerived()), std::forward<Factor>(factor));
+	}
+
+	template <typename Other,
+	          std::enable_if_t<Detail::IsLowRankExpression<std::decay_t<Other>>::value
+	                                   && std::is_same_v<Scalar, typename std::decay_t<Other>::Scalar>,
+	                           int> = 0>
+	[[nodiscard]] auto operator+(const Other& other) const
+	{
+		return Detail::AddLowRank<false>(asDerived(), other);
+	}
+
+	template <typename Other,
+	          std::enable_if_t<Detail::IsLowRankExpression<std::decay_t<Other>>::value
+	                                   && std::is_same_v<Scalar, typename std::decay_t<Other>::Scalar>,
+	                           int> = 0>
+	[[nodiscard]] auto operator-(const Other& other) const
+	{
+		return Detail::AddLowRank<true>(asDerived(), other);
 	}
 
 	[[nodiscard]] Eigen::Matrix<Scalar, RowsAtCompileTime, ColsAtCompileTime> toDense() const
@@ -741,6 +765,33 @@ public:
 		m_RightVectorBuffer.clear();
 	}
 
+	LowRankMatrix& operator+=(const LowRankMatrix& other)
+	{
+		eigen_assert(rows() == other.rows() && cols() == other.cols()
+		             && "Low-rank matrix dimensions do not agree");
+		if (this == &other)
+		{
+			for (Scalar& coefficient : m_Coefficients)
+			{
+				coefficient *= Scalar{2};
+			}
+			return *this;
+		}
+		return addTerms(other.coefficients(), other.leftVectors(), other.rightVectors());
+	}
+
+	LowRankMatrix& operator-=(const LowRankMatrix& other)
+	{
+		eigen_assert(rows() == other.rows() && cols() == other.cols()
+		             && "Low-rank matrix dimensions do not agree");
+		if (this == &other)
+		{
+			clear();
+			return *this;
+		}
+		return addTerms(-other.coefficients(), other.leftVectors(), other.rightVectors());
+	}
+
 	template <typename LeftDerived, typename RightDerived>
 	LowRankMatrix& addTerm(const Scalar& coefficient,
 	                       const Eigen::MatrixBase<LeftDerived>& leftVector,
@@ -973,6 +1024,31 @@ public:
 		m_VectorBuffer.clear();
 	}
 
+	SingleFactorLowRankMatrix& operator+=(const SingleFactorLowRankMatrix& other)
+	{
+		eigen_assert(rows() == other.rows() && "Structured low-rank matrix dimensions do not agree");
+		if (this == &other)
+		{
+			for (CoefficientScalar& coefficient : m_Coefficients)
+			{
+				coefficient *= CoefficientScalar{2};
+			}
+			return *this;
+		}
+		return addTerms(other.coefficients(), other.leftVectors());
+	}
+
+	SingleFactorLowRankMatrix& operator-=(const SingleFactorLowRankMatrix& other)
+	{
+		eigen_assert(rows() == other.rows() && "Structured low-rank matrix dimensions do not agree");
+		if (this == &other)
+		{
+			clear();
+			return *this;
+		}
+		return addTerms(-other.coefficients(), other.leftVectors());
+	}
+
 	template <typename VectorDerived>
 	SingleFactorLowRankMatrix& addTerm(const CoefficientScalar& coefficient,
 	                                   const Eigen::MatrixBase<VectorDerived>& vector)
@@ -1109,6 +1185,11 @@ private:
 
 namespace Hoppy::Detail
 {
+	template <typename Matrix>
+	struct IsLowRankExpression : std::is_base_of<LowRankMatrixBase<Matrix>, Matrix>
+	{
+	};
+
 	template <typename StructurePolicy>
 	struct UnaryOperationsForStructure
 	{
@@ -1342,5 +1423,70 @@ namespace Hoppy::Detail
 		using StoredFactor = std::decay_t<Factor>;
 		return LowRankScalarExpr<UnaryNested<Matrix&&>, StoredFactor, DivideLowRankOperation, false>{
 		        std::forward<Matrix>(matrix), std::forward<Factor>(factor)};
+	}
+
+	template <int LeftSize, int RightSize>
+	inline constexpr int MergedCompileTimeSize = LeftSize == RightSize   ? LeftSize
+	                                           : LeftSize == Eigen::Dynamic  ? RightSize
+	                                           : RightSize == Eigen::Dynamic ? LeftSize
+	                                                                         : Eigen::Dynamic;
+
+	template <typename Left, typename Right>
+	struct LowRankSumTraits
+	{
+		using Scalar = typename Left::Scalar;
+		using LeftStructure = typename UnaryExpressionTraits<Left>::ResultStructurePolicy;
+		using RightStructure = typename UnaryExpressionTraits<Right>::ResultStructurePolicy;
+		static constexpr bool PreservesStructure =
+		        !std::is_void_v<LeftStructure> && std::is_same_v<LeftStructure, RightStructure>;
+		using StructurePolicy = std::conditional_t<PreservesStructure, LeftStructure, void>;
+		static constexpr int RowsAtCompileTime =
+		        MergedCompileTimeSize<Left::RowsAtCompileTime, Right::RowsAtCompileTime>;
+		static constexpr int ColsAtCompileTime =
+		        MergedCompileTimeSize<Left::ColsAtCompileTime, Right::ColsAtCompileTime>;
+		using Result = std::conditional_t<
+		        PreservesStructure,
+		        SingleFactorLowRankMatrix<Scalar, StructurePolicy, RowsAtCompileTime>,
+		        LowRankMatrix<Scalar, RowsAtCompileTime, ColsAtCompileTime>>;
+	};
+
+	template <bool Subtract, typename Left, typename Right>
+	[[nodiscard]] auto AddLowRank(const Left& left, const Right& right)
+	{
+		eigen_assert(left.rows() == right.rows() && left.cols() == right.cols()
+		             && "Low-rank matrix dimensions do not agree");
+		using Traits = LowRankSumTraits<Left, Right>;
+		using Result = typename Traits::Result;
+
+		if constexpr (Traits::PreservesStructure)
+		{
+			Result result(left.rows());
+			result.reserve(left.termCount() + right.termCount());
+			result.addTerms(left.coefficients(), left.leftVectors());
+			if constexpr (Subtract)
+			{
+				result.addTerms(-right.coefficients(), right.leftVectors());
+			}
+			else
+			{
+				result.addTerms(right.coefficients(), right.leftVectors());
+			}
+			return result;
+		}
+		else
+		{
+			Result result(left.rows(), left.cols());
+			result.reserve(left.termCount() + right.termCount());
+			result.addTerms(left.coefficients(), left.leftVectors(), left.rightVectors());
+			if constexpr (Subtract)
+			{
+				result.addTerms(-right.coefficients(), right.leftVectors(), right.rightVectors());
+			}
+			else
+			{
+				result.addTerms(right.coefficients(), right.leftVectors(), right.rightVectors());
+			}
+			return result;
+		}
 	}
 }
