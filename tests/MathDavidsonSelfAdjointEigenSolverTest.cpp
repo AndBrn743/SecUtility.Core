@@ -163,10 +163,9 @@ TEST_CASE("Davidson option and statistic defaults are stable", "[Math][Davidson]
 	CHECK(statistics.RetainedCorrectionVectorCount == 0);
 	CHECK(statistics.StructuredOperatorUpdateCount == 0);
 
-	const DavidsonIterationDecision<double> decision;
-	CHECK(decision.Action == DavidsonIterationAction::Continue);
-	CHECK(decision.LowRankOperatorUpdate.Factors.size() == 0);
-	CHECK(decision.LowRankOperatorUpdate.Core.size() == 0);
+	const DavidsonSelfAdjointLowRankUpdate<double> lowRankOperatorUpdate;
+	CHECK(lowRankOperatorUpdate.Factors.size() == 0);
+	CHECK(lowRankOperatorUpdate.Core.size() == 0);
 }
 
 
@@ -1232,6 +1231,7 @@ TEST_CASE("A Davidson low-rank operator update exactly tracks changed augmented-
 	DavidsonSelfAdjointEigenSolver<MutableAugmentedHessianOperator> solver;
 	Eigen::Index controllerCallCount = 0;
 	auto controller = [&linearOperator, &controllerCallCount](const DavidsonIterationInfo<double>& info)
+	        -> std::variant<DavidsonIterationAction, DavidsonSelfAdjointLowRankUpdate<double>>
 	{
 		CHECK(info.BasisVectorImages.isApprox(linearOperator.Matrix() * info.BasisVectors, 1e-12));
 		CHECK(info.ReducedMatrix.isApprox(
@@ -1242,11 +1242,9 @@ TEST_CASE("A Davidson low-rank operator update exactly tracks changed augmented-
 		{
 			const double oldScaling = linearOperator.GradientScaling;
 			linearOperator.GradientScaling = 0.4;
-			return DavidsonIterationDecision<double>{
-			        DavidsonIterationAction::ApplyLowRankOperatorUpdate,
-			        AugmentedHessianScalingUpdate(linearOperator, linearOperator.GradientScaling - oldScaling)};
+			return AugmentedHessianScalingUpdate(linearOperator, linearOperator.GradientScaling - oldScaling);
 		}
-		return DavidsonIterationDecision<double>{DavidsonIterationAction::Continue, {}};
+		return DavidsonIterationAction::Continue;
 	};
 	DavidsonEigenSolverOptions<double> options{3};
 
@@ -1275,8 +1273,7 @@ TEST_CASE("Davidson bounds repeated structured operator updates without addition
 		controllerCallCount++;
 		const double scalingChange = 0.1;
 		linearOperator.GradientScaling += scalingChange;
-		return DavidsonIterationDecision<double>{DavidsonIterationAction::ApplyLowRankOperatorUpdate,
-		                                         AugmentedHessianScalingUpdate(linearOperator, scalingChange)};
+		return AugmentedHessianScalingUpdate(linearOperator, scalingChange);
 	};
 	DavidsonEigenSolverOptions<double> options{3};
 	options.MaximumStructuredOperatorUpdateCountPerIteration = 2;
@@ -1374,10 +1371,8 @@ TEST_CASE("A rejected Davidson low-rank update clears potentially stale publishe
 	DavidsonSelfAdjointEigenSolver<MutableAugmentedHessianOperator> solver;
 	auto controller = [](const DavidsonIterationInfo<double>&)
 	{
-		return DavidsonIterationDecision<double>{
-		        DavidsonIterationAction::ApplyLowRankOperatorUpdate,
-		        DavidsonSelfAdjointLowRankUpdate<double>{Eigen::MatrixXd::Ones(2, 1),
-		                                                   Eigen::MatrixXd::Ones(1, 1)}};
+		return DavidsonSelfAdjointLowRankUpdate<double>{Eigen::MatrixXd::Ones(2, 1),
+		                                                   Eigen::MatrixXd::Ones(1, 1)};
 	};
 	CHECK_THROWS_AS(solver.Compute(linearOperator, Eigen::Matrix3d::Identity(),
 	                               DavidsonEigenSolverOptions<double>{3}, DiagonalDavidsonCorrection{}, controller,

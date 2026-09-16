@@ -23,6 +23,7 @@
 #include <limits>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 
 namespace SecUtility::Math
@@ -96,8 +97,7 @@ namespace SecUtility::Math
 	{
 		Continue,
 		StopRequested,
-		Restart,
-		ApplyLowRankOperatorUpdate
+		Restart
 	};
 
 
@@ -107,15 +107,6 @@ namespace SecUtility::Math
 		// Describes delta(A) = Factors * Core * Factors.adjoint().
 		Eigen::MatrixX<Scalar> Factors;
 		Eigen::MatrixX<Scalar> Core;
-	};
-
-
-	template <typename Scalar>
-	struct DavidsonIterationDecision
-	{
-		// LowRankOperatorUpdate is required only for ApplyLowRankOperatorUpdate.
-		DavidsonIterationAction Action = DavidsonIterationAction::Continue;
-		DavidsonSelfAdjointLowRankUpdate<Scalar> LowRankOperatorUpdate;
 	};
 
 
@@ -684,40 +675,28 @@ namespace SecUtility::Math
 						                                                  m_Statistics.RestartCount,
 						                                                  updateCount,
 						                                                  maximumSubspaceDimension};
-						auto controllerResult = std::invoke(iterationController, iterationInfo);
-						using ControllerResult = std::remove_cvref_t<decltype(controllerResult)>;
-						static_assert(std::same_as<ControllerResult, DavidsonIterationAction>
-						                      || std::same_as<ControllerResult, DavidsonIterationDecision<Scalar>>,
-						              "A Davidson iteration controller must return an action or a typed decision");
+						std::variant<DavidsonIterationAction, DavidsonSelfAdjointLowRankUpdate<Scalar>>
+						        controllerResult{std::invoke(iterationController, iterationInfo)};
 
-						const auto decision = [&controllerResult]() -> DavidsonIterationDecision<Scalar>
+						if (const auto* lowRankOperatorUpdatePtr =
+						            std::get_if<DavidsonSelfAdjointLowRankUpdate<Scalar>>(&controllerResult);
+						    lowRankOperatorUpdatePtr != nullptr)
 						{
-							if constexpr (std::same_as<ControllerResult, DavidsonIterationAction>)
-							{
-								return {controllerResult, {}};
-							}
-							else
-							{
-								return std::move(controllerResult);
-							}
-						}();
+							previousEigenvalues = m_Eigenvalues;
+							ClearRitzResults();
+							Detail::Davidson::ApplyLowRankOperatorUpdate(subspace, diagonal, *lowRankOperatorUpdatePtr);
+							m_Statistics.StructuredOperatorUpdateCount++;
+							continue;
+						}
 
-						if (decision.Action == DavidsonIterationAction::StopRequested)
+						const auto action = std::get<DavidsonIterationAction>(controllerResult);
+						if (action == DavidsonIterationAction::StopRequested)
 						{
 							StoreSubspace(std::move(subspace));
 							m_Status = DavidsonEigenSolverStatus::StoppedByController;
 							return m_Status;
 						}
-						if (decision.Action == DavidsonIterationAction::ApplyLowRankOperatorUpdate)
-						{
-							previousEigenvalues = m_Eigenvalues;
-							ClearRitzResults();
-							Detail::Davidson::ApplyLowRankOperatorUpdate(
-							        subspace, diagonal, decision.LowRankOperatorUpdate);
-							m_Statistics.StructuredOperatorUpdateCount++;
-							continue;
-						}
-						if (decision.Action == DavidsonIterationAction::Restart)
+						if (action == DavidsonIterationAction::Restart)
 						{
 							subspace = Detail::Davidson::RestartSubspace(subspace,
 							                                             analysis,
@@ -730,7 +709,7 @@ namespace SecUtility::Math
 							isRestartRequested = true;
 							break;
 						}
-						if (decision.Action != DavidsonIterationAction::Continue)
+						if (action != DavidsonIterationAction::Continue)
 						{
 							throw InvalidArgumentException(
 							        "A Davidson iteration controller returned an invalid action");

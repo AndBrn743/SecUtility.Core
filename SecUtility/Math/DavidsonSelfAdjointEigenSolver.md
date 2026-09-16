@@ -57,9 +57,10 @@ provided. A custom correction callable receives an immutable `DavidsonCorrection
 orthogonalized.
 
 The iteration controller runs after a coherent Rayleigh–Ritz analysis and before convergence, restart, or expansion
-decisions. `DavidsonIterationInfo` references are immutable and valid only for that callback invocation. Controllers
-may return `Continue`, `StopRequested`, or `Restart` directly. A typed `DavidsonIterationDecision` additionally
-supports an exact low-rank operator update.
+decisions. `DavidsonIterationInfo` references are immutable and valid only for that callback invocation. A controller
+may return a `DavidsonIterationAction` or a `DavidsonSelfAdjointLowRankUpdate<Scalar>`. A controller that can produce
+either category declares `std::variant<DavidsonIterationAction, DavidsonSelfAdjointLowRankUpdate<Scalar>>` as its
+return type.
 
 For a self-adjoint change
 
@@ -67,7 +68,7 @@ For a self-adjoint change
 delta(A) = U C U.adjoint()
 ```
 
-return `ApplyLowRankOperatorUpdate` with `Factors = U` and self-adjoint `Core = C`. The solver updates the cached
+return a `DavidsonSelfAdjointLowRankUpdate` with `Factors = U` and self-adjoint `Core = C`. The solver updates the cached
 basis images, projection, and diagonal algebraically, then reruns Rayleigh–Ritz analysis in the same iteration. This
 path performs no operator application. Invalid dimensions, non-finite data, and non-self-adjoint cores are rejected.
 Arbitrary direct mutation or replacement of the reduced matrix is unsupported because it would break consistency
