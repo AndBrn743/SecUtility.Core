@@ -335,6 +335,8 @@ public:
 	          std::enable_if_t<Detail::IsLowRankExpression<std::decay_t<Other>>::value
 	                                   && std::is_same_v<Scalar, typename std::decay_t<Other>::Scalar>,
 	                           int> = 0>
+	/// Eagerly creates an owning low-rank matrix containing both expansions in order.
+	/// A lazy low-rank sum expression may replace this result strategy in a future version.
 	[[nodiscard]] auto operator+(const Other& other) const
 	{
 		return Detail::AddLowRank<false>(asDerived(), other);
@@ -344,6 +346,8 @@ public:
 	          std::enable_if_t<Detail::IsLowRankExpression<std::decay_t<Other>>::value
 	                                   && std::is_same_v<Scalar, typename std::decay_t<Other>::Scalar>,
 	                           int> = 0>
+	/// Eagerly creates an owning low-rank matrix, negating and appending the right expansion.
+	/// A lazy low-rank difference expression may replace this result strategy in a future version.
 	[[nodiscard]] auto operator-(const Other& other) const
 	{
 		return Detail::AddLowRank<true>(asDerived(), other);
