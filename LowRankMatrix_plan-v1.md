@@ -43,7 +43,7 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 5 | Low-rank arithmetic and controlled mutation | Complete |
 | 6 | Lazy dense/low-rank sums and Eigen iterative-solver integration | Complete |
 | 7 | Optional C++20 SecUtility.Core adapters | Complete |
-| 8 | Validation, documentation, licensing, and stabilization | Not started |
+| 8 | Validation, documentation, licensing, and stabilization | Complete |
 
 ## Intended public architecture
 

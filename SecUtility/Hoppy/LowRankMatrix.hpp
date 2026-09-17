@@ -17,6 +17,31 @@
 #include <vector>
 
 
+/// \file
+/// C++17 Eigen-compatible representations of exact ordered low-rank updates.
+///
+/// A general matrix represents `U * diag(c) * V.adjoint()`. Symmetric matrices represent
+/// `U * diag(c) * U.transpose()` (including for complex scalars), while self-adjoint matrices represent
+/// `U * diag(r) * U.adjoint()` with real coefficients. For real scalars the symmetric and self-adjoint aliases are
+/// the same type.
+///
+/// Each nonzero inserted coefficient remains a distinct term in insertion order. Exactly zero coefficients are
+/// ignored. No tolerance-based pruning, cancellation, compression, dependency detection, term removal, bounded
+/// history, or recompression is performed. Those facilities are deferred to a future version.
+///
+/// Owning matrices use O((rows + cols) * termCount) scalar storage (O(rows * termCount) for single-factor
+/// structures). Applying an update to a block with `p` columns costs O((rows + cols) * termCount * p). `toDense()`
+/// materializes the full matrix. Products, transforms, scalar operations, and dense/low-rank sums are the supported
+/// Eigen interoperability boundary; these types deliberately provide neither general coefficient access nor sparse
+/// iterators/compressed storage.
+///
+/// Bulk factor access is read-only. Appending terms invalidates existing views only if a backing buffer reallocates;
+/// `reserve` invalidates them only when it grows capacity, and `clear` invalidates term views and references while
+/// preserving dimensions and capacity. Invalid dimensions, shapes, indices, and capacities are programming errors
+/// checked with `eigen_assert`; violating them when Eigen assertions are disabled is undefined behavior.
+///
+/// This Eigen-extension header is distributed under MPL-2.0, Eigen's primary license. The surrounding
+/// SecUtility.Core headers remain independently licensed as marked in their respective files.
 namespace Hoppy
 {
 	namespace Detail
@@ -1414,6 +1439,8 @@ private:
 		return static_cast<Eigen::Index>(m_Coefficients.size());
 	}
 
+	/// Read-only views into owned storage. Any operation that increases capacity invalidates all existing views.
+	/// `clear` invalidates term views and references but retains the buffers and their capacity.
 	[[nodiscard]] auto coefficientsImpl() const noexcept
 	{
 		return Eigen::Map<const CoefficientVector>{m_Coefficients.data(), termCount()};

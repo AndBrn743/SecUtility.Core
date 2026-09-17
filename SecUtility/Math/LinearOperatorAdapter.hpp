@@ -64,6 +64,9 @@ namespace SecUtility::Math
 	}
 
 
+	/// Adapts an Eigen or Hoppy matrix expression to the Core `rows`, `cols`, and `ApplyOn` protocol.
+	/// Factory-created adapters reference lvalue sources and own rvalue sources. Rvalue Eigen expression trees are
+	/// evaluated into an owning plain matrix so references held by the original tree cannot dangle.
 	template <typename Nested_>
 	class LinearOperatorAdapter
 	{
@@ -92,6 +95,9 @@ namespace SecUtility::Math
 	};
 
 
+	/// Adds the real-valued `Diagonal` operation required by the Core self-adjoint linear-operator protocol.
+	/// Construction asserts that the source is square but deliberately does not inspect every coefficient. Using this
+	/// adapter is therefore an explicit caller assertion that the represented operator is self-adjoint.
 	template <typename Nested_>
 	class SelfAdjointLinearOperatorAdapter : public LinearOperatorAdapter<Nested_>
 	{
