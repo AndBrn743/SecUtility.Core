@@ -42,7 +42,7 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 4.2 | Scalar multiplication and division expressions | Complete |
 | 5 | Low-rank arithmetic and controlled mutation | Complete |
 | 6 | Lazy dense/low-rank sums and Eigen iterative-solver integration | Complete |
-| 7 | Optional C++20 SecUtility.Core adapters | Not started |
+| 7 | Optional C++20 SecUtility.Core adapters | Complete |
 | 8 | Validation, documentation, licensing, and stabilization | Not started |
 
 ## Intended public architecture
@@ -237,7 +237,8 @@ Eigen.
 ## Phase 7 — Optional C++20 SecUtility.Core adapters
 
 Add adapters available only in C++20 mode without changing the C++17 Hoppy implementation or its public contracts.
-A general adapter supplies Core-style dimensions and `ApplyOn`. A self-adjoint adapter additionally supplies a
+A general adapter, shared by dense Eigen and Hoppy matrix expressions, supplies Core-style dimensions and `ApplyOn`.
+A self-adjoint adapter additionally supplies a
 real-valued `Diagonal` and satisfies the existing `SecUtility::Math::SelfAdjointLinearOperator` protocol. Adapt the
 dense-plus-low-rank expression where useful to the later quasi-Newton solver, but do not make Hoppy types derive from
 `LinearOperatorBase` and do not introduce a C++20 dependency into their headers.
