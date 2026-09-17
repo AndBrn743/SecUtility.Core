@@ -112,12 +112,12 @@ namespace Hoppy
 	using LowRankSymmetricMatrixX = LowRankSymmetricMatrix<Scalar, Eigen::Dynamic>;
 
 	template <typename Scalar, int DimensionAtCompileTime>
-	using LowRankSelfAdjointMatrix = Detail::SingleFactorLowRankMatrix<
-	        Scalar,
-	        std::conditional_t<Eigen::NumTraits<Scalar>::IsComplex,
-	                           Detail::SelfAdjointLowRankStructure,
-	                           Detail::SymmetricLowRankStructure>,
-	        DimensionAtCompileTime>;
+	using LowRankSelfAdjointMatrix =
+	        Detail::SingleFactorLowRankMatrix<Scalar,
+	                                          std::conditional_t<Eigen::NumTraits<Scalar>::IsComplex,
+	                                                             Detail::SelfAdjointLowRankStructure,
+	                                                             Detail::SymmetricLowRankStructure>,
+	                                          DimensionAtCompileTime>;
 
 	template <typename Scalar>
 	using LowRankSelfAdjointMatrixX = LowRankSelfAdjointMatrix<Scalar, Eigen::Dynamic>;
@@ -180,8 +180,7 @@ struct Eigen::internal::traits<Hoppy::Detail::LowRankUnaryExpr<Nested_, Operatio
 
 
 template <typename Nested_, typename Factor_, typename Operation_, bool FactorOnLeft_>
-struct Eigen::internal::traits<
-        Hoppy::Detail::LowRankScalarExpr<Nested_, Factor_, Operation_, FactorOnLeft_>>
+struct Eigen::internal::traits<Hoppy::Detail::LowRankScalarExpr<Nested_, Factor_, Operation_, FactorOnLeft_>>
 {
 	using Nested = std::remove_reference_t<Nested_>;
 	using NestedScalar = typename traits<Nested>::Scalar;
@@ -255,11 +254,8 @@ struct Eigen::internal::AssignmentKind<Eigen::DenseShape, Hoppy::DenseLowRankSum
 
 
 template <typename Derived, typename Rhs, int ProductType>
-struct Eigen::internal::generic_product_impl<Hoppy::LowRankMatrixBase<Derived>,
-                                             Rhs,
-                                             Eigen::SparseShape,
-                                             Eigen::DenseShape,
-                                             ProductType>
+struct Eigen::internal::
+        generic_product_impl<Hoppy::LowRankMatrixBase<Derived>, Rhs, Eigen::SparseShape, Eigen::DenseShape, ProductType>
     : generic_product_impl_base<Hoppy::LowRankMatrixBase<Derived>,
                                 Rhs,
                                 generic_product_impl<Hoppy::LowRankMatrixBase<Derived>, Rhs>>
@@ -281,12 +277,7 @@ struct Eigen::internal::generic_product_impl<Hoppy::LowRankMatrixBase<Derived>,
 };
 
 
-template <typename DenseNested,
-          typename LowRankNested,
-          int DenseSign,
-          int LowRankSign,
-          typename Rhs,
-          int ProductType>
+template <typename DenseNested, typename LowRankNested, int DenseSign, int LowRankSign, typename Rhs, int ProductType>
 struct Eigen::internal::generic_product_impl<
         Hoppy::Detail::DenseLowRankSumExpr<DenseNested, LowRankNested, DenseSign, LowRankSign>,
         Rhs,
@@ -309,12 +300,10 @@ struct Eigen::internal::generic_product_impl<
 	        const Rhs& rhs,
 	        const std::common_type_t<typename traits<Expression>::Scalar, typename traits<Rhs>::Scalar>& alpha)
 	{
-		using ProductScalar =
-		        std::common_type_t<typename traits<Expression>::Scalar, typename traits<Rhs>::Scalar>;
+		using ProductScalar = std::common_type_t<typename traits<Expression>::Scalar, typename traits<Rhs>::Scalar>;
 		using Intermediate = Eigen::Matrix<ProductScalar, Eigen::Dynamic, traits<Rhs>::ColsAtCompileTime>;
 
-		destination.noalias() += ProductScalar{DenseSign} * alpha
-		                         * expression.dense().template cast<ProductScalar>()
+		destination.noalias() += ProductScalar{DenseSign} * alpha * expression.dense().template cast<ProductScalar>()
 		                         * rhs.template cast<ProductScalar>();
 		// low-rank does not provide `.cast<OtherScalar>()`
 		const Intermediate projected = expression.lowRank().rightVectors().template cast<ProductScalar>().adjoint()
@@ -342,13 +331,35 @@ public:
 	static constexpr int IsRowMajor = false;
 	static constexpr int Flags = Eigen::internal::traits<Derived>::Flags;
 
-	[[nodiscard]] constexpr Eigen::Index rows() const noexcept { return asDerived().rowsImpl(); }
-	[[nodiscard]] constexpr Eigen::Index cols() const noexcept { return asDerived().colsImpl(); }
-	[[nodiscard]] Eigen::Index termCount() const noexcept { return asDerived().termCountImpl(); }
+	[[nodiscard]] constexpr Eigen::Index rows() const noexcept
+	{
+		return asDerived().rowsImpl();
+	}
 
-	[[nodiscard]] decltype(auto) coefficients() const noexcept { return asDerived().coefficientsImpl(); }
-	[[nodiscard]] decltype(auto) leftVectors() const noexcept { return asDerived().leftVectorsImpl(); }
-	[[nodiscard]] decltype(auto) rightVectors() const noexcept { return asDerived().rightVectorsImpl(); }
+	[[nodiscard]] constexpr Eigen::Index cols() const noexcept
+	{
+		return asDerived().colsImpl();
+	}
+
+	[[nodiscard]] Eigen::Index termCount() const noexcept
+	{
+		return asDerived().termCountImpl();
+	}
+
+	[[nodiscard]] decltype(auto) coefficients() const noexcept
+	{
+		return asDerived().coefficientsImpl();
+	}
+
+	[[nodiscard]] decltype(auto) leftVectors() const noexcept
+	{
+		return asDerived().leftVectorsImpl();
+	}
+
+	[[nodiscard]] decltype(auto) rightVectors() const noexcept
+	{
+		return asDerived().rightVectorsImpl();
+	}
 
 	[[nodiscard]] decltype(auto) coefficientOfTerm(const Eigen::Index index) const
 	{
@@ -385,7 +396,7 @@ public:
 
 	template <typename Factor,
 	          std::enable_if_t<Detail::IsScalarProductCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
-	[[nodiscard]] auto operator*(Factor&& factor) const &
+	[[nodiscard]] auto operator*(Factor&& factor) const&
 	{
 		return Detail::MakeProduct<false>(asDerived(), std::forward<Factor>(factor));
 	}
@@ -399,7 +410,7 @@ public:
 
 	template <typename Factor,
 	          std::enable_if_t<Detail::IsScalarProductCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
-	[[nodiscard]] auto operator*(Factor&& factor) const &&
+	[[nodiscard]] auto operator*(Factor&& factor) const&&
 	{
 		return Detail::MakeProduct<false>(Derived{asDerived()}, std::forward<Factor>(factor));
 	}
@@ -407,7 +418,7 @@ public:
 	template <typename Factor,
 	          std::enable_if_t<Detail::IsScalarQuotientCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
 	/// Division deliberately follows the underlying scalar's division-by-zero behavior.
-	[[nodiscard]] auto operator/(Factor&& factor) const &
+	[[nodiscard]] auto operator/(Factor&& factor) const&
 	{
 		return Detail::MakeQuotient(asDerived(), std::forward<Factor>(factor));
 	}
@@ -421,7 +432,7 @@ public:
 
 	template <typename Factor,
 	          std::enable_if_t<Detail::IsScalarQuotientCompatible<Scalar, std::decay_t<Factor>>::value, int> = 0>
-	[[nodiscard]] auto operator/(Factor&& factor) const &&
+	[[nodiscard]] auto operator/(Factor&& factor) const&&
 	{
 		return Detail::MakeQuotient(Derived{asDerived()}, std::forward<Factor>(factor));
 	}
@@ -462,57 +473,49 @@ public:
 		return Detail::AddLowRank<true>(asDerived(), other);
 	}
 
-	template <typename Dense,
-	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
-	[[nodiscard]] auto operator+(Dense&& dense) const &
+	template <typename Dense, std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	[[nodiscard]] auto operator+(Dense&& dense) const&
 	{
 		return Detail::MakeDenseLowRankSum<1, 1>(std::forward<Dense>(dense), asDerived());
 	}
 
-	template <typename Dense,
-	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	template <typename Dense, std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
 	[[nodiscard]] auto operator+(Dense&& dense) &&
 	{
 		return Detail::MakeDenseLowRankSum<1, 1>(std::forward<Dense>(dense), std::move(asDerived()));
 	}
 
-	template <typename Dense,
-	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
-	[[nodiscard]] auto operator-(Dense&& dense) const &
+	template <typename Dense, std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	[[nodiscard]] auto operator-(Dense&& dense) const&
 	{
 		return Detail::MakeDenseLowRankSum<-1, 1>(std::forward<Dense>(dense), asDerived());
 	}
 
-	template <typename Dense,
-	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	template <typename Dense, std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
 	[[nodiscard]] auto operator-(Dense&& dense) &&
 	{
 		return Detail::MakeDenseLowRankSum<-1, 1>(std::forward<Dense>(dense), std::move(asDerived()));
 	}
 
-	template <typename Dense,
-	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	template <typename Dense, std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
 	friend auto operator+(Dense&& dense, const LowRankMatrixBase& lowRank)
 	{
 		return Detail::MakeDenseLowRankSum<1, 1>(std::forward<Dense>(dense), lowRank.asDerived());
 	}
 
-	template <typename Dense,
-	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	template <typename Dense, std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
 	friend auto operator+(Dense&& dense, LowRankMatrixBase&& lowRank)
 	{
 		return Detail::MakeDenseLowRankSum<1, 1>(std::forward<Dense>(dense), std::move(lowRank.asDerived()));
 	}
 
-	template <typename Dense,
-	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	template <typename Dense, std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
 	friend auto operator-(Dense&& dense, const LowRankMatrixBase& lowRank)
 	{
 		return Detail::MakeDenseLowRankSum<1, -1>(std::forward<Dense>(dense), lowRank.asDerived());
 	}
 
-	template <typename Dense,
-	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	template <typename Dense, std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
 	friend auto operator-(Dense&& dense, LowRankMatrixBase&& lowRank)
 	{
 		return Detail::MakeDenseLowRankSum<1, -1>(std::forward<Dense>(dense), std::move(lowRank.asDerived()));
@@ -546,16 +549,15 @@ public:
 		{
 			return Eigen::Matrix<Scalar, RowsAtCompileTime, 1>::Zero(rows());
 		}
-		return leftVectors() * (coefficients().template cast<Scalar>().asDiagonal()
-		       * rightVectors().row(index).conjugate().transpose());
+		return leftVectors()
+		       * (coefficients().template cast<Scalar>().asDiagonal()
+		          * rightVectors().row(index).conjugate().transpose());
 	}
 
-	[[nodiscard]] Eigen::Vector<Scalar,
-	                            Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime)>
+	[[nodiscard]] Eigen::Vector<Scalar, Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime)>
 	diagonal() const
 	{
-		constexpr int DiagonalSize =
-		        Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime);
+		constexpr int DiagonalSize = Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime);
 		using DiagonalVector = Eigen::Vector<Scalar, DiagonalSize>;
 		const Eigen::Index size = (std::min)(rows(), cols());
 		if (termCount() == 0)
@@ -582,19 +584,55 @@ public:
 		return (std::max)(RealScalar{0}, result);
 	}
 
-	[[nodiscard]] RealScalar norm() const { return std::sqrt(squaredNorm()); }
+	[[nodiscard]] RealScalar norm() const
+	{
+		return std::sqrt(squaredNorm());
+	}
 
-	[[nodiscard]] auto transpose() const & { return Detail::MakeTranspose(asDerived()); }
-	[[nodiscard]] auto transpose() && { return Detail::MakeTranspose(std::move(asDerived())); }
-	[[nodiscard]] auto transpose() const && { return Detail::MakeTranspose(Derived{asDerived()}); }
+	[[nodiscard]] auto transpose() const&
+	{
+		return Detail::MakeTranspose(asDerived());
+	}
 
-	[[nodiscard]] auto conjugate() const & { return Detail::MakeConjugate(asDerived()); }
-	[[nodiscard]] auto conjugate() && { return Detail::MakeConjugate(std::move(asDerived())); }
-	[[nodiscard]] auto conjugate() const && { return Detail::MakeConjugate(Derived{asDerived()}); }
+	[[nodiscard]] auto transpose() &&
+	{
+		return Detail::MakeTranspose(std::move(asDerived()));
+	}
 
-	[[nodiscard]] auto adjoint() const & { return Detail::MakeAdjoint(asDerived()); }
-	[[nodiscard]] auto adjoint() && { return Detail::MakeAdjoint(std::move(asDerived())); }
-	[[nodiscard]] auto adjoint() const && { return Detail::MakeAdjoint(Derived{asDerived()}); }
+	[[nodiscard]] auto transpose() const&&
+	{
+		return Detail::MakeTranspose(Derived{asDerived()});
+	}
+
+	[[nodiscard]] auto conjugate() const&
+	{
+		return Detail::MakeConjugate(asDerived());
+	}
+
+	[[nodiscard]] auto conjugate() &&
+	{
+		return Detail::MakeConjugate(std::move(asDerived()));
+	}
+
+	[[nodiscard]] auto conjugate() const&&
+	{
+		return Detail::MakeConjugate(Derived{asDerived()});
+	}
+
+	[[nodiscard]] auto adjoint() const&
+	{
+		return Detail::MakeAdjoint(asDerived());
+	}
+
+	[[nodiscard]] auto adjoint() &&
+	{
+		return Detail::MakeAdjoint(std::move(asDerived()));
+	}
+
+	[[nodiscard]] auto adjoint() const&&
+	{
+		return Detail::MakeAdjoint(Derived{asDerived()});
+	}
 
 protected:
 	constexpr LowRankMatrixBase() noexcept = default;
@@ -605,8 +643,15 @@ protected:
 	~LowRankMatrixBase() = default;
 
 private:
-	[[nodiscard]] constexpr const Derived& asDerived() const noexcept { return static_cast<const Derived&>(*this); }
-	[[nodiscard]] constexpr Derived& asDerived() noexcept { return static_cast<Derived&>(*this); }
+	[[nodiscard]] constexpr const Derived& asDerived() const noexcept
+	{
+		return static_cast<const Derived&>(*this);
+	}
+
+	[[nodiscard]] constexpr Derived& asDerived() noexcept
+	{
+		return static_cast<Derived&>(*this);
+	}
 };
 
 
@@ -617,21 +662,35 @@ namespace Hoppy::Detail
 		static constexpr bool SwapsDimensions = false;
 
 		template <typename Matrix>
-		[[nodiscard]] static decltype(auto) Coefficients(const Matrix& matrix) { return matrix.coefficients(); }
+		[[nodiscard]] static decltype(auto) Coefficients(const Matrix& matrix)
+		{
+			return matrix.coefficients();
+		}
+
 		template <typename Matrix>
-		[[nodiscard]] static decltype(auto) LeftVectors(const Matrix& matrix) { return matrix.leftVectors(); }
+		[[nodiscard]] static decltype(auto) LeftVectors(const Matrix& matrix)
+		{
+			return matrix.leftVectors();
+		}
+
 		template <typename Matrix>
-		[[nodiscard]] static decltype(auto) RightVectors(const Matrix& matrix) { return matrix.rightVectors(); }
+		[[nodiscard]] static decltype(auto) RightVectors(const Matrix& matrix)
+		{
+			return matrix.rightVectors();
+		}
+
 		template <typename Matrix>
 		[[nodiscard]] static decltype(auto) CoefficientOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
 			return matrix.coefficientOfTerm(index);
 		}
+
 		template <typename Matrix>
 		[[nodiscard]] static decltype(auto) LeftVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
 			return matrix.leftVectorOfTerm(index);
 		}
+
 		template <typename Matrix>
 		[[nodiscard]] static decltype(auto) RightVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
@@ -644,21 +703,35 @@ namespace Hoppy::Detail
 		static constexpr bool SwapsDimensions = true;
 
 		template <typename Matrix>
-		[[nodiscard]] static decltype(auto) Coefficients(const Matrix& matrix) { return matrix.coefficients(); }
+		[[nodiscard]] static decltype(auto) Coefficients(const Matrix& matrix)
+		{
+			return matrix.coefficients();
+		}
+
 		template <typename Matrix>
-		[[nodiscard]] static auto LeftVectors(const Matrix& matrix) { return matrix.rightVectors().conjugate(); }
+		[[nodiscard]] static auto LeftVectors(const Matrix& matrix)
+		{
+			return matrix.rightVectors().conjugate();
+		}
+
 		template <typename Matrix>
-		[[nodiscard]] static auto RightVectors(const Matrix& matrix) { return matrix.leftVectors().conjugate(); }
+		[[nodiscard]] static auto RightVectors(const Matrix& matrix)
+		{
+			return matrix.leftVectors().conjugate();
+		}
+
 		template <typename Matrix>
 		[[nodiscard]] static decltype(auto) CoefficientOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
 			return matrix.coefficientOfTerm(index);
 		}
+
 		template <typename Matrix>
 		[[nodiscard]] static auto LeftVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
 			return matrix.rightVectorOfTerm(index).conjugate();
 		}
+
 		template <typename Matrix>
 		[[nodiscard]] static auto RightVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
@@ -671,21 +744,35 @@ namespace Hoppy::Detail
 		static constexpr bool SwapsDimensions = false;
 
 		template <typename Matrix>
-		[[nodiscard]] static auto Coefficients(const Matrix& matrix) { return matrix.coefficients().conjugate(); }
+		[[nodiscard]] static auto Coefficients(const Matrix& matrix)
+		{
+			return matrix.coefficients().conjugate();
+		}
+
 		template <typename Matrix>
-		[[nodiscard]] static auto LeftVectors(const Matrix& matrix) { return matrix.leftVectors().conjugate(); }
+		[[nodiscard]] static auto LeftVectors(const Matrix& matrix)
+		{
+			return matrix.leftVectors().conjugate();
+		}
+
 		template <typename Matrix>
-		[[nodiscard]] static auto RightVectors(const Matrix& matrix) { return matrix.rightVectors().conjugate(); }
+		[[nodiscard]] static auto RightVectors(const Matrix& matrix)
+		{
+			return matrix.rightVectors().conjugate();
+		}
+
 		template <typename Matrix>
 		[[nodiscard]] static auto CoefficientOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
 			return Eigen::numext::conj(matrix.coefficientOfTerm(index));
 		}
+
 		template <typename Matrix>
 		[[nodiscard]] static auto LeftVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
 			return matrix.leftVectorOfTerm(index).conjugate();
 		}
+
 		template <typename Matrix>
 		[[nodiscard]] static auto RightVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
@@ -698,21 +785,35 @@ namespace Hoppy::Detail
 		static constexpr bool SwapsDimensions = true;
 
 		template <typename Matrix>
-		[[nodiscard]] static auto Coefficients(const Matrix& matrix) { return matrix.coefficients().conjugate(); }
+		[[nodiscard]] static auto Coefficients(const Matrix& matrix)
+		{
+			return matrix.coefficients().conjugate();
+		}
+
 		template <typename Matrix>
-		[[nodiscard]] static decltype(auto) LeftVectors(const Matrix& matrix) { return matrix.rightVectors(); }
+		[[nodiscard]] static decltype(auto) LeftVectors(const Matrix& matrix)
+		{
+			return matrix.rightVectors();
+		}
+
 		template <typename Matrix>
-		[[nodiscard]] static decltype(auto) RightVectors(const Matrix& matrix) { return matrix.leftVectors(); }
+		[[nodiscard]] static decltype(auto) RightVectors(const Matrix& matrix)
+		{
+			return matrix.leftVectors();
+		}
+
 		template <typename Matrix>
 		[[nodiscard]] static auto CoefficientOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
 			return Eigen::numext::conj(matrix.coefficientOfTerm(index));
 		}
+
 		template <typename Matrix>
 		[[nodiscard]] static decltype(auto) LeftVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
 			return matrix.rightVectorOfTerm(index);
 		}
+
 		template <typename Matrix>
 		[[nodiscard]] static decltype(auto) RightVectorOfTerm(const Matrix& matrix, const Eigen::Index index)
 		{
@@ -722,35 +823,35 @@ namespace Hoppy::Detail
 
 	template <typename LeftScalar, typename RightScalar>
 	struct IsScalarProductCompatible
-	    : Eigen::internal::has_ReturnType<Eigen::ScalarBinaryOpTraits<
-	              LeftScalar,
-	              RightScalar,
-	              Eigen::internal::scalar_product_op<LeftScalar, RightScalar>>>
+	    : Eigen::internal::has_ReturnType<
+	              Eigen::ScalarBinaryOpTraits<LeftScalar,
+	                                          RightScalar,
+	                                          Eigen::internal::scalar_product_op<LeftScalar, RightScalar>>>
 	{
 	};
 
 	template <typename LeftScalar, typename RightScalar>
 	struct IsScalarQuotientCompatible
-	    : Eigen::internal::has_ReturnType<Eigen::ScalarBinaryOpTraits<
-	              LeftScalar,
-	              RightScalar,
-	              Eigen::internal::scalar_quotient_op<LeftScalar, RightScalar>>>
+	    : Eigen::internal::has_ReturnType<
+	              Eigen::ScalarBinaryOpTraits<LeftScalar,
+	                                          RightScalar,
+	                                          Eigen::internal::scalar_quotient_op<LeftScalar, RightScalar>>>
 	{
 	};
 
 	struct MultiplyLowRankOperation
 	{
 		template <typename MatrixScalar, typename Factor, bool FactorOnLeft>
-		using ResultScalar = std::conditional_t<
-		        FactorOnLeft,
-		        typename Eigen::ScalarBinaryOpTraits<
-		                Factor,
-		                MatrixScalar,
-		                Eigen::internal::scalar_product_op<Factor, MatrixScalar>>::ReturnType,
-		        typename Eigen::ScalarBinaryOpTraits<
-		                MatrixScalar,
-		                Factor,
-		                Eigen::internal::scalar_product_op<MatrixScalar, Factor>>::ReturnType>;
+		using ResultScalar =
+		        std::conditional_t<FactorOnLeft,
+		                           typename Eigen::ScalarBinaryOpTraits<
+		                                   Factor,
+		                                   MatrixScalar,
+		                                   Eigen::internal::scalar_product_op<Factor, MatrixScalar>>::ReturnType,
+		                           typename Eigen::ScalarBinaryOpTraits<
+		                                   MatrixScalar,
+		                                   Factor,
+		                                   Eigen::internal::scalar_product_op<MatrixScalar, Factor>>::ReturnType>;
 
 		template <typename Result, bool IsFactorOnLeft, typename Coefficients, typename Factor>
 		[[nodiscard]] static auto CoefficientsResult(const Coefficients& coefficients, const Factor& factor)
@@ -850,8 +951,7 @@ namespace Hoppy::Detail
 
 
 template <typename Scalar_, int RowsAtCompileTime_, int ColsAtCompileTime_>
-class Hoppy::LowRankMatrix
-    : public LowRankMatrixBase<LowRankMatrix<Scalar_, RowsAtCompileTime_, ColsAtCompileTime_>>
+class Hoppy::LowRankMatrix : public LowRankMatrixBase<LowRankMatrix<Scalar_, RowsAtCompileTime_, ColsAtCompileTime_>>
 {
 	static_assert(RowsAtCompileTime_ == Eigen::Dynamic || RowsAtCompileTime_ >= 0);
 	static_assert(ColsAtCompileTime_ == Eigen::Dynamic || ColsAtCompileTime_ >= 0);
@@ -891,8 +991,7 @@ public:
 		eigen_assert(rows >= 0 && cols >= 0);
 	}
 
-	template <typename OtherDerived,
-	          std::enable_if_t<std::is_same_v<Scalar, typename OtherDerived::Scalar>, int> = 0>
+	template <typename OtherDerived, std::enable_if_t<std::is_same_v<Scalar, typename OtherDerived::Scalar>, int> = 0>
 	explicit LowRankMatrix(const LowRankMatrixBase<OtherDerived>& other) : LowRankMatrix(other.rows(), other.cols())
 	{
 		addTerms(other.coefficients(), other.leftVectors(), other.rightVectors());
@@ -916,7 +1015,10 @@ public:
 		addTerms(coefficients, leftVectors, rightVectors);
 	}
 
-	[[nodiscard]] std::size_t capacity() const noexcept { return m_Coefficients.capacity(); }
+	[[nodiscard]] std::size_t capacity() const noexcept
+	{
+		return m_Coefficients.capacity();
+	}
 
 	void reserve(const Eigen::Index termCapacity)
 	{
@@ -936,8 +1038,7 @@ public:
 
 	LowRankMatrix& operator+=(const LowRankMatrix& other)
 	{
-		eigen_assert(rows() == other.rows() && cols() == other.cols()
-		             && "Low-rank matrix dimensions do not agree");
+		eigen_assert(rows() == other.rows() && cols() == other.cols() && "Low-rank matrix dimensions do not agree");
 		if (this == &other)
 		{
 			for (Scalar& coefficient : m_Coefficients)
@@ -951,8 +1052,7 @@ public:
 
 	LowRankMatrix& operator-=(const LowRankMatrix& other)
 	{
-		eigen_assert(rows() == other.rows() && cols() == other.cols()
-		             && "Low-rank matrix dimensions do not agree");
+		eigen_assert(rows() == other.rows() && cols() == other.cols() && "Low-rank matrix dimensions do not agree");
 		if (this == &other)
 		{
 			clear();
@@ -1020,7 +1120,8 @@ public:
 
 		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
 		reserve(static_cast<Eigen::Index>(finalCount));
-		m_Coefficients.insert(m_Coefficients.end(), filteredCoefficients.data(),
+		m_Coefficients.insert(m_Coefficients.end(),
+		                      filteredCoefficients.data(),
 		                      filteredCoefficients.data() + filteredCoefficients.size());
 		appendBuffer(m_LeftVectorBuffer, filteredLeft.data(), filteredLeft.size());
 		appendBuffer(m_RightVectorBuffer, filteredRight.data(), filteredRight.size());
@@ -1028,8 +1129,16 @@ public:
 	}
 
 private:
-	[[nodiscard]] constexpr Eigen::Index rowsImpl() const noexcept { return m_Rows.value(); }
-	[[nodiscard]] constexpr Eigen::Index colsImpl() const noexcept { return m_Cols.value(); }
+	[[nodiscard]] constexpr Eigen::Index rowsImpl() const noexcept
+	{
+		return m_Rows.value();
+	}
+
+	[[nodiscard]] constexpr Eigen::Index colsImpl() const noexcept
+	{
+		return m_Cols.value();
+	}
+
 	[[nodiscard]] Eigen::Index termCountImpl() const noexcept
 	{
 		return static_cast<Eigen::Index>(m_Coefficients.size());
@@ -1177,7 +1286,10 @@ public:
 		addTerms(coefficients, vectors);
 	}
 
-	[[nodiscard]] std::size_t capacity() const noexcept { return m_Coefficients.capacity(); }
+	[[nodiscard]] std::size_t capacity() const noexcept
+	{
+		return m_Coefficients.capacity();
+	}
 
 	void reserve(const Eigen::Index termCapacity)
 	{
@@ -1274,7 +1386,8 @@ public:
 
 		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
 		reserve(static_cast<Eigen::Index>(finalCount));
-		m_Coefficients.insert(m_Coefficients.end(), filteredCoefficients.data(),
+		m_Coefficients.insert(m_Coefficients.end(),
+		                      filteredCoefficients.data(),
 		                      filteredCoefficients.data() + filteredCoefficients.size());
 		appendBuffer(m_VectorBuffer, filteredVectors.data(), filteredVectors.size());
 		return *this;
@@ -1286,8 +1399,16 @@ public:
 	}
 
 private:
-	[[nodiscard]] constexpr Eigen::Index rowsImpl() const noexcept { return m_Dimension.value(); }
-	[[nodiscard]] constexpr Eigen::Index colsImpl() const noexcept { return m_Dimension.value(); }
+	[[nodiscard]] constexpr Eigen::Index rowsImpl() const noexcept
+	{
+		return m_Dimension.value();
+	}
+
+	[[nodiscard]] constexpr Eigen::Index colsImpl() const noexcept
+	{
+		return m_Dimension.value();
+	}
+
 	[[nodiscard]] Eigen::Index termCountImpl() const noexcept
 	{
 		return static_cast<Eigen::Index>(m_Coefficients.size());
@@ -1403,8 +1524,7 @@ namespace Hoppy::Detail
 
 
 template <typename Nested_, typename Operation_>
-class Hoppy::Detail::LowRankUnaryExpr
-    : public LowRankMatrixBase<LowRankUnaryExpr<Nested_, Operation_>>
+class Hoppy::Detail::LowRankUnaryExpr : public LowRankMatrixBase<LowRankUnaryExpr<Nested_, Operation_>>
 {
 public:
 	using Base = LowRankMatrixBase<LowRankUnaryExpr>;
@@ -1427,29 +1547,51 @@ public:
 	static constexpr int IsRowMajor = false;
 	static constexpr int Flags = 0;
 
-	explicit LowRankUnaryExpr(Nested nested) : m_Nested(std::forward<Nested>(nested)) {}
+	explicit LowRankUnaryExpr(Nested nested) : m_Nested(std::forward<Nested>(nested))
+	{
+	}
 
 private:
 	[[nodiscard]] Eigen::Index rowsImpl() const noexcept
 	{
 		return Operation::SwapsDimensions ? m_Nested.cols() : m_Nested.rows();
 	}
+
 	[[nodiscard]] Eigen::Index colsImpl() const noexcept
 	{
 		return Operation::SwapsDimensions ? m_Nested.rows() : m_Nested.cols();
 	}
-	[[nodiscard]] Eigen::Index termCountImpl() const noexcept { return m_Nested.termCount(); }
-	[[nodiscard]] decltype(auto) coefficientsImpl() const { return Operation::Coefficients(m_Nested); }
-	[[nodiscard]] decltype(auto) leftVectorsImpl() const { return Operation::LeftVectors(m_Nested); }
-	[[nodiscard]] decltype(auto) rightVectorsImpl() const { return Operation::RightVectors(m_Nested); }
+
+	[[nodiscard]] Eigen::Index termCountImpl() const noexcept
+	{
+		return m_Nested.termCount();
+	}
+
+	[[nodiscard]] decltype(auto) coefficientsImpl() const
+	{
+		return Operation::Coefficients(m_Nested);
+	}
+
+	[[nodiscard]] decltype(auto) leftVectorsImpl() const
+	{
+		return Operation::LeftVectors(m_Nested);
+	}
+
+	[[nodiscard]] decltype(auto) rightVectorsImpl() const
+	{
+		return Operation::RightVectors(m_Nested);
+	}
+
 	[[nodiscard]] decltype(auto) coefficientOfTermImpl(const Eigen::Index index) const
 	{
 		return Operation::CoefficientOfTerm(m_Nested, index);
 	}
+
 	[[nodiscard]] decltype(auto) leftVectorOfTermImpl(const Eigen::Index index) const
 	{
 		return Operation::LeftVectorOfTerm(m_Nested, index);
 	}
+
 	[[nodiscard]] decltype(auto) rightVectorOfTermImpl(const Eigen::Index index) const
 	{
 		return Operation::RightVectorOfTerm(m_Nested, index);
@@ -1496,8 +1638,7 @@ public:
 	using NestedMatrix = std::remove_cv_t<std::remove_reference_t<Nested>>;
 	using NestedCoefficientScalar =
 	        std::decay_t<decltype(std::declval<const NestedMatrix&>().coefficientOfTerm(Eigen::Index{}))>;
-	using CoefficientScalar =
-	        typename Operation::template ResultScalar<NestedCoefficientScalar, Factor, FactorOnLeft_>;
+	using CoefficientScalar = typename Operation::template ResultScalar<NestedCoefficientScalar, Factor, FactorOnLeft_>;
 	using NestedStructurePolicy = typename UnaryExpressionTraits<NestedMatrix>::ResultStructurePolicy;
 	using StructurePolicy = typename ScaledResultStructure<NestedStructurePolicy, Factor>::Type;
 
@@ -1514,25 +1655,48 @@ public:
 	}
 
 private:
-	[[nodiscard]] Eigen::Index rowsImpl() const noexcept { return m_Nested.rows(); }
-	[[nodiscard]] Eigen::Index colsImpl() const noexcept { return m_Nested.cols(); }
-	[[nodiscard]] Eigen::Index termCountImpl() const noexcept { return m_Nested.termCount(); }
+	[[nodiscard]] Eigen::Index rowsImpl() const noexcept
+	{
+		return m_Nested.rows();
+	}
+
+	[[nodiscard]] Eigen::Index colsImpl() const noexcept
+	{
+		return m_Nested.cols();
+	}
+
+	[[nodiscard]] Eigen::Index termCountImpl() const noexcept
+	{
+		return m_Nested.termCount();
+	}
+
 	[[nodiscard]] auto coefficientsImpl() const
 	{
 		return Operation::template CoefficientsResult<CoefficientScalar, FactorOnLeft_>(m_Nested.coefficients(),
-		                                                                                 m_Factor);
+		                                                                                m_Factor);
 	}
-	[[nodiscard]] auto leftVectorsImpl() const { return m_Nested.leftVectors().template cast<Scalar>(); }
-	[[nodiscard]] auto rightVectorsImpl() const { return m_Nested.rightVectors().template cast<Scalar>(); }
+
+	[[nodiscard]] auto leftVectorsImpl() const
+	{
+		return m_Nested.leftVectors().template cast<Scalar>();
+	}
+
+	[[nodiscard]] auto rightVectorsImpl() const
+	{
+		return m_Nested.rightVectors().template cast<Scalar>();
+	}
+
 	[[nodiscard]] CoefficientScalar coefficientOfTermImpl(const Eigen::Index index) const
 	{
 		return Operation::template CoefficientResult<CoefficientScalar, FactorOnLeft_>(
 		        m_Nested.coefficientOfTerm(index), m_Factor);
 	}
+
 	[[nodiscard]] auto leftVectorOfTermImpl(const Eigen::Index index) const
 	{
 		return m_Nested.leftVectorOfTerm(index).template cast<Scalar>();
 	}
+
 	[[nodiscard]] auto rightVectorOfTermImpl(const Eigen::Index index) const
 	{
 		return m_Nested.rightVectorOfTerm(index).template cast<Scalar>();
@@ -1574,10 +1738,25 @@ public:
 		             && "Dense and low-rank matrix dimensions do not agree");
 	}
 
-	[[nodiscard]] Eigen::Index rows() const noexcept { return m_Dense.rows(); }
-	[[nodiscard]] Eigen::Index cols() const noexcept { return m_Dense.cols(); }
-	[[nodiscard]] const auto& dense() const noexcept { return m_Dense; }
-	[[nodiscard]] const auto& lowRank() const noexcept { return m_LowRank; }
+	[[nodiscard]] Eigen::Index rows() const noexcept
+	{
+		return m_Dense.rows();
+	}
+
+	[[nodiscard]] Eigen::Index cols() const noexcept
+	{
+		return m_Dense.cols();
+	}
+
+	[[nodiscard]] const auto& dense() const noexcept
+	{
+		return m_Dense;
+	}
+
+	[[nodiscard]] const auto& lowRank() const noexcept
+	{
+		return m_LowRank;
+	}
 
 	template <typename Rhs>
 	[[nodiscard]] auto operator*(const Eigen::MatrixBase<Rhs>& rhs) const
@@ -1625,9 +1804,7 @@ public:
 		return result;
 	}
 
-	[[nodiscard]] Eigen::Vector<
-	        Scalar,
-	        Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime)>
+	[[nodiscard]] Eigen::Vector<Scalar, Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime)>
 	diagonal() const
 	{
 		return Scalar{DenseSign} * m_Dense.diagonal().template cast<Scalar>()
@@ -1685,7 +1862,8 @@ namespace Hoppy::Detail
 {
 	template <typename Nested, typename Factor, typename Operation, bool FactorOnLeft>
 	struct UnaryExpressionTraits<LowRankScalarExpr<Nested, Factor, Operation, FactorOnLeft>>
-	    : UnaryOperationsForStructure<typename LowRankScalarExpr<Nested, Factor, Operation, FactorOnLeft>::StructurePolicy>
+	    : UnaryOperationsForStructure<
+	              typename LowRankScalarExpr<Nested, Factor, Operation, FactorOnLeft>::StructurePolicy>
 	{
 	};
 }
@@ -1737,10 +1915,10 @@ namespace Hoppy::Detail
 	}
 
 	template <int LeftSize, int RightSize>
-	inline constexpr int MergedCompileTimeSize = LeftSize == RightSize   ? LeftSize
-	                                           : LeftSize == Eigen::Dynamic  ? RightSize
-	                                           : RightSize == Eigen::Dynamic ? LeftSize
-	                                                                         : Eigen::Dynamic;
+	inline constexpr int MergedCompileTimeSize = LeftSize == RightSize         ? LeftSize
+	                                             : LeftSize == Eigen::Dynamic  ? RightSize
+	                                             : RightSize == Eigen::Dynamic ? LeftSize
+	                                                                           : Eigen::Dynamic;
 
 	template <typename Left, typename Right>
 	struct LowRankSumTraits
@@ -1755,10 +1933,9 @@ namespace Hoppy::Detail
 		        MergedCompileTimeSize<Left::RowsAtCompileTime, Right::RowsAtCompileTime>;
 		static constexpr int ColsAtCompileTime =
 		        MergedCompileTimeSize<Left::ColsAtCompileTime, Right::ColsAtCompileTime>;
-		using Result = std::conditional_t<
-		        PreservesStructure,
-		        SingleFactorLowRankMatrix<Scalar, StructurePolicy, RowsAtCompileTime>,
-		        LowRankMatrix<Scalar, RowsAtCompileTime, ColsAtCompileTime>>;
+		using Result = std::conditional_t<PreservesStructure,
+		                                  SingleFactorLowRankMatrix<Scalar, StructurePolicy, RowsAtCompileTime>,
+		                                  LowRankMatrix<Scalar, RowsAtCompileTime, ColsAtCompileTime>>;
 	};
 
 	template <bool Subtract, typename Left, typename Right>
