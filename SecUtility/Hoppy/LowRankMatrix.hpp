@@ -1209,11 +1209,14 @@ private:
 	{
 		eigen_assert((vector.rows() == 1 || vector.cols() == 1) && vector.size() == expectedSize
 		             && "A low-rank term vector has the wrong shape or dimension");
+		(void)vector;
+		(void)expectedSize;
 	}
 
 	void validateTermIndex(const Eigen::Index index) const
 	{
 		eigen_assert(index >= 0 && index < termCount() && "Low-rank term index is out of range");
+		(void)index;
 	}
 
 	void appendEvaluatedTerm(const Scalar& coefficient,
@@ -1478,11 +1481,13 @@ private:
 	{
 		eigen_assert((vector.rows() == 1 || vector.cols() == 1) && vector.size() == rows()
 		             && "A low-rank term vector has the wrong shape or dimension");
+		(void)vector;
 	}
 
 	void validateTermIndex(const Eigen::Index index) const
 	{
 		eigen_assert(index >= 0 && index < termCount() && "Low-rank term index is out of range");
+		(void)index;
 	}
 
 	static void appendBuffer(std::vector<Scalar>& destination, const Scalar* const source, const Eigen::Index size)
