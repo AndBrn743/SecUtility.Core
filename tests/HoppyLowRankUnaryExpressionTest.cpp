@@ -45,6 +45,8 @@ static_assert(ConjugateExpression::ColsAtCompileTime == 3);
 static_assert(AdjointExpression::RowsAtCompileTime == 3);
 static_assert(AdjointExpression::ColsAtCompileTime == 2);
 static_assert(std::is_same_v<typename TransposeExpression::StructurePolicy, void>);
+static_assert((Eigen::internal::traits<TransposeExpression>::Flags & Eigen::NestByRefBit) == 0);
+static_assert((TransposeExpression::Flags & Eigen::NestByRefBit) == 0);
 
 
 TEST_CASE("General low-rank unary expressions match dense transformations", "[Hoppy][LowRankMatrix]")

@@ -53,6 +53,8 @@ static_assert(std::is_same_v<typename ComplexSymmetric::StructurePolicy,
                              Hoppy::Detail::SymmetricLowRankStructure>);
 static_assert(std::is_same_v<typename FixedSelfAdjoint::StructurePolicy,
                              Hoppy::Detail::SymmetricLowRankStructure>);
+static_assert((Eigen::internal::traits<ComplexSelfAdjoint>::Flags & Eigen::NestByRefBit) != 0);
+static_assert((ComplexSelfAdjoint::Flags & Eigen::NestByRefBit) != 0);
 static_assert(!std::is_constructible_v<ComplexSelfAdjoint, std::complex<double>, Eigen::VectorXcd>);
 static_assert(!std::is_constructible_v<ComplexSelfAdjoint, Eigen::VectorXcd, Eigen::MatrixXcd>);
 static_assert(!CanAddTerms<ComplexSelfAdjoint, Eigen::VectorXcd, Eigen::MatrixXcd>::value);

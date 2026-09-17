@@ -53,6 +53,8 @@ static_assert(Hoppy::LowRankMatrixBase<FixedMatrix>::ColsAtCompileTime == 3);
 static_assert(std::is_same_v<Eigen::internal::traits<DynamicMatrix>::StorageKind, Hoppy::LowRankStorage>);
 static_assert(Eigen::internal::traits<FixedMatrix>::RowsAtCompileTime == 2);
 static_assert(Eigen::internal::traits<FixedMatrix>::ColsAtCompileTime == 3);
+static_assert((Eigen::internal::traits<DynamicMatrix>::Flags & Eigen::NestByRefBit) != 0);
+static_assert((DynamicMatrix::Flags & Eigen::NestByRefBit) != 0);
 static_assert(!HasMutableCoefficients<DynamicMatrix>::value);
 static_assert(!HasMutableLeftVectors<DynamicMatrix>::value);
 static_assert(std::is_const_v<std::remove_reference_t<decltype(std::declval<DynamicMatrixTerm>().coefficient)>>);

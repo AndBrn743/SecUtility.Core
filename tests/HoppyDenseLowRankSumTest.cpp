@@ -43,6 +43,8 @@ static_assert(FixedSum::ColsAtCompileTime == 2);
 static_assert(std::is_base_of_v<Eigen::EigenBase<FixedSum>, FixedSum>);
 static_assert(!std::is_base_of_v<Hoppy::LowRankMatrixBase<FixedSum>, FixedSum>);
 static_assert(!HasFactors<FixedSum>::value);
+static_assert((Eigen::internal::traits<FixedSum>::Flags & Eigen::NestByRefBit) == 0);
+static_assert((FixedSum::Flags & Eigen::NestByRefBit) == 0);
 
 
 TEST_CASE("Dense and low-rank sums support every sign and operand order", "[Hoppy][LowRankMatrix]")

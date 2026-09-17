@@ -161,7 +161,7 @@ struct Eigen::internal::traits<Hoppy::LowRankMatrix<Scalar_, RowsAtCompileTime_,
 	static constexpr int ColsAtCompileTime = ColsAtCompileTime_;
 	static constexpr int MaxRowsAtCompileTime = RowsAtCompileTime_;
 	static constexpr int MaxColsAtCompileTime = ColsAtCompileTime_;
-	static constexpr int Flags = 0;
+	static constexpr int Flags = Eigen::NestByRefBit;
 };
 
 
@@ -178,7 +178,7 @@ struct Eigen::internal::traits<
 	static constexpr int ColsAtCompileTime = DimensionAtCompileTime_;
 	static constexpr int MaxRowsAtCompileTime = DimensionAtCompileTime_;
 	static constexpr int MaxColsAtCompileTime = DimensionAtCompileTime_;
-	static constexpr int Flags = 0;
+	static constexpr int Flags = Eigen::NestByRefBit;
 };
 
 
@@ -1002,7 +1002,7 @@ public:
 	static constexpr int MaxRowsAtCompileTime = RowsAtCompileTime_;
 	static constexpr int MaxColsAtCompileTime = ColsAtCompileTime_;
 	static constexpr int IsRowMajor = false;
-	static constexpr int Flags = 0;
+	static constexpr int Flags = Eigen::NestByRefBit;
 
 	constexpr LowRankMatrix() noexcept = default;
 	LowRankMatrix(const LowRankMatrix&) = default;
@@ -1270,7 +1270,7 @@ public:
 	static constexpr int MaxRowsAtCompileTime = DimensionAtCompileTime_;
 	static constexpr int MaxColsAtCompileTime = DimensionAtCompileTime_;
 	static constexpr int IsRowMajor = false;
-	static constexpr int Flags = 0;
+	static constexpr int Flags = Eigen::NestByRefBit;
 
 	constexpr SingleFactorLowRankMatrix() noexcept = default;
 	SingleFactorLowRankMatrix(const SingleFactorLowRankMatrix&) = default;
