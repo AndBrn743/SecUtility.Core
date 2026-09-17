@@ -4,6 +4,7 @@
 #pragma once
 
 #include <Eigen/Core>
+#include <Eigen/IterativeLinearSolvers>
 
 #include <algorithm>
 #include <cmath>
@@ -39,6 +40,9 @@ namespace Hoppy
 		template <typename Nested_, typename Factor_, typename Operation_, bool FactorOnLeft_>
 		class LowRankScalarExpr;
 
+		template <typename DenseNested_, typename LowRankNested_, int DenseSign_, int LowRankSign_>
+		class DenseLowRankSumExpr;
+
 		template <typename Matrix>
 		struct UnaryExpressionTraits;
 
@@ -50,6 +54,9 @@ namespace Hoppy
 
 		template <typename Matrix>
 		struct IsLowRankExpression;
+
+		template <typename Matrix>
+		struct IsDenseExpression;
 
 		template <typename Matrix>
 		[[nodiscard]] auto MakeTranspose(Matrix&& matrix);
@@ -68,6 +75,9 @@ namespace Hoppy
 
 		template <bool Subtract, typename Left, typename Right>
 		[[nodiscard]] auto AddLowRank(const Left& left, const Right& right);
+
+		template <int DenseSign, int LowRankSign, typename Dense, typename LowRank>
+		[[nodiscard]] auto MakeDenseLowRankSum(Dense&& dense, LowRank&& lowRank);
 	}
 
 	template <typename Derived>
@@ -80,8 +90,19 @@ namespace Hoppy
 	{
 	};
 
+	struct DenseLowRankSumStorage
+	{
+	};
+
+	struct DenseLowRankSumShape
+	{
+	};
+
 	template <typename Scalar>
 	using LowRankMatrixX = LowRankMatrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+
+	template <typename Scalar>
+	class LowRankDiagonalPreconditioner;
 
 	template <typename Scalar, int DimensionAtCompileTime>
 	using LowRankSymmetricMatrix =
@@ -177,6 +198,34 @@ struct Eigen::internal::traits<
 };
 
 
+template <typename DenseNested_, typename LowRankNested_, int DenseSign_, int LowRankSign_>
+struct Eigen::internal::traits<
+        Hoppy::Detail::DenseLowRankSumExpr<DenseNested_, LowRankNested_, DenseSign_, LowRankSign_>>
+{
+	using DenseNested = std::remove_reference_t<DenseNested_>;
+	using LowRankNested = std::remove_reference_t<LowRankNested_>;
+	using DenseScalar = typename traits<DenseNested>::Scalar;
+	using LowRankScalar = typename traits<LowRankNested>::Scalar;
+	using Scalar = typename Eigen::ScalarBinaryOpTraits<
+	        DenseScalar,
+	        LowRankScalar,
+	        Eigen::internal::scalar_sum_op<DenseScalar, LowRankScalar>>::ReturnType;
+	using StorageKind = Hoppy::DenseLowRankSumStorage;
+	using StorageIndex = Eigen::Index;
+	using XprKind = Eigen::MatrixXpr;
+
+	static constexpr int RowsAtCompileTime = Eigen::internal::min_size_prefer_fixed(
+	        traits<DenseNested>::RowsAtCompileTime, traits<LowRankNested>::RowsAtCompileTime);
+	static constexpr int ColsAtCompileTime = Eigen::internal::min_size_prefer_fixed(
+	        traits<DenseNested>::ColsAtCompileTime, traits<LowRankNested>::ColsAtCompileTime);
+	static constexpr int MaxRowsAtCompileTime = Eigen::internal::min_size_prefer_fixed(
+	        traits<DenseNested>::MaxRowsAtCompileTime, traits<LowRankNested>::MaxRowsAtCompileTime);
+	static constexpr int MaxColsAtCompileTime = Eigen::internal::min_size_prefer_fixed(
+	        traits<DenseNested>::MaxColsAtCompileTime, traits<LowRankNested>::MaxColsAtCompileTime);
+	static constexpr int Flags = 0;
+};
+
+
 template <typename Derived>
 struct Eigen::internal::traits<Hoppy::LowRankMatrixBase<Derived>> : traits<Derived>
 {
@@ -188,6 +237,20 @@ template <>
 struct Eigen::internal::storage_kind_to_shape<Hoppy::LowRankStorage>
 {
 	using Shape = Eigen::SparseShape;
+};
+
+
+template <>
+struct Eigen::internal::storage_kind_to_shape<Hoppy::DenseLowRankSumStorage>
+{
+	using Shape = Hoppy::DenseLowRankSumShape;
+};
+
+
+template <>
+struct Eigen::internal::AssignmentKind<Eigen::DenseShape, Hoppy::DenseLowRankSumShape>
+{
+	using Kind = Eigen::internal::EigenBase2EigenBase;
 };
 
 
@@ -214,6 +277,52 @@ struct Eigen::internal::generic_product_impl<Hoppy::LowRankMatrixBase<Derived>,
 		const Intermediate projected = lowRank.rightVectors().adjoint() * rhs;
 		const Intermediate weighted = lowRank.coefficients().template cast<ProductScalar>().asDiagonal() * projected;
 		destination.noalias() += alpha * lowRank.leftVectors() * weighted;
+	}
+};
+
+
+template <typename DenseNested,
+          typename LowRankNested,
+          int DenseSign,
+          int LowRankSign,
+          typename Rhs,
+          int ProductType>
+struct Eigen::internal::generic_product_impl<
+        Hoppy::Detail::DenseLowRankSumExpr<DenseNested, LowRankNested, DenseSign, LowRankSign>,
+        Rhs,
+        Hoppy::DenseLowRankSumShape,
+        Eigen::DenseShape,
+        ProductType>
+    : generic_product_impl_base<
+              Hoppy::Detail::DenseLowRankSumExpr<DenseNested, LowRankNested, DenseSign, LowRankSign>,
+              Rhs,
+              generic_product_impl<
+                      Hoppy::Detail::DenseLowRankSumExpr<DenseNested, LowRankNested, DenseSign, LowRankSign>,
+                      Rhs>>
+{
+	using Expression = Hoppy::Detail::DenseLowRankSumExpr<DenseNested, LowRankNested, DenseSign, LowRankSign>;
+
+	template <typename Dest>
+	static void scaleAndAddTo(
+	        Dest& destination,
+	        const Expression& expression,
+	        const Rhs& rhs,
+	        const std::common_type_t<typename traits<Expression>::Scalar, typename traits<Rhs>::Scalar>& alpha)
+	{
+		using ProductScalar =
+		        std::common_type_t<typename traits<Expression>::Scalar, typename traits<Rhs>::Scalar>;
+		using Intermediate = Eigen::Matrix<ProductScalar, Eigen::Dynamic, traits<Rhs>::ColsAtCompileTime>;
+
+		destination.noalias() += ProductScalar{DenseSign} * alpha
+		                         * expression.dense().template cast<ProductScalar>()
+		                         * rhs.template cast<ProductScalar>();
+		// low-rank does not provide `.cast<OtherScalar>()`
+		const Intermediate projected = expression.lowRank().rightVectors().template cast<ProductScalar>().adjoint()
+		                               * rhs.template cast<ProductScalar>();
+		const Intermediate weighted =
+		        expression.lowRank().coefficients().template cast<ProductScalar>().asDiagonal() * projected;
+		destination.noalias() += ProductScalar{LowRankSign} * alpha
+		                         * expression.lowRank().leftVectors().template cast<ProductScalar>() * weighted;
 	}
 };
 
@@ -351,6 +460,62 @@ public:
 	[[nodiscard]] auto operator-(const Other& other) const
 	{
 		return Detail::AddLowRank<true>(asDerived(), other);
+	}
+
+	template <typename Dense,
+	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	[[nodiscard]] auto operator+(Dense&& dense) const &
+	{
+		return Detail::MakeDenseLowRankSum<1, 1>(std::forward<Dense>(dense), asDerived());
+	}
+
+	template <typename Dense,
+	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	[[nodiscard]] auto operator+(Dense&& dense) &&
+	{
+		return Detail::MakeDenseLowRankSum<1, 1>(std::forward<Dense>(dense), std::move(asDerived()));
+	}
+
+	template <typename Dense,
+	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	[[nodiscard]] auto operator-(Dense&& dense) const &
+	{
+		return Detail::MakeDenseLowRankSum<-1, 1>(std::forward<Dense>(dense), asDerived());
+	}
+
+	template <typename Dense,
+	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	[[nodiscard]] auto operator-(Dense&& dense) &&
+	{
+		return Detail::MakeDenseLowRankSum<-1, 1>(std::forward<Dense>(dense), std::move(asDerived()));
+	}
+
+	template <typename Dense,
+	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	friend auto operator+(Dense&& dense, const LowRankMatrixBase& lowRank)
+	{
+		return Detail::MakeDenseLowRankSum<1, 1>(std::forward<Dense>(dense), lowRank.asDerived());
+	}
+
+	template <typename Dense,
+	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	friend auto operator+(Dense&& dense, LowRankMatrixBase&& lowRank)
+	{
+		return Detail::MakeDenseLowRankSum<1, 1>(std::forward<Dense>(dense), std::move(lowRank.asDerived()));
+	}
+
+	template <typename Dense,
+	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	friend auto operator-(Dense&& dense, const LowRankMatrixBase& lowRank)
+	{
+		return Detail::MakeDenseLowRankSum<1, -1>(std::forward<Dense>(dense), lowRank.asDerived());
+	}
+
+	template <typename Dense,
+	          std::enable_if_t<Detail::IsDenseExpression<std::decay_t<Dense>>::value, int> = 0>
+	friend auto operator-(Dense&& dense, LowRankMatrixBase&& lowRank)
+	{
+		return Detail::MakeDenseLowRankSum<1, -1>(std::forward<Dense>(dense), std::move(lowRank.asDerived()));
 	}
 
 	[[nodiscard]] Eigen::Matrix<Scalar, RowsAtCompileTime, ColsAtCompileTime> toDense() const
@@ -1194,6 +1359,11 @@ namespace Hoppy::Detail
 	{
 	};
 
+	template <typename Matrix>
+	struct IsDenseExpression : std::is_base_of<Eigen::MatrixBase<Matrix>, Matrix>
+	{
+	};
+
 	template <typename StructurePolicy>
 	struct UnaryOperationsForStructure
 	{
@@ -1374,6 +1544,143 @@ private:
 };
 
 
+template <typename DenseNested_, typename LowRankNested_, int DenseSign_, int LowRankSign_>
+class Hoppy::Detail::DenseLowRankSumExpr
+    : public Eigen::EigenBase<DenseLowRankSumExpr<DenseNested_, LowRankNested_, DenseSign_, LowRankSign_>>
+{
+	static_assert(DenseSign_ == 1 || DenseSign_ == -1);
+	static_assert(LowRankSign_ == 1 || LowRankSign_ == -1);
+
+public:
+	using DenseNested = DenseNested_;
+	using LowRankNested = LowRankNested_;
+	using Scalar = typename Eigen::internal::traits<DenseLowRankSumExpr>::Scalar;
+	using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+	using StorageIndex = Eigen::Index;
+
+	static constexpr int RowsAtCompileTime = Eigen::internal::traits<DenseLowRankSumExpr>::RowsAtCompileTime;
+	static constexpr int ColsAtCompileTime = Eigen::internal::traits<DenseLowRankSumExpr>::ColsAtCompileTime;
+	static constexpr int MaxRowsAtCompileTime = Eigen::internal::traits<DenseLowRankSumExpr>::MaxRowsAtCompileTime;
+	static constexpr int MaxColsAtCompileTime = Eigen::internal::traits<DenseLowRankSumExpr>::MaxColsAtCompileTime;
+	static constexpr int IsRowMajor = false;
+	static constexpr int Flags = 0;
+	static constexpr int DenseSign = DenseSign_;
+	static constexpr int LowRankSign = LowRankSign_;
+
+	DenseLowRankSumExpr(DenseNested dense, LowRankNested lowRank)
+	    : m_Dense(std::forward<DenseNested>(dense)), m_LowRank(std::forward<LowRankNested>(lowRank))
+	{
+		eigen_assert(m_Dense.rows() == m_LowRank.rows() && m_Dense.cols() == m_LowRank.cols()
+		             && "Dense and low-rank matrix dimensions do not agree");
+	}
+
+	[[nodiscard]] Eigen::Index rows() const noexcept { return m_Dense.rows(); }
+	[[nodiscard]] Eigen::Index cols() const noexcept { return m_Dense.cols(); }
+	[[nodiscard]] const auto& dense() const noexcept { return m_Dense; }
+	[[nodiscard]] const auto& lowRank() const noexcept { return m_LowRank; }
+
+	template <typename Rhs>
+	[[nodiscard]] auto operator*(const Eigen::MatrixBase<Rhs>& rhs) const
+	{
+		return Eigen::Product<DenseLowRankSumExpr, Rhs, Eigen::DefaultProduct>{*this, rhs.derived()};
+	}
+
+	template <typename Destination>
+	void evalTo(Destination& destination) const
+	{
+		using DestinationScalar = typename Destination::Scalar;
+		destination = DestinationScalar{DenseSign} * m_Dense.template cast<DestinationScalar>();
+		destination.noalias() += DestinationScalar{LowRankSign}
+		                         * m_LowRank.leftVectors().template cast<DestinationScalar>()
+		                         * m_LowRank.coefficients().template cast<DestinationScalar>().asDiagonal()
+		                         * m_LowRank.rightVectors().template cast<DestinationScalar>().adjoint();
+	}
+
+	template <typename Destination>
+	void addTo(Destination& destination) const
+	{
+		using DestinationScalar = typename Destination::Scalar;
+		destination += DestinationScalar{DenseSign} * m_Dense.template cast<DestinationScalar>();
+		destination.noalias() += DestinationScalar{LowRankSign}
+		                         * m_LowRank.leftVectors().template cast<DestinationScalar>()
+		                         * m_LowRank.coefficients().template cast<DestinationScalar>().asDiagonal()
+		                         * m_LowRank.rightVectors().template cast<DestinationScalar>().adjoint();
+	}
+
+	template <typename Destination>
+	void subTo(Destination& destination) const
+	{
+		using DestinationScalar = typename Destination::Scalar;
+		destination -= DestinationScalar{DenseSign} * m_Dense.template cast<DestinationScalar>();
+		destination.noalias() -= DestinationScalar{LowRankSign}
+		                         * m_LowRank.leftVectors().template cast<DestinationScalar>()
+		                         * m_LowRank.coefficients().template cast<DestinationScalar>().asDiagonal()
+		                         * m_LowRank.rightVectors().template cast<DestinationScalar>().adjoint();
+	}
+
+	[[nodiscard]] Eigen::Matrix<Scalar, RowsAtCompileTime, ColsAtCompileTime> toDense() const
+	{
+		Eigen::Matrix<Scalar, RowsAtCompileTime, ColsAtCompileTime> result(rows(), cols());
+		evalTo(result);
+		return result;
+	}
+
+	[[nodiscard]] Eigen::Vector<
+	        Scalar,
+	        Eigen::internal::min_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime)>
+	diagonal() const
+	{
+		return Scalar{DenseSign} * m_Dense.diagonal().template cast<Scalar>()
+		       + Scalar{LowRankSign} * m_LowRank.diagonal().template cast<Scalar>();
+	}
+
+private:
+	DenseNested m_Dense;
+	LowRankNested m_LowRank;
+};
+
+
+template <typename Scalar>
+class Hoppy::LowRankDiagonalPreconditioner : public Eigen::DiagonalPreconditioner<Scalar>
+{
+	using Base = Eigen::DiagonalPreconditioner<Scalar>;
+
+public:
+	LowRankDiagonalPreconditioner() = default;
+
+	template <typename Matrix>
+	explicit LowRankDiagonalPreconditioner(const Matrix& matrix)
+	{
+		compute(matrix);
+	}
+
+	template <typename Matrix>
+	LowRankDiagonalPreconditioner& analyzePattern(const Matrix&)
+	{
+		return *this;
+	}
+
+	template <typename Matrix>
+	LowRankDiagonalPreconditioner& factorize(const Matrix& matrix)
+	{
+		return compute(matrix);
+	}
+
+	template <typename Matrix>
+	LowRankDiagonalPreconditioner& compute(const Matrix& matrix)
+	{
+		const Eigen::VectorX<Scalar> diagonal = matrix.diagonal();
+		this->m_invdiag.resize(diagonal.size());
+		for (Eigen::Index index = 0; index < diagonal.size(); index++)
+		{
+			this->m_invdiag[index] = diagonal[index] == Scalar{0} ? Scalar{1} : Scalar{1} / diagonal[index];
+		}
+		this->m_isInitialized = true;
+		return *this;
+	}
+};
+
+
 namespace Hoppy::Detail
 {
 	template <typename Nested, typename Factor, typename Operation, bool FactorOnLeft>
@@ -1492,5 +1799,32 @@ namespace Hoppy::Detail
 			}
 			return result;
 		}
+	}
+
+	template <typename Dense>
+	[[nodiscard]] decltype(auto) NestDenseExpression(Dense&& dense)
+	{
+		using Expression = std::decay_t<Dense>;
+		if constexpr (std::is_lvalue_reference_v<Dense&&>)
+		{
+			return std::forward<Dense>(dense);
+		}
+		else if constexpr (std::is_same_v<Expression, typename Expression::PlainObject>)
+		{
+			return Expression{std::forward<Dense>(dense)};
+		}
+		else
+		{
+			return dense.eval();
+		}
+	}
+
+	template <int DenseSign, int LowRankSign, typename Dense, typename LowRank>
+	[[nodiscard]] auto MakeDenseLowRankSum(Dense&& dense, LowRank&& lowRank)
+	{
+		using NestedDense = decltype(NestDenseExpression(std::forward<Dense>(dense)));
+		using NestedLowRank = UnaryNested<LowRank&&>;
+		return DenseLowRankSumExpr<NestedDense, NestedLowRank, DenseSign, LowRankSign>{
+		        NestDenseExpression(std::forward<Dense>(dense)), std::forward<LowRank>(lowRank)};
 	}
 }

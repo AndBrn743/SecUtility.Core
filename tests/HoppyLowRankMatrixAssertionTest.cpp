@@ -134,6 +134,19 @@ TEST_CASE("Low-rank arithmetic validates dimensions before mutation", "[Hoppy][L
 }
 
 
+TEST_CASE("Dense and low-rank sums validate dimensions", "[Hoppy][LowRankMatrix][assert]")
+{
+	DynamicMatrix correction(2, 3);
+	const Eigen::MatrixXd wrongRows = Eigen::MatrixXd::Zero(3, 3);
+	const Eigen::MatrixXd wrongCols = Eigen::MatrixXd::Zero(2, 4);
+
+	CHECK_THROWS_AS(wrongRows + correction, Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(wrongRows - correction, Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(correction + wrongCols, Hoppy::Test::EigenAssertionFailure);
+	CHECK_THROWS_AS(correction - wrongCols, Hoppy::Test::EigenAssertionFailure);
+}
+
+
 TEST_CASE("Self-adjoint low-rank insertion assertions precede mutation", "[Hoppy][LowRankMatrix][assert]")
 {
 	DynamicSelfAdjoint matrix(3);

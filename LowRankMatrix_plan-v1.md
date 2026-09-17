@@ -41,7 +41,7 @@ agent changes the status to **Awaiting user verification** and stops at the phas
 | 4.1 | Transpose, conjugate, and adjoint expressions | Complete |
 | 4.2 | Scalar multiplication and division expressions | Complete |
 | 5 | Low-rank arithmetic and controlled mutation | Complete |
-| 6 | Lazy dense/low-rank sums and Eigen iterative-solver integration | Not started |
+| 6 | Lazy dense/low-rank sums and Eigen iterative-solver integration | Complete |
 | 7 | Optional C++20 SecUtility.Core adapters | Not started |
 | 8 | Validation, documentation, licensing, and stabilization | Not started |
 
@@ -222,9 +222,11 @@ not dangle when either operand is temporary. Support dense materialization, vect
 scaled product accumulation without first materializing the low-rank operand.
 
 Expose an efficient combined `diagonal()` for dense-plus-low-rank expressions. Make square compatible expressions
-usable by applicable Eigen iterative solvers, including `Eigen::DiagonalPreconditioner`, without falsely advertising
-the operands as ordinary sparse matrices. The initial dense matrix and low-rank correction remain separate values;
-the expression is their non-owning or safely nested algebraic composition.
+usable by applicable Eigen iterative solvers without falsely advertising the operands as ordinary sparse matrices.
+Because Eigen's stock `DiagonalPreconditioner` requires sparse `InnerIterator` access rather than a `diagonal()` API,
+provide an Eigen-compatible Hoppy preconditioner derived from it that initializes through the combined diagonal. The
+initial dense matrix and low-rank correction remain separate values; the expression is their non-owning or safely
+nested algebraic composition.
 
 Tests must cover all four operand orders/signs; fixed/dynamic and complex scalar combinations; rectangular dense
 materialization and products; expression nesting and temporary lifetimes; destination aliasing; combined diagonals;
