@@ -30,6 +30,15 @@ namespace
 	using RealSelfAdjoint = Hoppy::LowRankSelfAdjointMatrixX<double>;
 	using ComplexSelfAdjoint = Hoppy::LowRankSelfAdjointMatrixX<std::complex<double>>;
 
+	template <typename Nested>
+	class ExtendedLinearOperatorAdapter : public SecUtility::Math::LinearOperatorAdapter<Nested>
+	{
+		using Base = SecUtility::Math::LinearOperatorAdapter<Nested>;
+
+	public:
+		explicit ExtendedLinearOperatorAdapter(Nested nested) : Base(std::forward<Nested>(nested)) {}
+	};
+
 	static_assert(std::same_as<RealSymmetric, RealSelfAdjoint>);
 	static_assert(GenerallyAdaptable<General>);
 	static_assert(GenerallyAdaptable<Eigen::MatrixXd>);
@@ -42,9 +51,14 @@ namespace
 	        SecUtility::Math::MakeSelfAdjointLinearOperatorAdapter(std::declval<RealSelfAdjoint&>()));
 	using ComplexAdapter = decltype(
 	        SecUtility::Math::MakeSelfAdjointLinearOperatorAdapter(std::declval<Eigen::MatrixXcd&>()));
+	using DenseAdapter = SecUtility::Math::LinearOperatorAdapter<Eigen::MatrixXd&>;
+	using ExtendedDenseAdapter = ExtendedLinearOperatorAdapter<Eigen::MatrixXd&>;
 	static_assert(SecUtility::Math::SelfAdjointLinearOperator<RealAdapter>);
 	static_assert(SecUtility::Math::SelfAdjointLinearOperator<ComplexAdapter>);
 	static_assert(std::same_as<typename ComplexAdapter::RealScalar, double>);
+	static_assert(!std::constructible_from<DenseAdapter, Eigen::MatrixXd&>);
+	static_assert(!std::constructible_from<RealAdapter, RealSelfAdjoint&>);
+	static_assert(std::constructible_from<ExtendedDenseAdapter, Eigen::MatrixXd&>);
 }
 
 
