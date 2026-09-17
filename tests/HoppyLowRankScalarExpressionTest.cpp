@@ -30,6 +30,8 @@ static_assert(std::is_same_v<typename RightScaled::Scalar, std::complex<double>>
 static_assert(std::is_same_v<typename LeftScaled::Scalar, std::complex<double>>);
 static_assert(std::is_same_v<typename Divided::Scalar, std::complex<double>>);
 static_assert(std::is_same_v<typename RightScaled::StructurePolicy, void>);
+static_assert(std::is_base_of_v<Hoppy::LowRankMatrixBase<RightScaled>, RightScaled>);
+static_assert(std::is_base_of_v<Hoppy::BulkLowRankMatrixBase<RightScaled>, RightScaled>);
 static_assert((Eigen::internal::traits<RightScaled>::Flags & Eigen::NestByRefBit) == 0);
 static_assert((RightScaled::Flags & Eigen::NestByRefBit) == 0);
 

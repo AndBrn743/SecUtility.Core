@@ -43,6 +43,7 @@ using FixedSelfAdjoint = Hoppy::LowRankSelfAdjointMatrix<double, 3>;
 using FixedGeneralFromSelfAdjoint = decltype(std::declval<const FixedSelfAdjoint&>().toGeneral());
 
 static_assert(std::is_base_of_v<Hoppy::LowRankMatrixBase<ComplexSelfAdjoint>, ComplexSelfAdjoint>);
+static_assert(std::is_base_of_v<Hoppy::BulkLowRankMatrixBase<ComplexSelfAdjoint>, ComplexSelfAdjoint>);
 static_assert(std::is_same_v<typename ComplexSelfAdjoint::Scalar, std::complex<double>>);
 static_assert(std::is_same_v<typename ComplexSelfAdjoint::RealScalar, double>);
 static_assert(std::is_same_v<typename ComplexSelfAdjoint::CoefficientVector, Eigen::VectorXd>);
@@ -149,6 +150,22 @@ TEST_CASE("Single-factor low-rank matrices support fixed, dynamic, and rank-zero
 	CHECK(filtered.rows() == 4);
 	CHECK(filtered.cols() == 4);
 	CHECK(filtered.termCount() == 0);
+}
+
+
+TEST_CASE("Bulk-access structured matrices materialize through factor blocks", "[Hoppy][LowRankMatrix]")
+{
+	FixedSelfAdjoint fixed;
+	fixed.addTerm(2.0, Eigen::Vector3d{1.0, -2.0, 0.5});
+	fixed.addTerm(-0.25, Eigen::Vector3d{-1.0, 3.0, 2.0});
+	const Hoppy::LowRankSelfAdjointMatrixX<double> dynamic(fixed);
+
+	CHECK(dynamic.rows() == fixed.rows());
+	CHECK(dynamic.cols() == fixed.cols());
+	CHECK(dynamic.termCount() == fixed.termCount());
+	CHECK(dynamic.coefficients() == fixed.coefficients());
+	CHECK(dynamic.leftVectors() == fixed.leftVectors());
+	CHECK(dynamic.rightVectors() == fixed.rightVectors());
 }
 
 

@@ -35,6 +35,19 @@ namespace
 	                                                  = std::declval<typename Matrix::Scalar>())>> : std::true_type
 	{
 	};
+
+	template <typename Matrix, typename = void>
+	struct HasBulkFactors : std::false_type
+	{
+	};
+
+	template <typename Matrix>
+	struct HasBulkFactors<Matrix,
+	                      std::void_t<decltype(std::declval<const Matrix&>().coefficients()),
+	                                  decltype(std::declval<const Matrix&>().leftVectors()),
+	                                  decltype(std::declval<const Matrix&>().rightVectors())>> : std::true_type
+	{
+	};
 }
 
 
@@ -46,6 +59,9 @@ using DynamicMatrixTerm = decltype(std::declval<const DynamicMatrix&>().term(0))
 
 static_assert(std::is_base_of_v<Eigen::EigenBase<DynamicMatrix>, DynamicMatrix>);
 static_assert(std::is_base_of_v<Hoppy::LowRankMatrixBase<DynamicMatrix>, DynamicMatrix>);
+static_assert(std::is_base_of_v<Hoppy::BulkLowRankMatrixBase<DynamicMatrix>, DynamicMatrix>);
+static_assert(!HasBulkFactors<Hoppy::LowRankMatrixBase<DynamicMatrix>>::value);
+static_assert(HasBulkFactors<Hoppy::BulkLowRankMatrixBase<DynamicMatrix>>::value);
 static_assert(std::is_same_v<Eigen::internal::traits<DynamicMatrix>::Scalar, double>);
 static_assert(std::is_same_v<Hoppy::LowRankMatrixBase<DynamicMatrix>::Scalar, double>);
 static_assert(Hoppy::LowRankMatrixBase<FixedMatrix>::RowsAtCompileTime == 2);
@@ -118,12 +134,13 @@ TEST_CASE("General low-rank matrices add and inspect individual terms", "[Hoppy]
 	REQUIRE(matrix.termCount() == 1);
 	CHECK(TermCountThroughBase(matrix) == 1);
 	const Hoppy::LowRankMatrixBase<DynamicMatrix>& base = matrix;
+	const Hoppy::BulkLowRankMatrixBase<DynamicMatrix>& bulkBase = matrix;
 	CHECK(base.rows() == 2);
 	CHECK(base.cols() == 3);
 	CHECK(base.termCount() == 1);
-	CHECK(base.coefficients() == matrix.coefficients());
-	CHECK(base.leftVectors() == matrix.leftVectors());
-	CHECK(base.rightVectors() == matrix.rightVectors());
+	CHECK(bulkBase.coefficients() == matrix.coefficients());
+	CHECK(bulkBase.leftVectors() == matrix.leftVectors());
+	CHECK(bulkBase.rightVectors() == matrix.rightVectors());
 	CHECK(base.coefficientOfTerm(0) == 2.5);
 	CHECK(base.leftVectorOfTerm(0) == left);
 	CHECK(base.rightVectorOfTerm(0) == right);

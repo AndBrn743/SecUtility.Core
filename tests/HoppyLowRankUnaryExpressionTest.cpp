@@ -45,6 +45,8 @@ static_assert(ConjugateExpression::ColsAtCompileTime == 3);
 static_assert(AdjointExpression::RowsAtCompileTime == 3);
 static_assert(AdjointExpression::ColsAtCompileTime == 2);
 static_assert(std::is_same_v<typename TransposeExpression::StructurePolicy, void>);
+static_assert(std::is_base_of_v<Hoppy::LowRankMatrixBase<TransposeExpression>, TransposeExpression>);
+static_assert(std::is_base_of_v<Hoppy::BulkLowRankMatrixBase<TransposeExpression>, TransposeExpression>);
 static_assert((Eigen::internal::traits<TransposeExpression>::Flags & Eigen::NestByRefBit) == 0);
 static_assert((TransposeExpression::Flags & Eigen::NestByRefBit) == 0);
 
@@ -115,6 +117,20 @@ TEST_CASE("Unary expressions materialize without dense expansion", "[Hoppy][LowR
 	const Hoppy::LowRankSymmetricMatrixX<std::complex<double>> symmetric(coefficients, vectors);
 	const Hoppy::LowRankSymmetricMatrixX<std::complex<double>> conjugated(symmetric.conjugate());
 	CHECK(conjugated.toDense().isApprox(symmetric.toDense().conjugate()));
+}
+
+
+TEST_CASE("Bulk-access general matrices materialize through factor blocks", "[Hoppy][LowRankMatrix]")
+{
+	const General fixed = GeneralMatrix();
+	const Hoppy::LowRankMatrixX<std::complex<double>> dynamic(fixed);
+
+	CHECK(dynamic.rows() == fixed.rows());
+	CHECK(dynamic.cols() == fixed.cols());
+	CHECK(dynamic.termCount() == fixed.termCount());
+	CHECK(dynamic.coefficients() == fixed.coefficients());
+	CHECK(dynamic.leftVectors() == fixed.leftVectors());
+	CHECK(dynamic.rightVectors() == fixed.rightVectors());
 }
 
 
