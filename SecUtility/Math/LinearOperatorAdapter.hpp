@@ -43,7 +43,14 @@ namespace SecUtility::Math
 			using Source = std::remove_cvref_t<Matrix>;
 			if constexpr (std::is_lvalue_reference_v<Matrix&&>)
 			{
-				return std::forward<Matrix>(matrix);
+				if constexpr ((Eigen::internal::traits<Source>::Flags & Eigen::NestByRefBit) != 0)
+				{
+					return std::forward<Matrix>(matrix);
+				}
+				else
+				{
+					return Source{matrix};
+				}
 			}
 			else if constexpr (requires { typename Source::PlainObject; })
 			{
@@ -53,6 +60,8 @@ namespace SecUtility::Math
 				}
 				else
 				{
+					// Eigen may nest owning rvalue operands by reference for C++03 compatibility. Evaluation is
+					// therefore required at this lifetime boundary unless the caller used `.nestByValue()`.
 					return matrix.eval();
 				}
 			}

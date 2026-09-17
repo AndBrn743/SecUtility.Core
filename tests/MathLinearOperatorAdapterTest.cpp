@@ -77,6 +77,8 @@ TEST_CASE("Linear operator adapters apply dense and low-rank matrices", "[Math][
 	Eigen::Matrix<double, 2, 2> block;
 	block << 4.0, 1.0, -2.0, 3.0;
 
+	static_assert(std::is_reference_v<typename decltype(lowRankAdapter)::Nested>);
+	static_assert(std::is_reference_v<typename decltype(denseAdapter)::Nested>);
 	CHECK(lowRankAdapter.rows() == 3);
 	CHECK(lowRankAdapter.cols() == 2);
 	CHECK(lowRankAdapter.ApplyOn(vector).isApprox(dense * vector));
@@ -122,6 +124,7 @@ TEST_CASE("Dense plus low-rank updates use the general adapter", "[Math][LinearO
 	const Eigen::MatrixXd block = Eigen::MatrixXd::Random(3, 4);
 
 	static_assert(SecUtility::Math::SelfAdjointLinearOperator<decltype(adapter)>);
+	static_assert(!std::is_reference_v<typename decltype(adapter)::Nested>);
 	CHECK(adapter.Diagonal().isApprox(expression.diagonal()));
 	CHECK(adapter.ApplyOn(block).isApprox(expression.toDense() * block));
 }
@@ -132,21 +135,51 @@ TEST_CASE("Adapters own temporary expressions and reference lvalues", "[Math][Li
 	Eigen::Matrix2d dense;
 	dense << 2.0, 1.0, 1.0, 3.0;
 	const auto referencing = SecUtility::Math::MakeSelfAdjointLinearOperatorAdapter(dense);
+	const auto namedDenseExpression = dense + Eigen::Matrix2d::Identity();
+	const auto owningNamedDenseExpression =
+	        SecUtility::Math::MakeLinearOperatorAdapter(namedDenseExpression);
 	const auto owningPlain = SecUtility::Math::MakeLinearOperatorAdapter(Eigen::Matrix2d{dense});
 	const auto owningDense = SecUtility::Math::MakeLinearOperatorAdapter(dense + Eigen::Matrix2d::Identity());
 	RealSelfAdjoint update(2);
 	Eigen::Vector2d direction(1.0, -2.0);
 	update.addTerm(0.5, direction);
+	const auto namedLowRankExpression = update * 2.0;
+	const auto owningNamedLowRankExpression =
+	        SecUtility::Math::MakeSelfAdjointLinearOperatorAdapter(namedLowRankExpression);
 	const auto owningComposite =
 	        SecUtility::Math::MakeSelfAdjointLinearOperatorAdapter(Eigen::Matrix2d::Identity() + update);
 	const Eigen::Vector2d vector(2.0, 3.0);
 
 	static_assert(std::is_reference_v<typename decltype(referencing)::Nested>);
+	static_assert(!std::is_reference_v<typename decltype(owningNamedDenseExpression)::Nested>);
 	static_assert(!std::is_reference_v<typename decltype(owningPlain)::Nested>);
 	static_assert(!std::is_reference_v<typename decltype(owningDense)::Nested>);
+	static_assert(!std::is_reference_v<typename decltype(owningNamedLowRankExpression)::Nested>);
 	static_assert(!std::is_reference_v<typename decltype(owningComposite)::Nested>);
 	CHECK(referencing.ApplyOn(vector).isApprox(dense * vector));
+	CHECK(owningNamedDenseExpression.ApplyOn(vector).isApprox(namedDenseExpression * vector));
 	CHECK(owningPlain.ApplyOn(vector).isApprox(dense * vector));
 	CHECK(owningDense.ApplyOn(vector).isApprox((dense + Eigen::Matrix2d::Identity()) * vector));
+	CHECK(owningNamedLowRankExpression.ApplyOn(vector).isApprox(namedLowRankExpression * vector));
 	CHECK(owningComposite.ApplyOn(vector).isApprox((Eigen::Matrix2d::Identity() + update.toDense()) * vector));
+}
+
+
+TEST_CASE("Adapters defensively evaluate rvalue Eigen expressions", "[Math][LinearOperatorAdapter]")
+{
+	auto makeAdapter = [] {
+		Eigen::Matrix2d left;
+		left << 1.0, 2.0, 3.0, 4.0;
+		Eigen::Matrix2d right;
+		right << -2.0, 1.0, 0.5, 3.0;
+		return SecUtility::Math::MakeLinearOperatorAdapter(Eigen::Matrix2d{left} + Eigen::Matrix2d{right});
+	};
+
+	const auto adapter = makeAdapter();
+	const Eigen::Vector2d vector(2.0, -1.0);
+	Eigen::Matrix2d expected;
+	expected << -1.0, 3.0, 3.5, 7.0;
+
+	static_assert(std::same_as<typename decltype(adapter)::Nested, const Eigen::Matrix2d>);
+	CHECK(adapter.ApplyOn(vector).isApprox(expected * vector));
 }
