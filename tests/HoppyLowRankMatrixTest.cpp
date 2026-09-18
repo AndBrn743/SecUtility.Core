@@ -317,7 +317,7 @@ TEST_CASE("General low-rank values support reserve, clear, copy, and move", "[Ho
 {
 	DynamicMatrix matrix(2, 3);
 	matrix.reserve(8);
-	CHECK(matrix.capacity() >= 8);
+	CHECK(matrix.capacity() == 8);
 
 	matrix.addTerm(2, Eigen::Vector2d{1, 2}, Eigen::Vector3d{3, 4, 5});
 	DynamicMatrix copy = matrix;
@@ -326,6 +326,18 @@ TEST_CASE("General low-rank values support reserve, clear, copy, and move", "[Ho
 	CHECK(copy.coefficients() == matrix.coefficients());
 	CHECK(copy.leftVectors() == matrix.leftVectors());
 	CHECK(copy.rightVectors() == matrix.rightVectors());
+	CHECK(copy.capacity() == copy.termCount());
+	CHECK(matrix.capacity() == 8);
+
+	DynamicMatrix copyAssigned(7, 9);
+	copyAssigned.reserve(12);
+	copyAssigned = matrix;
+	CHECK(copyAssigned.rows() == 2);
+	CHECK(copyAssigned.cols() == 3);
+	CHECK(copyAssigned.coefficients() == matrix.coefficients());
+	CHECK(copyAssigned.leftVectors() == matrix.leftVectors());
+	CHECK(copyAssigned.rightVectors() == matrix.rightVectors());
+	CHECK(copyAssigned.capacity() == copyAssigned.termCount());
 
 	DynamicMatrix moved = std::move(copy);
 	CHECK(moved.termCount() == 1);
@@ -340,7 +352,14 @@ TEST_CASE("General low-rank values support reserve, clear, copy, and move", "[Ho
 	CHECK(matrix.rows() == 2);
 	CHECK(matrix.cols() == 3);
 	CHECK(matrix.termCount() == 0);
-	CHECK(matrix.capacity() >= 8);
+	CHECK(matrix.capacity() == 8);
+
+	matrix.addTerm(-3, Eigen::Vector2d{4, 5}, Eigen::Vector3d{6, 7, 8});
+	CHECK(matrix.termCount() == 1);
+	CHECK(matrix.capacity() == 8);
+	CHECK(matrix.coefficients() == Eigen::VectorXd::Constant(1, -3));
+	CHECK((matrix.leftVectorOfTerm(0) == Eigen::Vector2d{4, 5}));
+	CHECK((matrix.rightVectorOfTerm(0) == Eigen::Vector3d{6, 7, 8}));
 }
 
 

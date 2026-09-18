@@ -76,7 +76,7 @@ TEST_CASE("In-place self arithmetic avoids duplicate storage and preserves dimen
 {
 	auto matrix = General(2, 3, 2);
 	const Eigen::MatrixXd dense = matrix.toDense();
-	const std::size_t capacity = matrix.capacity();
+	const Eigen::Index capacity = matrix.capacity();
 	matrix += matrix;
 	CHECK(matrix.termCount() == 1);
 	CHECK(matrix.coefficientOfTerm(0) == 4);
@@ -128,7 +128,7 @@ TEST_CASE("Structured low-rank arithmetic preserves equal policies", "[Hoppy][Lo
 	CHECK(selfAdjointDifference.toDense().isApprox(selfAdjoint1.toDense() - selfAdjoint2.toDense()));
 
 	auto selfDoubled = selfAdjoint1;
-	const std::size_t selfDoubledCapacity = selfDoubled.capacity();
+	const Eigen::Index selfDoubledCapacity = selfDoubled.capacity();
 	selfDoubled += selfDoubled;
 	REQUIRE(selfDoubled.termCount() == 1);
 	CHECK(selfDoubled.coefficientOfTerm(0) == 4);

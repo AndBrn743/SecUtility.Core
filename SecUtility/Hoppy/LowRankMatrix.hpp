@@ -8,13 +8,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
 #include <limits>
-#include <stdexcept>
-#include <tuple>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 
 /// \file
@@ -39,9 +35,9 @@
 /// coefficient and factor blocks without allocation additionally derive from `BulkLowRankMatrixBase`; returned bulk
 /// objects are read-only Eigen expressions and do not necessarily provide contiguous or direct memory access.
 ///
-/// For owning matrices, appending terms invalidates existing views only if a backing buffer reallocates; `reserve`
+/// For owning matrices, appending terms invalidates existing views only if the backing storage grows; `reserve`
 /// invalidates them only when it grows capacity, and `clear` invalidates term views and references while preserving
-/// dimensions and capacity. Automatic growth is geometric in the number of complete terms that all backing buffers
+/// dimensions and capacity. Automatic growth is geometric in the number of complete terms that all backing arrays
 /// can accept. Views returned by a lazy expression inherit the lifetime and invalidation rules of its nested
 /// expression. Arguments to `addTerm` and `addTerms` must not alias storage owned by the destination; callers that
 /// need to reinsert exposed views must evaluate them first. Invalid dimensions, shapes, indices, and capacities are
@@ -1049,31 +1045,6 @@ namespace Hoppy::Detail
 		}
 	};
 
-	inline std::size_t CheckedBufferSize(const Eigen::Index dimension, const Eigen::Index termCount)
-	{
-		eigen_assert(dimension >= 0 && termCount >= 0 && "A matrix dimension or term count cannot be negative");
-
-		const auto unsignedDimension = static_cast<std::size_t>(dimension);
-		const auto unsignedTermCount = static_cast<std::size_t>(termCount);
-		if (unsignedDimension != 0 && unsignedTermCount > std::numeric_limits<std::size_t>::max() / unsignedDimension)
-		{
-			throw std::length_error("Low-rank matrix storage size overflow");
-		}
-		return unsignedDimension * unsignedTermCount;
-	}
-
-	inline Eigen::Index BufferTermCapacity(const std::size_t scalarCapacity, const Eigen::Index scalarsPerTerm) noexcept
-	{
-		if (scalarsPerTerm == 0)
-		{
-			return (std::numeric_limits<Eigen::Index>::max)();
-		}
-
-		const auto termCapacity = scalarCapacity / static_cast<std::size_t>(scalarsPerTerm);
-		const auto maximumCapacity = static_cast<std::size_t>((std::numeric_limits<Eigen::Index>::max)());
-		return static_cast<Eigen::Index>((std::min)(termCapacity, maximumCapacity));
-	}
-
 	inline Eigen::Index GeometricTermCapacity(const Eigen::Index currentCapacity,
 	                                          const Eigen::Index requiredCapacity) noexcept
 	{
@@ -1121,14 +1092,30 @@ public:
 	static constexpr int IsRowMajor = false;
 	static constexpr int Flags = Eigen::NestByRefBit;
 
-	constexpr LowRankMatrix() noexcept = default;
-	LowRankMatrix(const LowRankMatrix&) = default;
+	LowRankMatrix() = default;
+	LowRankMatrix(const LowRankMatrix& other) : LowRankMatrix(other.rows(), other.cols())
+	{
+		reserve(other.termCount());
+		m_CoefficientStorage.head(other.termCount()) = other.coefficients();
+		m_LeftVectorStorage.leftCols(other.termCount()) = other.leftVectors();
+		m_RightVectorStorage.leftCols(other.termCount()) = other.rightVectors();
+		m_TermCount = other.termCount();
+	}
 	LowRankMatrix(LowRankMatrix&&) noexcept = default;
-	LowRankMatrix& operator=(const LowRankMatrix&) = default;
+	LowRankMatrix& operator=(const LowRankMatrix& other)
+	{
+		if (this != &other)
+		{
+			LowRankMatrix copy(other);
+			*this = std::move(copy);
+		}
+		return *this;
+	}
 	LowRankMatrix& operator=(LowRankMatrix&&) noexcept = default;
 	~LowRankMatrix() = default;
 
-	explicit LowRankMatrix(const Eigen::Index rows, const Eigen::Index cols) : m_Rows(rows), m_Cols(cols)
+	explicit LowRankMatrix(const Eigen::Index rows, const Eigen::Index cols)
+	    : m_LeftVectorStorage(rows, 0), m_RightVectorStorage(cols, 0)
 	{
 		eigen_assert(rows >= 0 && cols >= 0);
 	}
@@ -1154,7 +1141,7 @@ public:
 	LowRankMatrix(const Scalar& coefficient,
 	              const Eigen::MatrixBase<LeftDerived>& leftVector,
 	              const Eigen::MatrixBase<RightDerived>& rightVector)
-	    : m_Rows(leftVector.size()), m_Cols(rightVector.size())
+	    : m_LeftVectorStorage(leftVector.size(), 0), m_RightVectorStorage(rightVector.size(), 0)
 	{
 		addTerm(coefficient, leftVector, rightVector);
 	}
@@ -1163,31 +1150,38 @@ public:
 	LowRankMatrix(const Eigen::MatrixBase<CoefficientsDerived>& coefficients,
 	              const Eigen::MatrixBase<LeftDerived>& leftVectors,
 	              const Eigen::MatrixBase<RightDerived>& rightVectors)
-	    : m_Rows(leftVectors.rows()), m_Cols(rightVectors.rows())
+	    : m_LeftVectorStorage(leftVectors.rows(), 0), m_RightVectorStorage(rightVectors.rows(), 0)
 	{
 		addTerms(coefficients, leftVectors, rightVectors);
 	}
 
 	[[nodiscard]] Eigen::Index capacity() const noexcept
 	{
-		return (std::min)({Detail::BufferTermCapacity(m_Coefficients.capacity(), 1),
-		                   Detail::BufferTermCapacity(m_LeftVectorBuffer.capacity(), rows()),
-		                   Detail::BufferTermCapacity(m_RightVectorBuffer.capacity(), cols())});
+		return m_CoefficientStorage.size();
 	}
 
 	void reserve(const Eigen::Index termCapacity)
 	{
 		eigen_assert(termCapacity >= 0 && "A term capacity cannot be negative");
-		m_Coefficients.reserve(static_cast<std::size_t>(termCapacity));
-		m_LeftVectorBuffer.reserve(Detail::CheckedBufferSize(rows(), termCapacity));
-		m_RightVectorBuffer.reserve(Detail::CheckedBufferSize(cols(), termCapacity));
+		if (termCapacity <= capacity())
+		{
+			return;
+		}
+
+		CoefficientVector coefficientStorage(termCapacity);
+		LeftVectors leftVectorStorage(rows(), termCapacity);
+		RightVectors rightVectorStorage(cols(), termCapacity);
+		coefficientStorage.head(termCount()) = this->coefficients();
+		leftVectorStorage.leftCols(termCount()) = this->leftVectors();
+		rightVectorStorage.leftCols(termCount()) = this->rightVectors();
+		m_CoefficientStorage.swap(coefficientStorage);
+		m_LeftVectorStorage.swap(leftVectorStorage);
+		m_RightVectorStorage.swap(rightVectorStorage);
 	}
 
 	void clear() noexcept
 	{
-		m_Coefficients.clear();
-		m_LeftVectorBuffer.clear();
-		m_RightVectorBuffer.clear();
+		m_TermCount = 0;
 	}
 
 	LowRankMatrix& operator+=(const LowRankMatrix& other)
@@ -1195,10 +1189,7 @@ public:
 		eigen_assert(rows() == other.rows() && cols() == other.cols() && "Low-rank matrix dimensions do not agree");
 		if (this == &other)
 		{
-			for (Scalar& coefficient : m_Coefficients)
-			{
-				coefficient *= Scalar{2};
-			}
+			m_CoefficientStorage.head(termCount()) *= Scalar{2};
 			return *this;
 		}
 		return addTerms(other.coefficients(), other.leftVectors(), other.rightVectors());
@@ -1229,9 +1220,10 @@ public:
 		validateVector(leftVector, rows());
 		validateVector(rightVector, cols());
 		ensureCapacity(termCount() + 1);
-		m_Coefficients.push_back(std::move(coefficient));
-		appendVector<RowsAtCompileTime>(m_LeftVectorBuffer, rows(), leftVector);
-		appendVector<ColsAtCompileTime>(m_RightVectorBuffer, cols(), rightVector);
+		m_CoefficientStorage[termCount()] = std::move(coefficient);
+		m_LeftVectorStorage.col(termCount()) = leftVector.reshaped();
+		m_RightVectorStorage.col(termCount()) = rightVector.reshaped();
+		m_TermCount++;
 		return *this;
 	}
 
@@ -1260,81 +1252,72 @@ public:
 		}
 
 		ensureCapacity(termCount() + nonzeroCount);
-		const auto oldLeftSize = m_LeftVectorBuffer.size();
-		const auto oldRightSize = m_RightVectorBuffer.size();
-		m_LeftVectorBuffer.resize(oldLeftSize + Detail::CheckedBufferSize(rows(), nonzeroCount));
-		m_RightVectorBuffer.resize(oldRightSize + Detail::CheckedBufferSize(cols(), nonzeroCount));
+		const Eigen::Index oldTermCount = termCount();
 		Eigen::Index destinationIndex = 0;
 		for (Eigen::Index sourceIndex = 0; sourceIndex < evaluatedCoefficients.size(); sourceIndex++)
 		{
 			if (evaluatedCoefficients[sourceIndex] != Scalar{})
 			{
-				m_Coefficients.push_back(evaluatedCoefficients[sourceIndex]);
-				assignVector<RowsAtCompileTime>(
-				        m_LeftVectorBuffer,
-				        oldLeftSize + static_cast<std::size_t>(rows()) * static_cast<std::size_t>(destinationIndex),
-				        rows(),
-				        leftVectors.col(sourceIndex));
-				assignVector<ColsAtCompileTime>(
-				        m_RightVectorBuffer,
-				        oldRightSize + static_cast<std::size_t>(cols()) * static_cast<std::size_t>(destinationIndex),
-				        cols(),
-				        rightVectors.col(sourceIndex));
+				const Eigen::Index destinationTerm = oldTermCount + destinationIndex;
+				m_CoefficientStorage[destinationTerm] = evaluatedCoefficients[sourceIndex];
+				m_LeftVectorStorage.col(destinationTerm) = leftVectors.col(sourceIndex);
+				m_RightVectorStorage.col(destinationTerm) = rightVectors.col(sourceIndex);
 				destinationIndex++;
 			}
 		}
+		m_TermCount += nonzeroCount;
 		return *this;
 	}
 
 private:
 	[[nodiscard]] constexpr Eigen::Index rowsImpl() const noexcept
 	{
-		return m_Rows.value();
+		return m_LeftVectorStorage.rows();
 	}
 
 	[[nodiscard]] constexpr Eigen::Index colsImpl() const noexcept
 	{
-		return m_Cols.value();
+		return m_RightVectorStorage.rows();  // because of the adjoint
 	}
 
 	[[nodiscard]] Eigen::Index termCountImpl() const noexcept
 	{
-		return static_cast<Eigen::Index>(m_Coefficients.size());
+		return m_TermCount;
 	}
 
 	/// Read-only views into owned storage. Any operation that increases capacity invalidates all existing views.
-	/// `clear` invalidates term views and references but retains the buffers and their capacity.
+	/// `clear` invalidates term views and references but retains the storage and its capacity.
 	[[nodiscard]] auto coefficientsImpl() const noexcept
 	{
-		return Eigen::Map<const CoefficientVector>{m_Coefficients.data(), termCount()};
+		return m_CoefficientStorage.head(termCount());
 	}
 
 	[[nodiscard]] auto leftVectorsImpl() const noexcept
 	{
-		return Eigen::Map<const LeftVectors>{m_LeftVectorBuffer.data(), rows(), termCount()};
+		return m_LeftVectorStorage.leftCols(termCount());
 	}
 
 	[[nodiscard]] auto rightVectorsImpl() const noexcept
 	{
-		return Eigen::Map<const RightVectors>{m_RightVectorBuffer.data(), cols(), termCount()};
+		return m_RightVectorStorage.leftCols(termCount());
 	}
 
 	[[nodiscard]] const Scalar& coefficientOfTermImpl(const Eigen::Index index) const
 	{
 		validateTermIndex(index);
-		return m_Coefficients[static_cast<std::size_t>(index)];
+		return m_CoefficientStorage[index];
 	}
 
 	[[nodiscard]] auto leftVectorOfTermImpl(const Eigen::Index index) const
 	{
 		validateTermIndex(index);
-		return Eigen::Map<const LeftVector>{m_LeftVectorBuffer.data() + rows() * index, rows()};
+		return m_LeftVectorStorage.col(index);
 	}
 
 	[[nodiscard]] auto rightVectorOfTermImpl(const Eigen::Index index) const
 	{
 		validateTermIndex(index);
-		return Eigen::Map<const RightVector>{m_RightVectorBuffer.data() + cols() * index, cols()};
+		return m_RightVectorStorage.col(index);
 	}
 
 	template <typename Derived>
@@ -1360,35 +1343,11 @@ private:
 		}
 	}
 
-	template <int SizeAtCompileTime, typename Derived>
-	static void appendVector(std::vector<Scalar>& destination,
-	                         const Eigen::Index size,
-	                         const Eigen::MatrixBase<Derived>& expression)
-	{
-		const auto oldSize = destination.size();
-		destination.resize(oldSize + static_cast<std::size_t>(size));
-		assignVector<SizeAtCompileTime>(destination, oldSize, size, expression);
-	}
-
-	template <int SizeAtCompileTime, typename Derived>
-	static void assignVector(std::vector<Scalar>& destination,
-	                         const std::size_t offset,
-	                         const Eigen::Index size,
-	                         const Eigen::MatrixBase<Derived>& expression)
-	{
-		if (size != 0)
-		{
-			Eigen::Map<Eigen::Vector<Scalar, SizeAtCompileTime>>{destination.data() + offset, size} =
-			        expression.reshaped();
-		}
-	}
-
 private:
-	Eigen::internal::variable_if_dynamic<Eigen::Index, RowsAtCompileTime> m_Rows{};
-	Eigen::internal::variable_if_dynamic<Eigen::Index, ColsAtCompileTime> m_Cols{};
-	std::vector<Scalar> m_Coefficients{};
-	std::vector<Scalar> m_LeftVectorBuffer{};
-	std::vector<Scalar> m_RightVectorBuffer{};
+	CoefficientVector m_CoefficientStorage{};
+	LeftVectors m_LeftVectorStorage{};
+	RightVectors m_RightVectorStorage{};
+	Eigen::Index m_TermCount = 0;
 };
 
 
@@ -1423,14 +1382,28 @@ public:
 	static constexpr int IsRowMajor = false;
 	static constexpr int Flags = Eigen::NestByRefBit;
 
-	constexpr SingleFactorLowRankMatrix() noexcept = default;
-	SingleFactorLowRankMatrix(const SingleFactorLowRankMatrix&) = default;
+	SingleFactorLowRankMatrix() = default;
+	SingleFactorLowRankMatrix(const SingleFactorLowRankMatrix& other) : SingleFactorLowRankMatrix(other.rows())
+	{
+		reserve(other.termCount());
+		m_CoefficientStorage.head(other.termCount()) = other.coefficients();
+		m_VectorStorage.leftCols(other.termCount()) = other.leftVectors();
+		m_TermCount = other.termCount();
+	}
 	SingleFactorLowRankMatrix(SingleFactorLowRankMatrix&&) noexcept = default;
-	SingleFactorLowRankMatrix& operator=(const SingleFactorLowRankMatrix&) = default;
+	SingleFactorLowRankMatrix& operator=(const SingleFactorLowRankMatrix& other)
+	{
+		if (this != &other)
+		{
+			SingleFactorLowRankMatrix copy(other);
+			*this = std::move(copy);
+		}
+		return *this;
+	}
 	SingleFactorLowRankMatrix& operator=(SingleFactorLowRankMatrix&&) noexcept = default;
 	~SingleFactorLowRankMatrix() = default;
 
-	explicit SingleFactorLowRankMatrix(const Eigen::Index dimension) : m_Dimension(dimension)
+	explicit SingleFactorLowRankMatrix(const Eigen::Index dimension) : m_VectorStorage(dimension, 0)
 	{
 		eigen_assert(dimension >= 0);
 	}
@@ -1462,7 +1435,7 @@ public:
 
 	template <typename VectorDerived>
 	SingleFactorLowRankMatrix(const CoefficientScalar& coefficient, const Eigen::MatrixBase<VectorDerived>& vector)
-	    : m_Dimension(vector.size())
+	    : m_VectorStorage(vector.size(), 0)
 	{
 		addTerm(coefficient, vector);
 	}
@@ -1472,28 +1445,35 @@ public:
 	          std::enable_if_t<std::is_convertible_v<typename CoefficientsDerived::Scalar, CoefficientScalar>, int> = 0>
 	SingleFactorLowRankMatrix(const Eigen::MatrixBase<CoefficientsDerived>& coefficients,
 	                          const Eigen::MatrixBase<VectorsDerived>& vectors)
-	    : m_Dimension(vectors.rows())
+	    : m_VectorStorage(vectors.rows(), 0)
 	{
 		addTerms(coefficients, vectors);
 	}
 
 	[[nodiscard]] Eigen::Index capacity() const noexcept
 	{
-		return (std::min)(Detail::BufferTermCapacity(m_Coefficients.capacity(), 1),
-		                  Detail::BufferTermCapacity(m_VectorBuffer.capacity(), rows()));
+		return m_CoefficientStorage.size();
 	}
 
 	void reserve(const Eigen::Index termCapacity)
 	{
 		eigen_assert(termCapacity >= 0 && "A term capacity cannot be negative");
-		m_Coefficients.reserve(static_cast<std::size_t>(termCapacity));
-		m_VectorBuffer.reserve(Detail::CheckedBufferSize(rows(), termCapacity));
+		if (termCapacity <= capacity())
+		{
+			return;
+		}
+
+		CoefficientVector coefficientStorage(termCapacity);
+		Vectors vectorStorage(rows(), termCapacity);
+		coefficientStorage.head(termCount()) = this->coefficients();
+		vectorStorage.leftCols(termCount()) = this->leftVectors();
+		m_CoefficientStorage.swap(coefficientStorage);
+		m_VectorStorage.swap(vectorStorage);
 	}
 
 	void clear() noexcept
 	{
-		m_Coefficients.clear();
-		m_VectorBuffer.clear();
+		m_TermCount = 0;
 	}
 
 	SingleFactorLowRankMatrix& operator+=(const SingleFactorLowRankMatrix& other)
@@ -1501,10 +1481,7 @@ public:
 		eigen_assert(rows() == other.rows() && "Structured low-rank matrix dimensions do not agree");
 		if (this == &other)
 		{
-			for (CoefficientScalar& coefficient : m_Coefficients)
-			{
-				coefficient *= CoefficientScalar{2};
-			}
+			m_CoefficientStorage.head(termCount()) *= CoefficientScalar{2};
 			return *this;
 		}
 		return addTerms(other.coefficients(), other.leftVectors());
@@ -1532,8 +1509,9 @@ public:
 
 		validateVector(vector);
 		ensureCapacity(termCount() + 1);
-		m_Coefficients.push_back(std::move(coefficient));
-		appendVector(m_VectorBuffer, vector);
+		m_CoefficientStorage[termCount()] = std::move(coefficient);
+		m_VectorStorage.col(termCount()) = vector.reshaped();
+		m_TermCount++;
 		return *this;
 	}
 
@@ -1562,21 +1540,19 @@ public:
 		}
 
 		ensureCapacity(termCount() + nonzeroCount);
-		const auto oldVectorSize = m_VectorBuffer.size();
-		m_VectorBuffer.resize(oldVectorSize + Detail::CheckedBufferSize(rows(), nonzeroCount));
+		const Eigen::Index oldTermCount = termCount();
 		Eigen::Index destinationIndex = 0;
 		for (Eigen::Index sourceIndex = 0; sourceIndex < evaluatedCoefficients.size(); sourceIndex++)
 		{
 			if (evaluatedCoefficients[sourceIndex] != CoefficientScalar{})
 			{
-				m_Coefficients.push_back(evaluatedCoefficients[sourceIndex]);
-				assignVector(m_VectorBuffer,
-				             oldVectorSize
-				                     + static_cast<std::size_t>(rows()) * static_cast<std::size_t>(destinationIndex),
-				             vectors.col(sourceIndex));
+				const Eigen::Index destinationTerm = oldTermCount + destinationIndex;
+				m_CoefficientStorage[destinationTerm] = evaluatedCoefficients[sourceIndex];
+				m_VectorStorage.col(destinationTerm) = vectors.col(sourceIndex);
 				destinationIndex++;
 			}
 		}
+		m_TermCount += nonzeroCount;
 		return *this;
 	}
 
@@ -1588,29 +1564,29 @@ public:
 private:
 	[[nodiscard]] constexpr Eigen::Index rowsImpl() const noexcept
 	{
-		return m_Dimension.value();
+		return m_VectorStorage.rows();
 	}
 
 	[[nodiscard]] constexpr Eigen::Index colsImpl() const noexcept
 	{
-		return m_Dimension.value();
+		return m_VectorStorage.rows();
 	}
 
 	[[nodiscard]] Eigen::Index termCountImpl() const noexcept
 	{
-		return static_cast<Eigen::Index>(m_Coefficients.size());
+		return m_TermCount;
 	}
 
 	/// Read-only views into owned storage. Any operation that increases capacity invalidates all existing views.
-	/// `clear` invalidates term views and references but retains the buffers and their capacity.
+	/// `clear` invalidates term views and references but retains the storage and its capacity.
 	[[nodiscard]] auto coefficientsImpl() const noexcept
 	{
-		return Eigen::Map<const CoefficientVector>{m_Coefficients.data(), termCount()};
+		return m_CoefficientStorage.head(termCount());
 	}
 
 	[[nodiscard]] auto leftVectorsImpl() const noexcept
 	{
-		return Eigen::Map<const Vectors>{m_VectorBuffer.data(), rows(), termCount()};
+		return m_VectorStorage.leftCols(termCount());
 	}
 
 	[[nodiscard]] auto rightVectorsImpl() const noexcept
@@ -1621,13 +1597,13 @@ private:
 	[[nodiscard]] const CoefficientScalar& coefficientOfTermImpl(const Eigen::Index index) const
 	{
 		validateTermIndex(index);
-		return m_Coefficients[static_cast<std::size_t>(index)];
+		return m_CoefficientStorage[index];
 	}
 
 	[[nodiscard]] auto leftVectorOfTermImpl(const Eigen::Index index) const
 	{
 		validateTermIndex(index);
-		return Eigen::Map<const Vector>{m_VectorBuffer.data() + rows() * index, rows()};
+		return m_VectorStorage.col(index);
 	}
 
 	[[nodiscard]] auto rightVectorOfTermImpl(const Eigen::Index index) const
@@ -1657,29 +1633,10 @@ private:
 		}
 	}
 
-	template <typename Derived>
-	static void appendVector(std::vector<Scalar>& destination, const Eigen::MatrixBase<Derived>& expression)
-	{
-		const auto oldSize = destination.size();
-		destination.resize(oldSize + static_cast<std::size_t>(expression.size()));
-		assignVector(destination, oldSize, expression);
-	}
-
-	template <typename Derived>
-	static void assignVector(std::vector<Scalar>& destination,
-	                         const std::size_t offset,
-	                         const Eigen::MatrixBase<Derived>& expression)
-	{
-		if (expression.size() != 0)
-		{
-			Eigen::Map<Vector>{destination.data() + offset, expression.size()} = expression.reshaped();
-		}
-	}
-
 private:
-	Eigen::internal::variable_if_dynamic<Eigen::Index, DimensionAtCompileTime_> m_Dimension{};
-	std::vector<CoefficientScalar> m_Coefficients{};
-	std::vector<Scalar> m_VectorBuffer{};
+	CoefficientVector m_CoefficientStorage{};
+	Vectors m_VectorStorage{};
+	Eigen::Index m_TermCount = 0;
 };
 
 

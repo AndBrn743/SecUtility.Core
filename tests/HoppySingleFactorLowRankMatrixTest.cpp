@@ -248,12 +248,22 @@ TEST_CASE("Single-factor low-rank values support reserve, clear, copy, and move"
 {
 	Hoppy::LowRankSelfAdjointMatrixX<double> matrix(3);
 	matrix.reserve(8);
-	CHECK(matrix.capacity() >= 8);
+	CHECK(matrix.capacity() == 8);
 	matrix.addTerm(2, Eigen::Vector3d{1, 2, 3});
 
 	auto copy = matrix;
 	CHECK(copy.coefficients() == matrix.coefficients());
 	CHECK(copy.leftVectors() == matrix.leftVectors());
+	CHECK(copy.capacity() == copy.termCount());
+	CHECK(matrix.capacity() == 8);
+
+	Hoppy::LowRankSelfAdjointMatrixX<double> copyAssigned(5);
+	copyAssigned.reserve(12);
+	copyAssigned = matrix;
+	CHECK(copyAssigned.rows() == 3);
+	CHECK(copyAssigned.coefficients() == matrix.coefficients());
+	CHECK(copyAssigned.leftVectors() == matrix.leftVectors());
+	CHECK(copyAssigned.capacity() == copyAssigned.termCount());
 
 	auto moved = std::move(copy);
 	CHECK(moved.rows() == 3);
@@ -267,7 +277,13 @@ TEST_CASE("Single-factor low-rank values support reserve, clear, copy, and move"
 	CHECK(matrix.rows() == 3);
 	CHECK(matrix.cols() == 3);
 	CHECK(matrix.termCount() == 0);
-	CHECK(matrix.capacity() >= 8);
+	CHECK(matrix.capacity() == 8);
+
+	matrix.addTerm(-3, Eigen::Vector3d{4, 5, 6});
+	CHECK(matrix.termCount() == 1);
+	CHECK(matrix.capacity() == 8);
+	CHECK(matrix.coefficients() == Eigen::VectorXd::Constant(1, -3));
+	CHECK((matrix.leftVectorOfTerm(0) == Eigen::Vector3d{4, 5, 6}));
 }
 
 
