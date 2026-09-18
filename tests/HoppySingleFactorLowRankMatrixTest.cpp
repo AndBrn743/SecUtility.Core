@@ -153,6 +153,21 @@ TEST_CASE("Single-factor low-rank matrices support fixed, dynamic, and rank-zero
 }
 
 
+TEST_CASE("Single-factor insertion supports an empty factor dimension", "[Hoppy][LowRankMatrix]")
+{
+	Hoppy::LowRankSelfAdjointMatrixX<double> matrix(0);
+	matrix.addTerm(2.0, Eigen::VectorXd{});
+	matrix.addTerms(Eigen::Vector2d{3.0, -1.0}, Eigen::MatrixXd(0, 2));
+
+	CHECK(matrix.rows() == 0);
+	CHECK(matrix.cols() == 0);
+	CHECK(matrix.termCount() == 3);
+	CHECK(matrix.leftVectors().rows() == 0);
+	CHECK(matrix.leftVectors().cols() == 3);
+	CHECK(matrix.toDense().size() == 0);
+}
+
+
 TEST_CASE("Bulk-access structured matrices materialize through factor blocks", "[Hoppy][LowRankMatrix]")
 {
 	FixedSelfAdjoint fixed;
@@ -169,7 +184,8 @@ TEST_CASE("Bulk-access structured matrices materialize through factor blocks", "
 }
 
 
-TEST_CASE("Self-adjoint low-rank insertion filters exact zeros and is alias safe", "[Hoppy][LowRankMatrix]")
+TEST_CASE("Self-adjoint low-rank insertion filters exact zeros and accepts evaluated views",
+          "[Hoppy][LowRankMatrix]")
 {
 	ComplexSelfAdjoint matrix(3);
 	const Eigen::MatrixXcd vectors = Eigen::MatrixXcd::Random(3, 4);
@@ -183,7 +199,7 @@ TEST_CASE("Self-adjoint low-rank insertion filters exact zeros and is alias safe
 
 	const Eigen::VectorXd oldCoefficients = matrix.coefficients();
 	const Eigen::MatrixXcd oldVectors = matrix.leftVectors();
-	matrix.addTerms(matrix.coefficients(), matrix.leftVectors());
+	matrix.addTerms(oldCoefficients, oldVectors);
 	REQUIRE(matrix.termCount() == 4);
 	CHECK(matrix.coefficients().head(2) == oldCoefficients);
 	CHECK(matrix.coefficients().tail(2) == oldCoefficients);

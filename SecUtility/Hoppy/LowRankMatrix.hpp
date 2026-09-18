@@ -42,8 +42,10 @@
 /// For owning matrices, appending terms invalidates existing views only if a backing buffer reallocates; `reserve`
 /// invalidates them only when it grows capacity, and `clear` invalidates term views and references while preserving
 /// dimensions and capacity. Views returned by a lazy expression inherit the lifetime and invalidation rules of its
-/// nested expression. Invalid dimensions, shapes, indices, and capacities are programming errors checked with
-/// `eigen_assert`; violating them when Eigen assertions are disabled is undefined behavior.
+/// nested expression. Arguments to `addTerm` and `addTerms` must not alias storage owned by the destination; callers
+/// that need to reinsert exposed views must evaluate them first. Invalid dimensions, shapes, indices, and capacities
+/// are programming errors checked with `eigen_assert`; violating them when Eigen assertions are disabled is undefined
+/// behavior.
 ///
 /// This Eigen-extension header is distributed under MPL-2.0, Eigen's primary license. The surrounding
 /// SecUtility.Core headers remain independently licensed as marked in their respective files.
@@ -1186,7 +1188,8 @@ public:
 	}
 
 	template <typename LeftDerived, typename RightDerived>
-	LowRankMatrix& addTerm(const Scalar& coefficient,
+	/// The vector arguments must not alias storage owned by `*this`; evaluate exposed views before reinserting them.
+	LowRankMatrix& addTerm(Scalar coefficient,
 	                       const Eigen::MatrixBase<LeftDerived>& leftVector,
 	                       const Eigen::MatrixBase<RightDerived>& rightVector)
 	{
@@ -1197,13 +1200,14 @@ public:
 
 		validateVector(leftVector, rows());
 		validateVector(rightVector, cols());
-		const Scalar evaluatedCoefficient = coefficient;
-		const Eigen::VectorX<Scalar> evaluatedLeft = leftVector.reshaped();
-		const Eigen::VectorX<Scalar> evaluatedRight = rightVector.reshaped();
-		appendEvaluatedTerm(evaluatedCoefficient, evaluatedLeft, evaluatedRight);
+		reserve(termCount() + 1);
+		m_Coefficients.push_back(std::move(coefficient));
+		appendVector<RowsAtCompileTime>(m_LeftVectorBuffer, rows(), leftVector);
+		appendVector<ColsAtCompileTime>(m_RightVectorBuffer, cols(), rightVector);
 		return *this;
 	}
 
+	/// The input expressions must not alias storage owned by `*this`; evaluate exposed views before reinserting them.
 	template <typename CoefficientsDerived, typename LeftDerived, typename RightDerived>
 	LowRankMatrix& addTerms(const Eigen::MatrixBase<CoefficientsDerived>& coefficients,
 	                        const Eigen::MatrixBase<LeftDerived>& leftVectors,
@@ -1227,28 +1231,29 @@ public:
 			return *this;
 		}
 
-		CoefficientVector filteredCoefficients(nonzeroCount);
-		Eigen::MatrixX<Scalar> filteredLeft(rows(), nonzeroCount);
-		Eigen::MatrixX<Scalar> filteredRight(cols(), nonzeroCount);
+		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
+		reserve(static_cast<Eigen::Index>(finalCount));
+		const auto oldLeftSize = m_LeftVectorBuffer.size();
+		const auto oldRightSize = m_RightVectorBuffer.size();
+		m_LeftVectorBuffer.resize(oldLeftSize + Detail::CheckedBufferSize(rows(), nonzeroCount));
+		m_RightVectorBuffer.resize(oldRightSize + Detail::CheckedBufferSize(cols(), nonzeroCount));
 		Eigen::Index destinationIndex = 0;
 		for (Eigen::Index sourceIndex = 0; sourceIndex < evaluatedCoefficients.size(); sourceIndex++)
 		{
 			if (evaluatedCoefficients[sourceIndex] != Scalar{})
 			{
-				filteredCoefficients[destinationIndex] = evaluatedCoefficients[sourceIndex];
-				filteredLeft.col(destinationIndex) = leftVectors.col(sourceIndex);
-				filteredRight.col(destinationIndex) = rightVectors.col(sourceIndex);
+				m_Coefficients.push_back(evaluatedCoefficients[sourceIndex]);
+				assignVector<RowsAtCompileTime>(m_LeftVectorBuffer,
+				                                    oldLeftSize + static_cast<std::size_t>(rows())
+				                                                          * static_cast<std::size_t>(destinationIndex),
+				                                    rows(), leftVectors.col(sourceIndex));
+				assignVector<ColsAtCompileTime>(m_RightVectorBuffer,
+				                                    oldRightSize + static_cast<std::size_t>(cols())
+				                                                           * static_cast<std::size_t>(destinationIndex),
+				                                    cols(), rightVectors.col(sourceIndex));
 				destinationIndex++;
 			}
 		}
-
-		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
-		reserve(static_cast<Eigen::Index>(finalCount));
-		m_Coefficients.insert(m_Coefficients.end(),
-		                      filteredCoefficients.data(),
-		                      filteredCoefficients.data() + filteredCoefficients.size());
-		appendBuffer(m_LeftVectorBuffer, filteredLeft.data(), filteredLeft.size());
-		appendBuffer(m_RightVectorBuffer, filteredRight.data(), filteredRight.size());
 		return *this;
 	}
 
@@ -1318,21 +1323,26 @@ private:
 		(void)index;
 	}
 
-	void appendEvaluatedTerm(const Scalar& coefficient,
-	                         const Eigen::VectorX<Scalar>& leftVector,
-	                         const Eigen::VectorX<Scalar>& rightVector)
+	template <int SizeAtCompileTime, typename Derived>
+	static void appendVector(std::vector<Scalar>& destination,
+	                         const Eigen::Index size,
+	                         const Eigen::MatrixBase<Derived>& expression)
 	{
-		reserve(termCount() + 1);
-		m_Coefficients.push_back(coefficient);
-		appendBuffer(m_LeftVectorBuffer, leftVector.data(), leftVector.size());
-		appendBuffer(m_RightVectorBuffer, rightVector.data(), rightVector.size());
+		const auto oldSize = destination.size();
+		destination.resize(oldSize + static_cast<std::size_t>(size));
+		assignVector<SizeAtCompileTime>(destination, oldSize, size, expression);
 	}
 
-	static void appendBuffer(std::vector<Scalar>& destination, const Scalar* const source, const Eigen::Index size)
+	template <int SizeAtCompileTime, typename Derived>
+	static void assignVector(std::vector<Scalar>& destination,
+	                         const std::size_t offset,
+	                         const Eigen::Index size,
+	                         const Eigen::MatrixBase<Derived>& expression)
 	{
 		if (size != 0)
 		{
-			destination.insert(destination.end(), source, source + size);
+			Eigen::Map<Eigen::Vector<Scalar, SizeAtCompileTime>>{destination.data() + offset, size} =
+			        expression.reshaped();
 		}
 	}
 
@@ -1475,7 +1485,8 @@ public:
 	}
 
 	template <typename VectorDerived>
-	SingleFactorLowRankMatrix& addTerm(const CoefficientScalar& coefficient,
+	/// The vector argument must not alias storage owned by `*this`; evaluate exposed views before reinserting it.
+	SingleFactorLowRankMatrix& addTerm(CoefficientScalar coefficient,
 	                                   const Eigen::MatrixBase<VectorDerived>& vector)
 	{
 		if (coefficient == CoefficientScalar{})
@@ -1484,17 +1495,16 @@ public:
 		}
 
 		validateVector(vector);
-		const CoefficientScalar evaluatedCoefficient = coefficient;
-		const Eigen::VectorX<Scalar> evaluatedVector = vector.reshaped();
 		reserve(termCount() + 1);
-		m_Coefficients.push_back(evaluatedCoefficient);
-		appendBuffer(m_VectorBuffer, evaluatedVector.data(), evaluatedVector.size());
+		m_Coefficients.push_back(std::move(coefficient));
+		appendVector(m_VectorBuffer, vector);
 		return *this;
 	}
 
 	template <typename CoefficientsDerived,
 	          typename VectorsDerived,
 	          std::enable_if_t<std::is_convertible_v<typename CoefficientsDerived::Scalar, CoefficientScalar>, int> = 0>
+	/// The input expressions must not alias storage owned by `*this`; evaluate exposed views before reinserting them.
 	SingleFactorLowRankMatrix& addTerms(const Eigen::MatrixBase<CoefficientsDerived>& coefficients,
 	                                    const Eigen::MatrixBase<VectorsDerived>& vectors)
 	{
@@ -1515,25 +1525,23 @@ public:
 			return *this;
 		}
 
-		CoefficientVector filteredCoefficients(nonzeroCount);
-		Eigen::MatrixX<Scalar> filteredVectors(rows(), nonzeroCount);
+		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
+		reserve(static_cast<Eigen::Index>(finalCount));
+		const auto oldVectorSize = m_VectorBuffer.size();
+		m_VectorBuffer.resize(oldVectorSize + Detail::CheckedBufferSize(rows(), nonzeroCount));
 		Eigen::Index destinationIndex = 0;
 		for (Eigen::Index sourceIndex = 0; sourceIndex < evaluatedCoefficients.size(); sourceIndex++)
 		{
 			if (evaluatedCoefficients[sourceIndex] != CoefficientScalar{})
 			{
-				filteredCoefficients[destinationIndex] = evaluatedCoefficients[sourceIndex];
-				filteredVectors.col(destinationIndex) = vectors.col(sourceIndex);
+				m_Coefficients.push_back(evaluatedCoefficients[sourceIndex]);
+				assignVector(m_VectorBuffer,
+				             oldVectorSize + static_cast<std::size_t>(rows())
+				                                     * static_cast<std::size_t>(destinationIndex),
+				             vectors.col(sourceIndex));
 				destinationIndex++;
 			}
 		}
-
-		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
-		reserve(static_cast<Eigen::Index>(finalCount));
-		m_Coefficients.insert(m_Coefficients.end(),
-		                      filteredCoefficients.data(),
-		                      filteredCoefficients.data() + filteredCoefficients.size());
-		appendBuffer(m_VectorBuffer, filteredVectors.data(), filteredVectors.size());
 		return *this;
 	}
 
@@ -1606,11 +1614,22 @@ private:
 		(void)index;
 	}
 
-	static void appendBuffer(std::vector<Scalar>& destination, const Scalar* const source, const Eigen::Index size)
+	template <typename Derived>
+	static void appendVector(std::vector<Scalar>& destination, const Eigen::MatrixBase<Derived>& expression)
 	{
-		if (size != 0)
+		const auto oldSize = destination.size();
+		destination.resize(oldSize + static_cast<std::size_t>(expression.size()));
+		assignVector(destination, oldSize, expression);
+	}
+
+	template <typename Derived>
+	static void assignVector(std::vector<Scalar>& destination,
+	                         const std::size_t offset,
+	                         const Eigen::MatrixBase<Derived>& expression)
+	{
+		if (expression.size() != 0)
 		{
-			destination.insert(destination.end(), source, source + size);
+			Eigen::Map<Vector>{destination.data() + offset, expression.size()} = expression.reshaped();
 		}
 	}
 

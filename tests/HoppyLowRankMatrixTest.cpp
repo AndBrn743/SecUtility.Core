@@ -124,6 +124,22 @@ TEST_CASE("General low-rank matrices preserve dimensions and rank-zero state", "
 }
 
 
+TEST_CASE("General low-rank insertion supports empty factor dimensions", "[Hoppy][LowRankMatrix]")
+{
+	DynamicMatrix matrix(0, 2);
+	matrix.addTerm(2.0, Eigen::VectorXd{}, Eigen::Vector2d{1.0, -3.0});
+	matrix.addTerms(Eigen::Vector2d{4.0, -1.0}, Eigen::MatrixXd(0, 2), Eigen::Matrix2d::Identity());
+
+	CHECK(matrix.rows() == 0);
+	CHECK(matrix.cols() == 2);
+	CHECK(matrix.termCount() == 3);
+	CHECK(matrix.leftVectors().rows() == 0);
+	CHECK(matrix.leftVectors().cols() == 3);
+	CHECK(matrix.toDense().rows() == 0);
+	CHECK(matrix.toDense().cols() == 2);
+}
+
+
 TEST_CASE("General low-rank matrices add and inspect individual terms", "[Hoppy][LowRankMatrix]")
 {
 	DynamicMatrix matrix(2, 3);
@@ -265,7 +281,7 @@ TEST_CASE("An all-zero batch constructor preserves inferred rectangular dimensio
 }
 
 
-TEST_CASE("General low-rank insertion evaluates aliased views before reallocating", "[Hoppy][LowRankMatrix]")
+TEST_CASE("General low-rank insertion accepts explicitly evaluated source views", "[Hoppy][LowRankMatrix]")
 {
 	DynamicMatrix matrix(2, 3);
 	Eigen::Matrix<double, 2, 2> left;
@@ -277,7 +293,7 @@ TEST_CASE("General low-rank insertion evaluates aliased views before reallocatin
 	const Eigen::MatrixXd expectedLeft = matrix.leftVectors();
 	const Eigen::MatrixXd expectedRight = matrix.rightVectors();
 	const Eigen::VectorXd expectedCoefficients = matrix.coefficients();
-	matrix.addTerms(matrix.coefficients(), matrix.leftVectors(), matrix.rightVectors());
+	matrix.addTerms(expectedCoefficients, expectedLeft, expectedRight);
 
 	REQUIRE(matrix.termCount() == 4);
 	CHECK(matrix.leftVectors().leftCols(2) == expectedLeft);
@@ -289,7 +305,7 @@ TEST_CASE("General low-rank insertion evaluates aliased views before reallocatin
 
 	const Eigen::Vector2d aliasedLeft = matrix.leftVectorOfTerm(0);
 	const Eigen::Vector3d aliasedRight = matrix.rightVectorOfTerm(0);
-	matrix.addTerm(matrix.coefficientOfTerm(0), matrix.leftVectorOfTerm(0), matrix.rightVectorOfTerm(0));
+	matrix.addTerm(matrix.coefficientOfTerm(0), aliasedLeft, aliasedRight);
 	REQUIRE(matrix.termCount() == 5);
 	CHECK(matrix.leftVectorOfTerm(4) == aliasedLeft);
 	CHECK(matrix.rightVectorOfTerm(4) == aliasedRight);
