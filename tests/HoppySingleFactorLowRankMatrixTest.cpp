@@ -67,6 +67,7 @@ static_assert(std::is_same_v<Hoppy::LowRankSymmetricMatrix<double, Eigen::Dynami
                              Hoppy::LowRankSelfAdjointMatrix<double, Eigen::Dynamic>>);
 static_assert(!std::is_same_v<ComplexSymmetric, ComplexSelfAdjoint>);
 static_assert(std::is_same_v<FixedGeneralFromSelfAdjoint, Hoppy::LowRankMatrix<double, 3, 3>>);
+static_assert(std::is_same_v<decltype(std::declval<const ComplexSelfAdjoint&>().capacity()), Eigen::Index>);
 
 
 TEMPLATE_TEST_CASE("Self-adjoint low-rank matrices preserve their structural expansion", "[Hoppy][LowRankMatrix]",
@@ -267,4 +268,19 @@ TEST_CASE("Single-factor low-rank values support reserve, clear, copy, and move"
 	CHECK(matrix.cols() == 3);
 	CHECK(matrix.termCount() == 0);
 	CHECK(matrix.capacity() >= 8);
+}
+
+
+TEST_CASE("Single-factor insertion grows complete-term capacity geometrically", "[Hoppy][LowRankMatrix]")
+{
+	Hoppy::LowRankSelfAdjointMatrixX<double> matrix(3);
+	matrix.addTerm(1.0, Eigen::Vector3d::Ones());
+	const Eigen::Index oldCapacity = matrix.capacity();
+	REQUIRE(oldCapacity >= 1);
+	const auto additionalTerms = static_cast<Eigen::Index>(oldCapacity);
+
+	matrix.addTerms(Eigen::VectorXd::Ones(additionalTerms), Eigen::MatrixXd::Ones(3, additionalTerms));
+
+	CHECK(matrix.termCount() == oldCapacity + 1);
+	CHECK(matrix.capacity() >= 2 * oldCapacity);
 }

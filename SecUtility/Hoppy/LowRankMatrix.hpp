@@ -41,10 +41,11 @@
 ///
 /// For owning matrices, appending terms invalidates existing views only if a backing buffer reallocates; `reserve`
 /// invalidates them only when it grows capacity, and `clear` invalidates term views and references while preserving
-/// dimensions and capacity. Views returned by a lazy expression inherit the lifetime and invalidation rules of its
-/// nested expression. Arguments to `addTerm` and `addTerms` must not alias storage owned by the destination; callers
-/// that need to reinsert exposed views must evaluate them first. Invalid dimensions, shapes, indices, and capacities
-/// are programming errors checked with `eigen_assert`; violating them when Eigen assertions are disabled is undefined
+/// dimensions and capacity. Automatic growth is geometric in the number of complete terms that all backing buffers
+/// can accept. Views returned by a lazy expression inherit the lifetime and invalidation rules of its nested
+/// expression. Arguments to `addTerm` and `addTerms` must not alias storage owned by the destination; callers that
+/// need to reinsert exposed views must evaluate them first. Invalid dimensions, shapes, indices, and capacities are
+/// programming errors checked with `eigen_assert`; violating them when Eigen assertions are disabled is undefined
 /// behavior.
 ///
 /// This Eigen-extension header is distributed under MPL-2.0, Eigen's primary license. The surrounding
@@ -1048,16 +1049,42 @@ namespace Hoppy::Detail
 		}
 	};
 
-	inline std::size_t CheckedBufferSize(const Eigen::Index dimension, const std::size_t termCount)
+	inline std::size_t CheckedBufferSize(const Eigen::Index dimension, const Eigen::Index termCount)
 	{
-		eigen_assert(dimension >= 0 && "A matrix dimension cannot be negative");
+		eigen_assert(dimension >= 0 && termCount >= 0 && "A matrix dimension or term count cannot be negative");
 
 		const auto unsignedDimension = static_cast<std::size_t>(dimension);
-		if (unsignedDimension != 0 && termCount > std::numeric_limits<std::size_t>::max() / unsignedDimension)
+		const auto unsignedTermCount = static_cast<std::size_t>(termCount);
+		if (unsignedDimension != 0 && unsignedTermCount > std::numeric_limits<std::size_t>::max() / unsignedDimension)
 		{
 			throw std::length_error("Low-rank matrix storage size overflow");
 		}
-		return unsignedDimension * termCount;
+		return unsignedDimension * unsignedTermCount;
+	}
+
+	inline Eigen::Index BufferTermCapacity(const std::size_t scalarCapacity, const Eigen::Index scalarsPerTerm) noexcept
+	{
+		if (scalarsPerTerm == 0)
+		{
+			return (std::numeric_limits<Eigen::Index>::max)();
+		}
+
+		const auto termCapacity = scalarCapacity / static_cast<std::size_t>(scalarsPerTerm);
+		const auto maximumCapacity = static_cast<std::size_t>((std::numeric_limits<Eigen::Index>::max)());
+		return static_cast<Eigen::Index>((std::min)(termCapacity, maximumCapacity));
+	}
+
+	inline Eigen::Index GeometricTermCapacity(const Eigen::Index currentCapacity,
+	                                          const Eigen::Index requiredCapacity) noexcept
+	{
+		if (requiredCapacity <= currentCapacity)
+		{
+			return currentCapacity;
+		}
+
+		const auto maximumCapacity = (std::numeric_limits<Eigen::Index>::max)();
+		const auto doubledCapacity = currentCapacity > maximumCapacity / 2 ? maximumCapacity : 2 * currentCapacity;
+		return (std::max)(requiredCapacity, (std::max)(Eigen::Index{1}, doubledCapacity));
 	}
 }
 
@@ -1141,18 +1168,19 @@ public:
 		addTerms(coefficients, leftVectors, rightVectors);
 	}
 
-	[[nodiscard]] std::size_t capacity() const noexcept
+	[[nodiscard]] Eigen::Index capacity() const noexcept
 	{
-		return m_Coefficients.capacity();
+		return (std::min)({Detail::BufferTermCapacity(m_Coefficients.capacity(), 1),
+		                   Detail::BufferTermCapacity(m_LeftVectorBuffer.capacity(), rows()),
+		                   Detail::BufferTermCapacity(m_RightVectorBuffer.capacity(), cols())});
 	}
 
 	void reserve(const Eigen::Index termCapacity)
 	{
 		eigen_assert(termCapacity >= 0 && "A term capacity cannot be negative");
-		const auto capacity = static_cast<std::size_t>(termCapacity);
-		m_Coefficients.reserve(capacity);
-		m_LeftVectorBuffer.reserve(Detail::CheckedBufferSize(rows(), capacity));
-		m_RightVectorBuffer.reserve(Detail::CheckedBufferSize(cols(), capacity));
+		m_Coefficients.reserve(static_cast<std::size_t>(termCapacity));
+		m_LeftVectorBuffer.reserve(Detail::CheckedBufferSize(rows(), termCapacity));
+		m_RightVectorBuffer.reserve(Detail::CheckedBufferSize(cols(), termCapacity));
 	}
 
 	void clear() noexcept
@@ -1200,7 +1228,7 @@ public:
 
 		validateVector(leftVector, rows());
 		validateVector(rightVector, cols());
-		reserve(termCount() + 1);
+		ensureCapacity(termCount() + 1);
 		m_Coefficients.push_back(std::move(coefficient));
 		appendVector<RowsAtCompileTime>(m_LeftVectorBuffer, rows(), leftVector);
 		appendVector<ColsAtCompileTime>(m_RightVectorBuffer, cols(), rightVector);
@@ -1231,8 +1259,7 @@ public:
 			return *this;
 		}
 
-		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
-		reserve(static_cast<Eigen::Index>(finalCount));
+		ensureCapacity(termCount() + nonzeroCount);
 		const auto oldLeftSize = m_LeftVectorBuffer.size();
 		const auto oldRightSize = m_RightVectorBuffer.size();
 		m_LeftVectorBuffer.resize(oldLeftSize + Detail::CheckedBufferSize(rows(), nonzeroCount));
@@ -1243,14 +1270,16 @@ public:
 			if (evaluatedCoefficients[sourceIndex] != Scalar{})
 			{
 				m_Coefficients.push_back(evaluatedCoefficients[sourceIndex]);
-				assignVector<RowsAtCompileTime>(m_LeftVectorBuffer,
-				                                    oldLeftSize + static_cast<std::size_t>(rows())
-				                                                          * static_cast<std::size_t>(destinationIndex),
-				                                    rows(), leftVectors.col(sourceIndex));
-				assignVector<ColsAtCompileTime>(m_RightVectorBuffer,
-				                                    oldRightSize + static_cast<std::size_t>(cols())
-				                                                           * static_cast<std::size_t>(destinationIndex),
-				                                    cols(), rightVectors.col(sourceIndex));
+				assignVector<RowsAtCompileTime>(
+				        m_LeftVectorBuffer,
+				        oldLeftSize + static_cast<std::size_t>(rows()) * static_cast<std::size_t>(destinationIndex),
+				        rows(),
+				        leftVectors.col(sourceIndex));
+				assignVector<ColsAtCompileTime>(
+				        m_RightVectorBuffer,
+				        oldRightSize + static_cast<std::size_t>(cols()) * static_cast<std::size_t>(destinationIndex),
+				        cols(),
+				        rightVectors.col(sourceIndex));
 				destinationIndex++;
 			}
 		}
@@ -1321,6 +1350,14 @@ private:
 	{
 		eigen_assert(index >= 0 && index < termCount() && "Low-rank term index is out of range");
 		(void)index;
+	}
+
+	void ensureCapacity(const Eigen::Index requiredCapacity)
+	{
+		if (requiredCapacity > capacity())
+		{
+			reserve(Detail::GeometricTermCapacity(capacity(), requiredCapacity));
+		}
 	}
 
 	template <int SizeAtCompileTime, typename Derived>
@@ -1440,17 +1477,17 @@ public:
 		addTerms(coefficients, vectors);
 	}
 
-	[[nodiscard]] std::size_t capacity() const noexcept
+	[[nodiscard]] Eigen::Index capacity() const noexcept
 	{
-		return m_Coefficients.capacity();
+		return (std::min)(Detail::BufferTermCapacity(m_Coefficients.capacity(), 1),
+		                  Detail::BufferTermCapacity(m_VectorBuffer.capacity(), rows()));
 	}
 
 	void reserve(const Eigen::Index termCapacity)
 	{
 		eigen_assert(termCapacity >= 0 && "A term capacity cannot be negative");
-		const auto capacity = static_cast<std::size_t>(termCapacity);
-		m_Coefficients.reserve(capacity);
-		m_VectorBuffer.reserve(Detail::CheckedBufferSize(rows(), capacity));
+		m_Coefficients.reserve(static_cast<std::size_t>(termCapacity));
+		m_VectorBuffer.reserve(Detail::CheckedBufferSize(rows(), termCapacity));
 	}
 
 	void clear() noexcept
@@ -1486,8 +1523,7 @@ public:
 
 	template <typename VectorDerived>
 	/// The vector argument must not alias storage owned by `*this`; evaluate exposed views before reinserting it.
-	SingleFactorLowRankMatrix& addTerm(CoefficientScalar coefficient,
-	                                   const Eigen::MatrixBase<VectorDerived>& vector)
+	SingleFactorLowRankMatrix& addTerm(CoefficientScalar coefficient, const Eigen::MatrixBase<VectorDerived>& vector)
 	{
 		if (coefficient == CoefficientScalar{})
 		{
@@ -1495,7 +1531,7 @@ public:
 		}
 
 		validateVector(vector);
-		reserve(termCount() + 1);
+		ensureCapacity(termCount() + 1);
 		m_Coefficients.push_back(std::move(coefficient));
 		appendVector(m_VectorBuffer, vector);
 		return *this;
@@ -1525,8 +1561,7 @@ public:
 			return *this;
 		}
 
-		const auto finalCount = static_cast<std::size_t>(termCount() + nonzeroCount);
-		reserve(static_cast<Eigen::Index>(finalCount));
+		ensureCapacity(termCount() + nonzeroCount);
 		const auto oldVectorSize = m_VectorBuffer.size();
 		m_VectorBuffer.resize(oldVectorSize + Detail::CheckedBufferSize(rows(), nonzeroCount));
 		Eigen::Index destinationIndex = 0;
@@ -1536,8 +1571,8 @@ public:
 			{
 				m_Coefficients.push_back(evaluatedCoefficients[sourceIndex]);
 				assignVector(m_VectorBuffer,
-				             oldVectorSize + static_cast<std::size_t>(rows())
-				                                     * static_cast<std::size_t>(destinationIndex),
+				             oldVectorSize
+				                     + static_cast<std::size_t>(rows()) * static_cast<std::size_t>(destinationIndex),
 				             vectors.col(sourceIndex));
 				destinationIndex++;
 			}
@@ -1612,6 +1647,14 @@ private:
 	{
 		eigen_assert(index >= 0 && index < termCount() && "Low-rank term index is out of range");
 		(void)index;
+	}
+
+	void ensureCapacity(const Eigen::Index requiredCapacity)
+	{
+		if (requiredCapacity > capacity())
+		{
+			reserve(Detail::GeometricTermCapacity(capacity(), requiredCapacity));
+		}
 	}
 
 	template <typename Derived>

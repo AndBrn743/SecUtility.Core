@@ -69,6 +69,7 @@ static_assert(Hoppy::LowRankMatrixBase<FixedMatrix>::ColsAtCompileTime == 3);
 static_assert(std::is_same_v<Eigen::internal::traits<DynamicMatrix>::StorageKind, Hoppy::LowRankStorage>);
 static_assert(Eigen::internal::traits<FixedMatrix>::RowsAtCompileTime == 2);
 static_assert(Eigen::internal::traits<FixedMatrix>::ColsAtCompileTime == 3);
+static_assert(std::is_same_v<decltype(std::declval<const DynamicMatrix&>().capacity()), Eigen::Index>);
 static_assert((Eigen::internal::traits<DynamicMatrix>::Flags & Eigen::NestByRefBit) != 0);
 static_assert((DynamicMatrix::Flags & Eigen::NestByRefBit) != 0);
 static_assert(!HasMutableCoefficients<DynamicMatrix>::value);
@@ -340,4 +341,20 @@ TEST_CASE("General low-rank values support reserve, clear, copy, and move", "[Ho
 	CHECK(matrix.cols() == 3);
 	CHECK(matrix.termCount() == 0);
 	CHECK(matrix.capacity() >= 8);
+}
+
+
+TEST_CASE("General low-rank insertion grows complete-term capacity geometrically", "[Hoppy][LowRankMatrix]")
+{
+	DynamicMatrix matrix(2, 3);
+	matrix.addTerm(1.0, Eigen::Vector2d::Ones(), Eigen::Vector3d::Ones());
+	const Eigen::Index oldCapacity = matrix.capacity();
+	REQUIRE(oldCapacity >= 1);
+	const auto additionalTerms = static_cast<Eigen::Index>(oldCapacity);
+
+	matrix.addTerms(Eigen::VectorXd::Ones(additionalTerms), Eigen::MatrixXd::Ones(2, additionalTerms),
+	                Eigen::MatrixXd::Ones(3, additionalTerms));
+
+	CHECK(matrix.termCount() == oldCapacity + 1);
+	CHECK(matrix.capacity() >= 2 * oldCapacity);
 }
