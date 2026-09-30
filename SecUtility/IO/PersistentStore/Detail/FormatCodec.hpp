@@ -154,7 +154,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 			}
 		}
 
-		inline bool IsUnsignedByteLess(const std::string& left, const std::string& right) noexcept
+		inline bool IsUnsignedByteLess(const std::string_view left, const std::string_view right) noexcept
 		{
 			return std::lexicographical_compare(
 			        left.begin(),
