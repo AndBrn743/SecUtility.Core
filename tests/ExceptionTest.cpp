@@ -8,6 +8,7 @@
 
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 
 using namespace SecUtility;
@@ -277,6 +278,20 @@ TEST_CASE("Exception - Exception hierarchy")
 			CHECK_THAT(ex.what(), Equals("Derived exception"));
 		}
 	}
+}
+
+
+TEST_CASE("Exception - Key exception hierarchy")
+{
+	STATIC_CHECK(std::is_base_of_v<InvalidOperationException, InvalidKeyException>);
+	STATIC_CHECK(std::is_base_of_v<InvalidOperationException, KeyAlreadyExistsException>);
+	STATIC_CHECK(std::is_base_of_v<InvalidOperationException, KeyNotFoundException>);
+
+	CHECK_THROWS_AS(throw InvalidKeyException("invalid UTF-8 key"), InvalidOperationException);
+	CHECK_THROWS_AS(throw KeyAlreadyExistsException("duplicate key"), InvalidOperationException);
+	CHECK_THROWS_AS(throw KeyNotFoundException("missing key"), InvalidOperationException);
+	CHECK_THROWS_WITH(throw InvalidKeyException("invalid UTF-8 key"),
+	                  "InvalidKeyException\n\t-> invalid UTF-8 key");
 }
 
 
