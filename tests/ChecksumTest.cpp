@@ -648,6 +648,14 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 	}
 }
 
+
+TEST_CASE("Crc32C - Public dispatcher uses the Castagnoli polynomial")
+{
+	const UInt8 data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+	const Checksum32 checksum = Crc32C(data, 9);
+	CHECK(std::to_underlying(checksum) == 0xE3069283);
+}
+
 TEST_CASE("HardwareCrc32C - Known test vectors")
 {
 #if SECUTILITY_HAS_HARDWARE_CRC32C

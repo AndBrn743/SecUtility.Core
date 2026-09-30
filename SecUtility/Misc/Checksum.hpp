@@ -412,6 +412,6 @@ namespace SecUtility::Checksum
 		}
 #endif
 
-		return SlicedSoftwareCrc32<16, 4>(data, byteCount, crc);
+		return SlicedSoftwareCrc32C<16>(data, byteCount, crc);
 	}
 }
