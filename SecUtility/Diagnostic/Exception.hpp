@@ -22,6 +22,9 @@ Exception
 │   │   ├── ArgumentNullException
 │   │   └── ArgumentOutOfRangeException
 │   ├── InvalidOperationException
+│   │   ├── InvalidKeyException
+│   │   ├── KeyAlreadyExistsException
+│   │   └── KeyNotFoundException
 │   ├── NotImplementedException
 │   ├── NotSupportedException
 │   ├── UnreachableException  // calls terminate
@@ -229,6 +232,9 @@ namespace SecUtility
 			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ArgumentNullException, InvalidArgumentException)
 			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ArgumentOutOfRangeException, InvalidArgumentException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(InvalidOperationException, LogicException)
+			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(InvalidKeyException, InvalidOperationException)
+			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(KeyAlreadyExistsException, InvalidOperationException)
+			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(KeyNotFoundException, InvalidOperationException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(NotImplementedException, LogicException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(NotSupportedException, LogicException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(PreconditionViolationException, LogicException)
