@@ -25,10 +25,7 @@ namespace SecUtility
 	using UInt32 = std::uint32_t;
 	using UInt64 = std::uint64_t;
 
-	enum class Byte : unsigned char
-	{
-		/* NO CODE  */
-	};
+	using Byte = std::byte;
 
 	enum class SByte : signed char
 	{

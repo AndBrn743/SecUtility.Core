@@ -651,7 +651,8 @@ TEST_CASE("SoftwareCrc32C - Known test vectors")
 
 TEST_CASE("Crc32C - Public dispatcher uses the Castagnoli polynomial")
 {
-	const UInt8 data[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+	const Byte data[] = {Byte{'1'}, Byte{'2'}, Byte{'3'}, Byte{'4'}, Byte{'5'},
+	                     Byte{'6'}, Byte{'7'}, Byte{'8'}, Byte{'9'}};
 	const Checksum32 checksum = Crc32C(data, 9);
 	CHECK(std::to_underlying(checksum) == 0xE3069283);
 }

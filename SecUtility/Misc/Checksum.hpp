@@ -414,4 +414,18 @@ namespace SecUtility::Checksum
 
 		return SlicedSoftwareCrc32C<16>(data, byteCount, crc);
 	}
+
+	inline Checksum32 Crc32(const Byte* data,
+	                        const std::size_t byteCount,
+	                        const Checksum32 crc = Checksum32{0xFFFFFFFF})
+	{
+		return Crc32(reinterpret_cast<const UInt8*>(data), byteCount, crc);
+	}
+
+	inline Checksum32 Crc32C(const Byte* data,
+	                         const std::size_t byteCount,
+	                         const Checksum32 crc = Checksum32{0xFFFFFFFF})
+	{
+		return Crc32C(reinterpret_cast<const UInt8*>(data), byteCount, crc);
+	}
 }
