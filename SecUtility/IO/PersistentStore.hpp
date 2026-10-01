@@ -81,12 +81,6 @@ namespace SecUtility::IO
 	private:
 		friend class PersistentStoreDetail::StoreState;
 
-		enum class AccessState
-		{
-			ReadOnly,
-			ReadWrite
-		};
-
 		explicit PersistentStore(std::shared_ptr<PersistentStoreDetail::StoreState> statePtr) noexcept
 		    : m_StatePtr(std::move(statePtr))
 		{
@@ -95,4 +89,41 @@ namespace SecUtility::IO
 
 		std::shared_ptr<PersistentStoreDetail::StoreState> m_StatePtr;
 	};
+}
+
+#include <SecUtility/IO/PersistentStore/Detail/StoreState.hpp>
+
+namespace SecUtility::IO
+{
+	inline PersistentStore PersistentStore::OpenForReadOnly(const std::filesystem::path& path)
+	{
+		return PersistentStore(PersistentStoreDetail::StoreState::Open(
+		        path, PersistentStoreDetail::FileAccess::ReadOnly));
+	}
+
+	inline PersistentStore PersistentStore::OpenForReadWrite(const std::filesystem::path& path)
+	{
+		return PersistentStore(PersistentStoreDetail::StoreState::Open(
+		        path, PersistentStoreDetail::FileAccess::ReadWrite));
+	}
+
+	inline PersistentStore PersistentStore::Create(const std::filesystem::path& path)
+	{
+		return PersistentStore(PersistentStoreDetail::StoreState::Create(path));
+	}
+
+	inline PersistentStore PersistentStore::CreateIfNotExist(const std::filesystem::path& path)
+	{
+		return PersistentStore(PersistentStoreDetail::StoreState::CreateIfNotExist(path));
+	}
+
+	inline bool PersistentStore::Contains(const std::string_view key) const
+	{
+		return m_StatePtr->Contains(key);
+	}
+
+	inline std::size_t PersistentStore::Size() const
+	{
+		return m_StatePtr->Size();
+	}
 }
