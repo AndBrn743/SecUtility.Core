@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -330,6 +331,50 @@ TEST_CASE("PersistentStore backend performs exact positional I/O")
 	backend.ReadExact(11, read.data(), read.size());
 	CHECK(read == written);
 	CHECK(backend.GetPhysicalFileBytes() == written.size() + 17);
+}
+
+
+TEST_CASE("PersistentStore backend compares path identities")
+{
+	TemporaryPath firstTemporary;
+	TemporaryPath secondTemporary;
+	auto firstOptional = FileBackend::TryCreateExclusive(firstTemporary.Get());
+	auto secondOptional = FileBackend::TryCreateExclusive(secondTemporary.Get());
+	REQUIRE(firstOptional.has_value());
+	REQUIRE(secondOptional.has_value());
+	FileBackend first = std::move(*firstOptional);
+
+	CHECK(first.DoesPathIdentifySameFile(firstTemporary.Get()));
+	CHECK_FALSE(first.DoesPathIdentifySameFile(secondTemporary.Get()));
+	CHECK_FALSE(first.DoesPathIdentifySameFile(firstTemporary.Get().string() + "-missing"));
+}
+
+
+TEST_CASE("PersistentStore backend rejects invalid exact I/O and read-only writes")
+{
+	TemporaryPath temporary;
+	{
+		auto backendOptional = FileBackend::TryCreateExclusive(temporary.Get());
+		REQUIRE(backendOptional.has_value());
+		FileBackend backend = std::move(*backendOptional);
+		backend.SetPhysicalFileBytes(4);
+
+		std::array<Byte, 4> bytes{};
+		CHECK_THROWS_AS(backend.ReadExact(1, bytes.data(), bytes.size()), IOException);
+		CHECK_THROWS_AS(backend.ReadExact(0, nullptr, 1), IOException);
+		CHECK_THROWS_AS(backend.WriteExact(0, nullptr, 1), IOException);
+		CHECK_THROWS_AS(backend.ReadExact(std::numeric_limits<UInt64>::max(), bytes.data(), 1), IOException);
+		CHECK_THROWS_AS(backend.WriteExact(std::numeric_limits<UInt64>::max(), bytes.data(), 1), IOException);
+		CHECK_THROWS_AS(backend.SetPhysicalFileBytes(std::numeric_limits<UInt64>::max()), IOException);
+
+		CHECK_NOTHROW(backend.ReadExact(0, nullptr, 0));
+		CHECK_NOTHROW(backend.WriteExact(0, nullptr, 0));
+	}
+
+	auto backend = FileBackend::Open(temporary.Get(), FileAccess::ReadOnly);
+	std::array<Byte, 1> byte{};
+	CHECK_THROWS_AS(backend.WriteExact(0, byte.data(), byte.size()), InvalidOperationException);
+	CHECK_THROWS_AS(backend.SetPhysicalFileBytes(8), InvalidOperationException);
 }
 
 
