@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-#if !defined(_WIN32) && __has_include(<cxxabi.h>)
+#if defined(__GNUC__) && !defined(_MSC_VER)
 #include <cxxabi.h>
 #endif
 
@@ -60,7 +60,7 @@ namespace SecUtility
 
 	inline std::string Demangle(const std::string_view& mangledName)
 	{
-#if !defined(_WIN32) && __has_include(<cxxabi.h>)
+#if defined(__GNUC__) && !defined(_MSC_VER)
 		int status;
 		char* name = abi::__cxa_demangle(mangledName.begin(), nullptr, nullptr, &status);
 		if (status != 0)
