@@ -82,7 +82,7 @@ TEST_CASE("Demangle should work")
 #if defined(_MSC_VER)
 	REQUIRE(SecUtility::Demangle(typeid(Example::Internal::Array<int, 3>).name())
 	        == std::string_view{"class Example::Internal::Array<int,3>"});
-#elif defined(__GNUC__)
+#elif defined(__GNUC__) && defined(_WIN32)
 	REQUIRE(SecUtility::Demangle(typeid(Example::Internal::Array<int, 3>).name())
 	        == std::string_view{"Example::Internal::Array<int, 3ull>"});
 #else
