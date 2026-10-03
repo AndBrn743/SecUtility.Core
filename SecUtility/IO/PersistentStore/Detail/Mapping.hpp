@@ -10,9 +10,9 @@ namespace SecUtility::IO::PersistentStoreDetail
 {
 #if defined(_WIN32)
 	using ReadOnlyMappedRegion = WindowsReadOnlyMappedRegion;
-	using WritableMappedRegion = WindowsWritableMappedRegion;
+	using ReadWriteMappedRegion = WindowsReadWriteMappedRegion;
 #else
 	using ReadOnlyMappedRegion = PosixReadOnlyMappedRegion;
-	using WritableMappedRegion = PosixWritableMappedRegion;
+	using ReadWriteMappedRegion = PosixReadWriteMappedRegion;
 #endif
 }

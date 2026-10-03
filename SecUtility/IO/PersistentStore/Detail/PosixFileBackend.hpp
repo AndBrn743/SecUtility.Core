@@ -137,7 +137,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 	};
 
 	using PosixReadOnlyMappedRegion = PosixMappedRegion<false>;
-	using PosixWritableMappedRegion = PosixMappedRegion<true>;
+	using PosixReadWriteMappedRegion = PosixMappedRegion<true>;
 
 	struct PosixFileIdentity
 	{
@@ -411,7 +411,9 @@ namespace SecUtility::IO::PersistentStoreDetail
 			return Map<false>(offset, byteCount, alignment);
 		}
 
-		PosixWritableMappedRegion MapWritable(const UInt64 offset, const std::size_t byteCount, const UInt64 alignment)
+		PosixReadWriteMappedRegion MapReadWrite(const UInt64 offset,
+		                                        const std::size_t byteCount,
+		                                        const UInt64 alignment)
 		{
 			RequireWritable("map writable file region");
 			return Map<true>(offset, byteCount, alignment);

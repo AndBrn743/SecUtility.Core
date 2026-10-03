@@ -53,7 +53,7 @@ namespace
 		return backend;
 	}
 
-	void Fill(WritableMappedRegion& ref_region, const Byte value)
+	void Fill(ReadWriteMappedRegion& ref_region, const Byte value)
 	{
 		std::fill(ref_region.Data(), ref_region.Data() + ref_region.Size(), value);
 	}
@@ -84,7 +84,7 @@ TEST_CASE("PersistentStore mapping exposes bounded aligned regions")
 	                                           granularity * 2 + 1};
 	for (const UInt64 offset : offsets)
 	{
-		auto writable = backend.MapWritable(offset, 3, 1);
+		auto writable = backend.MapReadWrite(offset, 3, 1);
 		CHECK(writable.Size() == 3);
 		Fill(writable, Byte{0x5A});
 		writable.Complete();
@@ -119,7 +119,7 @@ TEST_CASE("PersistentStore mapping rejects invalid ranges and access")
 	}
 
 	auto backend = FileBackend::Open(temporary.Get(), FileAccess::ReadOnly);
-	CHECK_THROWS_AS(backend.MapWritable(0, 1, 1), InvalidOperationException);
+	CHECK_THROWS_AS(backend.MapReadWrite(0, 1, 1), InvalidOperationException);
 }
 
 
@@ -135,12 +135,12 @@ TEST_CASE("PersistentStore retained mappings survive growth and coherent mapped 
 	auto backend = CreateBackend(temporary.Get(), initialBytes);
 
 	{
-		auto writable = backend.MapWritable(oldOffset, oldBytes, 1);
+		auto writable = backend.MapReadWrite(oldOffset, oldBytes, 1);
 		Fill(writable, Byte{0x11});
 		writable.Complete();
 	}
 	{
-		auto writable = backend.MapWritable(reusableOffset, reusableBytes, 1);
+		auto writable = backend.MapReadWrite(reusableOffset, reusableBytes, 1);
 		Fill(writable, Byte{0x22});
 		writable.Complete();
 	}
@@ -153,7 +153,7 @@ TEST_CASE("PersistentStore retained mappings survive growth and coherent mapped 
 	backend.SetPhysicalFileBytes(granularity * 3);
 	const UInt64 grownOffset = granularity * 2 + 64;
 	{
-		auto writable = backend.MapWritable(grownOffset, 16, 1);
+		auto writable = backend.MapReadWrite(grownOffset, 16, 1);
 		Fill(writable, Byte{0x33});
 		writable.Complete();
 	}
@@ -167,7 +167,7 @@ TEST_CASE("PersistentStore retained mappings survive growth and coherent mapped 
 	{
 		const UInt64 offset = reuseOffsets[index];
 		const Byte replacement{static_cast<unsigned char>(0x40 + index)};
-		auto replacementView = backend.MapWritable(offset, 1, 1);
+		auto replacementView = backend.MapReadWrite(offset, 1, 1);
 		replacementView.Data()[0] = replacement;
 		replacementView.Complete();
 
@@ -178,7 +178,7 @@ TEST_CASE("PersistentStore retained mappings survive growth and coherent mapped 
 	}
 
 	{
-		auto reusableView = backend.MapWritable(reusableOffset, reusableBytes, 1);
+		auto reusableView = backend.MapReadWrite(reusableOffset, reusableBytes, 1);
 		Fill(reusableView, Byte{0x77});
 		reusableView.Complete();
 		const auto freshView = backend.MapReadOnly(reusableOffset, reusableBytes, 1);
@@ -197,7 +197,7 @@ TEST_CASE("PersistentStore mapped writes remain visible after reopen")
 	TemporaryPath temporary;
 	{
 		auto backend = CreateBackend(temporary.Get(), 4096);
-		auto writable = backend.MapWritable(127, 4, 1);
+		auto writable = backend.MapReadWrite(127, 4, 1);
 		Fill(writable, Byte{0x6C});
 		writable.Complete();
 	}

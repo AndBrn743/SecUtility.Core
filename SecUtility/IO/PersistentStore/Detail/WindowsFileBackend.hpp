@@ -41,8 +41,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 		                    void* const basePtr,
 		                    Byte* const exposedPtr,
 		                    const std::size_t exposedBytes) noexcept
-		    : m_MappingHandle(mappingHandle), m_BasePtr(basePtr), m_ExposedPtr(exposedPtr),
-		      m_ExposedBytes(exposedBytes)
+		    : m_MappingHandle(mappingHandle), m_BasePtr(basePtr), m_ExposedPtr(exposedPtr), m_ExposedBytes(exposedBytes)
 		{
 			/* NO CODE */
 		}
@@ -71,7 +70,10 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		WindowsMappedRegion(const WindowsMappedRegion&) = delete;
 		WindowsMappedRegion& operator=(const WindowsMappedRegion&) = delete;
-		~WindowsMappedRegion() noexcept { Reset(); }
+		~WindowsMappedRegion() noexcept
+		{
+			Reset();
+		}
 
 		auto Data() const noexcept
 		{
@@ -85,7 +87,10 @@ namespace SecUtility::IO::PersistentStoreDetail
 			}
 		}
 
-		std::size_t Size() const noexcept { return m_ExposedBytes; }
+		std::size_t Size() const noexcept
+		{
+			return m_ExposedBytes;
+		}
 
 		template <bool IsEnabled = IsWritable, std::enable_if_t<IsEnabled, int> = 0>
 		void Complete()
@@ -136,7 +141,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 	};
 
 	using WindowsReadOnlyMappedRegion = WindowsMappedRegion<false>;
-	using WindowsWritableMappedRegion = WindowsMappedRegion<true>;
+	using WindowsReadWriteMappedRegion = WindowsMappedRegion<true>;
 
 	struct WindowsFileIdentity
 	{
@@ -187,8 +192,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 				iterator = Registry.emplace(identity, RegistryEntry{}).first;
 			}
 			RegistryEntry& entry = iterator->second;
-			const bool hasConflict = access == FileAccess::ReadOnly ? entry.HasWriter
-			                                                        : entry.HasWriter || entry.ReaderCount != 0;
+			const bool hasConflict =
+			        access == FileAccess::ReadOnly ? entry.HasWriter : entry.HasWriter || entry.ReaderCount != 0;
 			if (hasConflict)
 			{
 				throw IOException("PersistentStore lock unavailable in this process");
@@ -235,9 +240,13 @@ namespace SecUtility::IO::PersistentStoreDetail
 		static WindowsFileBackend Open(const std::filesystem::path& path, const FileAccess access)
 		{
 			const DWORD desiredAccess = access == FileAccess::ReadOnly ? GENERIC_READ : GENERIC_READ | GENERIC_WRITE;
-			const HANDLE handle = ::CreateFileW(path.c_str(), desiredAccess, FILE_SHARE_READ | FILE_SHARE_WRITE,
-			                                    nullptr, OPEN_EXISTING,
-			                                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
+			const HANDLE handle = ::CreateFileW(path.c_str(),
+			                                    desiredAccess,
+			                                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+			                                    nullptr,
+			                                    OPEN_EXISTING,
+			                                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+			                                    nullptr);
 			if (handle == INVALID_HANDLE_VALUE)
 			{
 				throw IOException("PersistentStore open failed",
@@ -248,9 +257,13 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		static std::optional<WindowsFileBackend> TryCreateExclusive(const std::filesystem::path& path)
 		{
-			const HANDLE handle = ::CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
-			                                    FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, CREATE_NEW,
-			                                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
+			const HANDLE handle = ::CreateFileW(path.c_str(),
+			                                    GENERIC_READ | GENERIC_WRITE,
+			                                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+			                                    nullptr,
+			                                    CREATE_NEW,
+			                                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+			                                    nullptr);
 			if (handle == INVALID_HANDLE_VALUE)
 			{
 				const DWORD error = ::GetLastError();
@@ -265,10 +278,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 		}
 
 		WindowsFileBackend(WindowsFileBackend&& other) noexcept
-		    : m_Handle(std::exchange(other.m_Handle, INVALID_HANDLE_VALUE)),
-		      m_Identity(other.m_Identity),
-		      m_Access(other.m_Access),
-		      m_HasRegistryEntry(std::exchange(other.m_HasRegistryEntry, false))
+		    : m_Handle(std::exchange(other.m_Handle, INVALID_HANDLE_VALUE)), m_Identity(other.m_Identity),
+		      m_Access(other.m_Access), m_HasRegistryEntry(std::exchange(other.m_HasRegistryEntry, false))
 		{
 			/* NO CODE */
 		}
@@ -288,7 +299,10 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		WindowsFileBackend(const WindowsFileBackend&) = delete;
 		WindowsFileBackend& operator=(const WindowsFileBackend&) = delete;
-		~WindowsFileBackend() noexcept { Close(); }
+		~WindowsFileBackend() noexcept
+		{
+			Close();
+		}
 
 		UInt64 GetPhysicalFileBytes() const
 		{
@@ -318,38 +332,49 @@ namespace SecUtility::IO::PersistentStoreDetail
 		void ReadExact(const UInt64 offset, Byte* out_bytesPtr, const std::size_t byteCount) const
 		{
 			ValidateBufferAndRange(offset, out_bytesPtr, byteCount, "read");
-			CompleteExactTransfer(offset, out_bytesPtr, byteCount, true,
-			                      [this](const UInt64 currentOffset, Byte* currentBytesPtr,
-			                             const std::size_t remainingBytes) {
-				                      const DWORD chunk = static_cast<DWORD>(
-				                              std::min<std::size_t>(remainingBytes, MAXDWORD));
-				                      return ExactTransferResult{
-				                              Transfer(false, currentOffset, currentBytesPtr, chunk), false};
-			                      });
+			CompleteExactTransfer(
+			        offset,
+			        out_bytesPtr,
+			        byteCount,
+			        true,
+			        [this](const UInt64 currentOffset, Byte* currentBytesPtr, const std::size_t remainingBytes)
+			        {
+				        const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(remainingBytes, MAXDWORD));
+				        return ExactTransferResult{Transfer(false, currentOffset, currentBytesPtr, chunk), false};
+			        });
 		}
 
 		void WriteExact(const UInt64 offset, const Byte* bytesPtr, const std::size_t byteCount)
 		{
 			RequireWritable("write file");
 			ValidateBufferAndRange(offset, bytesPtr, byteCount, "write");
-			CompleteExactTransfer(offset, bytesPtr, byteCount, false,
-			                      [this](const UInt64 currentOffset, const Byte* currentBytesPtr,
-			                             const std::size_t remainingBytes) {
-				                      const DWORD chunk = static_cast<DWORD>(
-				                              std::min<std::size_t>(remainingBytes, MAXDWORD));
-				                      return ExactTransferResult{
-				                              Transfer(true, currentOffset, const_cast<Byte*>(currentBytesPtr), chunk),
-				                              false};
-			                      });
+			CompleteExactTransfer(
+			        offset,
+			        bytesPtr,
+			        byteCount,
+			        false,
+			        [this](const UInt64 currentOffset, const Byte* currentBytesPtr, const std::size_t remainingBytes)
+			        {
+				        const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(remainingBytes, MAXDWORD));
+				        return ExactTransferResult{
+				                Transfer(true, currentOffset, const_cast<Byte*>(currentBytesPtr), chunk), false};
+			        });
 		}
 
-		FileAccess GetAccess() const noexcept { return m_Access; }
+		FileAccess GetAccess() const noexcept
+		{
+			return m_Access;
+		}
 
 		bool DoesPathIdentifySameFile(const std::filesystem::path& path) const noexcept
 		{
-			const HANDLE pathHandle = ::CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
-			                                        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
-			                                        FILE_ATTRIBUTE_NORMAL, nullptr);
+			const HANDLE pathHandle = ::CreateFileW(path.c_str(),
+			                                        FILE_READ_ATTRIBUTES,
+			                                        FILE_SHARE_READ | FILE_SHARE_WRITE,
+			                                        nullptr,
+			                                        OPEN_EXISTING,
+			                                        FILE_ATTRIBUTE_NORMAL,
+			                                        nullptr);
 			if (pathHandle == INVALID_HANDLE_VALUE)
 			{
 				return false;
@@ -376,15 +401,15 @@ namespace SecUtility::IO::PersistentStoreDetail
 		}
 
 		WindowsReadOnlyMappedRegion MapReadOnly(const UInt64 offset,
-		                                               const std::size_t byteCount,
-		                                               const UInt64 alignment) const
+		                                        const std::size_t byteCount,
+		                                        const UInt64 alignment) const
 		{
 			return Map<false>(offset, byteCount, alignment);
 		}
 
-		WindowsWritableMappedRegion MapWritable(const UInt64 offset,
-		                                              const std::size_t byteCount,
-		                                              const UInt64 alignment)
+		WindowsReadWriteMappedRegion MapReadWrite(const UInt64 offset,
+		                                          const std::size_t byteCount,
+		                                          const UInt64 alignment)
 		{
 			RequireWritable("map writable file region");
 			return Map<true>(offset, byteCount, alignment);
@@ -393,8 +418,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 	private:
 		template <bool IsWritable>
 		WindowsMappedRegion<IsWritable> Map(const UInt64 offset,
-		                                          const std::size_t byteCount,
-		                                          const UInt64 alignment) const
+		                                    const std::size_t byteCount,
+		                                    const UInt64 alignment) const
 		{
 			ValidateMappingRequest(offset, byteCount, alignment);
 			if (byteCount == 0)
@@ -406,8 +431,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 			const UInt64 mappedOffset = offset - offset % granularity;
 			const UInt64 delta = offset - mappedOffset;
 			const UInt64 mappedBytes64 = CheckedAdd(delta, byteCount, "PersistentStore mapped byte count");
-			const std::size_t mappedBytes = CheckedNarrow<std::size_t>(
-			        mappedBytes64, "PersistentStore native mapped byte count");
+			const std::size_t mappedBytes =
+			        CheckedNarrow<std::size_t>(mappedBytes64, "PersistentStore native mapped byte count");
 			const DWORD protection = IsWritable ? PAGE_READWRITE : PAGE_READONLY;
 			const HANDLE mappingHandle = ::CreateFileMappingW(m_Handle, nullptr, protection, 0, 0, nullptr);
 			if (mappingHandle == nullptr)
@@ -415,9 +440,11 @@ namespace SecUtility::IO::PersistentStoreDetail
 				throw IOException(WindowsFileBackendDetail::ErrorMessage("CreateFileMappingW", ::GetLastError()));
 			}
 			const DWORD access = IsWritable ? FILE_MAP_WRITE | FILE_MAP_READ : FILE_MAP_READ;
-			void* const basePtr = ::MapViewOfFile(mappingHandle, access,
+			void* const basePtr = ::MapViewOfFile(mappingHandle,
+			                                      access,
 			                                      static_cast<DWORD>(mappedOffset >> 32U),
-			                                      static_cast<DWORD>(mappedOffset & 0xFFFFFFFFULL), mappedBytes);
+			                                      static_cast<DWORD>(mappedOffset & 0xFFFFFFFFULL),
+			                                      mappedBytes);
 			if (basePtr == nullptr)
 			{
 				const DWORD error = ::GetLastError();
@@ -434,9 +461,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 			return {mappingHandle, basePtr, exposedPtr, byteCount};
 		}
 
-		void ValidateMappingRequest(const UInt64 offset,
-		                            const std::size_t byteCount,
-		                            const UInt64 alignment) const
+		void ValidateMappingRequest(const UInt64 offset, const std::size_t byteCount, const UInt64 alignment) const
 		{
 			if (alignment == 0 || alignment > MaximumPayloadAlignment || (alignment & (alignment - 1)) != 0)
 			{
@@ -458,9 +483,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 			}
 		}
 
-		WindowsFileBackend(const HANDLE handle,
-		                   const WindowsFileIdentity identity,
-		                   const FileAccess access) noexcept
+		WindowsFileBackend(const HANDLE handle, const WindowsFileIdentity identity, const FileAccess access) noexcept
 		    : m_Handle(handle), m_Identity(identity), m_Access(access), m_HasRegistryEntry(true)
 		{
 			/* NO CODE */
@@ -505,10 +528,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 			return WindowsFileBackend(handle, identity, access);
 		}
 
-		DWORD Transfer(const bool isWrite,
-		               const UInt64 offset,
-		               Byte* bytesPtr,
-		               const DWORD byteCount) const
+		DWORD Transfer(const bool isWrite, const UInt64 offset, Byte* bytesPtr, const DWORD byteCount) const
 		{
 			OVERLAPPED overlapped{};
 			overlapped.Offset = static_cast<DWORD>(offset & 0xFFFFFFFFULL);
@@ -519,12 +539,11 @@ namespace SecUtility::IO::PersistentStoreDetail
 			if (!hasStarted)
 			{
 				const DWORD error = ::GetLastError();
-				if (error != ERROR_IO_PENDING
-				    || !::GetOverlappedResult(m_Handle, &overlapped, &transferred, TRUE))
+				if (error != ERROR_IO_PENDING || !::GetOverlappedResult(m_Handle, &overlapped, &transferred, TRUE))
 				{
 					const DWORD finalError = error == ERROR_IO_PENDING ? ::GetLastError() : error;
-					throw IOException(WindowsFileBackendDetail::ErrorMessage(
-					        isWrite ? "WriteFile" : "ReadFile", finalError));
+					throw IOException(
+					        WindowsFileBackendDetail::ErrorMessage(isWrite ? "WriteFile" : "ReadFile", finalError));
 				}
 			}
 			return transferred;
