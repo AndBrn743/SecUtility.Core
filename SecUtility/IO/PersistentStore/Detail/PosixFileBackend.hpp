@@ -8,10 +8,13 @@
 #endif
 
 #include <SecUtility/Diagnostic/Exception.hpp>
+#include <SecUtility/IO/PersistentStore/Detail/CheckedArithmetic.hpp>
+#include <SecUtility/IO/PersistentStore/Detail/Format.hpp>
 #include <SecUtility/Raw/Int.hpp>
 
 #include <algorithm>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <limits>
@@ -19,11 +22,13 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -31,6 +36,109 @@
 
 namespace SecUtility::IO::PersistentStoreDetail
 {
+	template <bool IsWritable>
+	class PosixMappedRegion final
+	{
+	public:
+		PosixMappedRegion() noexcept = default;
+
+		PosixMappedRegion(void* const basePtr,
+		                  const std::size_t mappedBytes,
+		                  Byte* const exposedPtr,
+		                  const std::size_t exposedBytes) noexcept
+		    : m_BasePtr(basePtr), m_MappedBytes(mappedBytes), m_ExposedPtr(exposedPtr), m_ExposedBytes(exposedBytes)
+		{
+			/* NO CODE */
+		}
+
+		PosixMappedRegion(PosixMappedRegion&& other) noexcept
+		    : m_BasePtr(std::exchange(other.m_BasePtr, nullptr)), m_MappedBytes(std::exchange(other.m_MappedBytes, 0)),
+		      m_ExposedPtr(std::exchange(other.m_ExposedPtr, nullptr)),
+		      m_ExposedBytes(std::exchange(other.m_ExposedBytes, 0))
+		{
+			/* NO CODE */
+		}
+
+		PosixMappedRegion& operator=(PosixMappedRegion&& other) noexcept
+		{
+			if (this != &other)
+			{
+				Reset();
+				m_BasePtr = std::exchange(other.m_BasePtr, nullptr);
+				m_MappedBytes = std::exchange(other.m_MappedBytes, 0);
+				m_ExposedPtr = std::exchange(other.m_ExposedPtr, nullptr);
+				m_ExposedBytes = std::exchange(other.m_ExposedBytes, 0);
+			}
+			return *this;
+		}
+
+		PosixMappedRegion(const PosixMappedRegion&) = delete;
+		PosixMappedRegion& operator=(const PosixMappedRegion&) = delete;
+		~PosixMappedRegion() noexcept
+		{
+			Reset();
+		}
+
+		auto Data() const noexcept
+		{
+			if constexpr (IsWritable)
+			{
+				return m_ExposedPtr;
+			}
+			else
+			{
+				return static_cast<const Byte*>(m_ExposedPtr);
+			}
+		}
+
+		std::size_t Size() const noexcept
+		{
+			return m_ExposedBytes;
+		}
+
+		template <bool IsEnabled = IsWritable, std::enable_if_t<IsEnabled, int> = 0>
+		void Complete()
+		{
+			if (m_BasePtr == nullptr)
+			{
+				return;
+			}
+			if (::msync(m_BasePtr, m_MappedBytes, MS_SYNC) != 0)
+			{
+				throw IOException(std::string("msync: ") + std::generic_category().message(errno));
+			}
+			if (::munmap(m_BasePtr, m_MappedBytes) != 0)
+			{
+				throw IOException(std::string("munmap: ") + std::generic_category().message(errno));
+			}
+			m_BasePtr = nullptr;
+			m_MappedBytes = 0;
+			m_ExposedPtr = nullptr;
+			m_ExposedBytes = 0;
+		}
+
+	private:
+		void Reset() noexcept
+		{
+			if (m_BasePtr != nullptr)
+			{
+				::munmap(m_BasePtr, m_MappedBytes);
+			}
+			m_BasePtr = nullptr;
+			m_MappedBytes = 0;
+			m_ExposedPtr = nullptr;
+			m_ExposedBytes = 0;
+		}
+
+		void* m_BasePtr = nullptr;
+		std::size_t m_MappedBytes = 0;
+		Byte* m_ExposedPtr = nullptr;
+		std::size_t m_ExposedBytes = 0;
+	};
+
+	using PosixReadOnlyMappedRegion = PosixMappedRegion<false>;
+	using PosixWritableMappedRegion = PosixMappedRegion<true>;
+
 	struct PosixFileIdentity
 	{
 		::dev_t Device = 0;
@@ -286,7 +394,85 @@ namespace SecUtility::IO::PersistentStoreDetail
 			return ::stat(path.c_str(), &status) == 0 && PosixFileIdentity{status.st_dev, status.st_ino} == m_Identity;
 		}
 
+		static UInt64 GetMappingGranularity()
+		{
+			const long pageBytes = ::sysconf(_SC_PAGE_SIZE);
+			if (pageBytes <= 0)
+			{
+				throw IOException("PersistentStore could not query the POSIX page size");
+			}
+			return static_cast<UInt64>(pageBytes);
+		}
+
+		PosixReadOnlyMappedRegion MapReadOnly(const UInt64 offset,
+		                                      const std::size_t byteCount,
+		                                      const UInt64 alignment) const
+		{
+			return Map<false>(offset, byteCount, alignment);
+		}
+
+		PosixWritableMappedRegion MapWritable(const UInt64 offset, const std::size_t byteCount, const UInt64 alignment)
+		{
+			RequireWritable("map writable file region");
+			return Map<true>(offset, byteCount, alignment);
+		}
+
 	private:
+		template <bool IsWritable>
+		PosixMappedRegion<IsWritable> Map(const UInt64 offset,
+		                                  const std::size_t byteCount,
+		                                  const UInt64 alignment) const
+		{
+			ValidateMappingRequest(offset, byteCount, alignment);
+			if (byteCount == 0)
+			{
+				return {};
+			}
+
+			const UInt64 granularity = GetMappingGranularity();
+			const UInt64 mappedOffset = offset - offset % granularity;
+			const UInt64 delta = offset - mappedOffset;
+			const UInt64 mappedBytes64 = CheckedAdd(delta, byteCount, "PersistentStore mapped byte count");
+			const std::size_t mappedBytes =
+			        CheckedNarrow<std::size_t>(mappedBytes64, "PersistentStore native mapped byte count");
+			const int protection = IsWritable ? PROT_READ | PROT_WRITE : PROT_READ;
+			void* const basePtr = ::mmap(
+			        nullptr, mappedBytes, protection, MAP_SHARED, m_Descriptor, static_cast<off_t>(mappedOffset));
+			if (basePtr == MAP_FAILED)
+			{
+				throw IOException(PosixFileBackendDetail::ErrorMessage("mmap", errno));
+			}
+			Byte* const exposedPtr = static_cast<Byte*>(basePtr) + static_cast<std::size_t>(delta);
+			if (reinterpret_cast<std::uintptr_t>(exposedPtr) % alignment != 0)
+			{
+				::munmap(basePtr, mappedBytes);
+				throw IOException("PersistentStore mapped address does not satisfy the requested alignment");
+			}
+			return {basePtr, mappedBytes, exposedPtr, byteCount};
+		}
+
+		void ValidateMappingRequest(const UInt64 offset, const std::size_t byteCount, const UInt64 alignment) const
+		{
+			if (alignment == 0 || alignment > MaximumPayloadAlignment || (alignment & (alignment - 1)) != 0)
+			{
+				throw IOException("PersistentStore mapping alignment must be a power of two from 1 through 4096");
+			}
+			if (offset % alignment != 0)
+			{
+				throw IOException("PersistentStore mapping offset does not satisfy the requested alignment");
+			}
+			if (offset > static_cast<UInt64>(std::numeric_limits<off_t>::max())
+			    || byteCount > static_cast<UInt64>(std::numeric_limits<off_t>::max()) - offset)
+			{
+				throw IOException("PersistentStore mapping exceeds the POSIX offset range");
+			}
+			const UInt64 physicalFileBytes = GetPhysicalFileBytes();
+			if (offset > physicalFileBytes || byteCount > physicalFileBytes - offset)
+			{
+				throw IOException("PersistentStore mapping extends past the physical file length");
+			}
+		}
+
 		PosixFileBackend(const int descriptor, const PosixFileIdentity identity, const FileAccess access) noexcept
 		    : m_Descriptor(descriptor), m_Identity(identity), m_Access(access), m_HasRegistryEntry(true)
 		{

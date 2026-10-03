@@ -13,20 +13,131 @@
 #include <windows.h>
 
 #include <SecUtility/Diagnostic/Exception.hpp>
+#include <SecUtility/IO/PersistentStore/Detail/CheckedArithmetic.hpp>
+#include <SecUtility/IO/PersistentStore/Detail/Format.hpp>
 #include <SecUtility/Raw/Int.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
 
 namespace SecUtility::IO::PersistentStoreDetail
 {
+	template <bool IsWritable>
+	class WindowsMappedRegion final
+	{
+	public:
+		WindowsMappedRegion() noexcept = default;
+
+		WindowsMappedRegion(const HANDLE mappingHandle,
+		                    void* const basePtr,
+		                    Byte* const exposedPtr,
+		                    const std::size_t exposedBytes) noexcept
+		    : m_MappingHandle(mappingHandle), m_BasePtr(basePtr), m_ExposedPtr(exposedPtr),
+		      m_ExposedBytes(exposedBytes)
+		{
+			/* NO CODE */
+		}
+
+		WindowsMappedRegion(WindowsMappedRegion&& other) noexcept
+		    : m_MappingHandle(std::exchange(other.m_MappingHandle, nullptr)),
+		      m_BasePtr(std::exchange(other.m_BasePtr, nullptr)),
+		      m_ExposedPtr(std::exchange(other.m_ExposedPtr, nullptr)),
+		      m_ExposedBytes(std::exchange(other.m_ExposedBytes, 0))
+		{
+			/* NO CODE */
+		}
+
+		WindowsMappedRegion& operator=(WindowsMappedRegion&& other) noexcept
+		{
+			if (this != &other)
+			{
+				Reset();
+				m_MappingHandle = std::exchange(other.m_MappingHandle, nullptr);
+				m_BasePtr = std::exchange(other.m_BasePtr, nullptr);
+				m_ExposedPtr = std::exchange(other.m_ExposedPtr, nullptr);
+				m_ExposedBytes = std::exchange(other.m_ExposedBytes, 0);
+			}
+			return *this;
+		}
+
+		WindowsMappedRegion(const WindowsMappedRegion&) = delete;
+		WindowsMappedRegion& operator=(const WindowsMappedRegion&) = delete;
+		~WindowsMappedRegion() noexcept { Reset(); }
+
+		auto Data() const noexcept
+		{
+			if constexpr (IsWritable)
+			{
+				return m_ExposedPtr;
+			}
+			else
+			{
+				return static_cast<const Byte*>(m_ExposedPtr);
+			}
+		}
+
+		std::size_t Size() const noexcept { return m_ExposedBytes; }
+
+		template <bool IsEnabled = IsWritable, std::enable_if_t<IsEnabled, int> = 0>
+		void Complete()
+		{
+			if (m_BasePtr == nullptr)
+			{
+				return;
+			}
+			if (!::FlushViewOfFile(m_BasePtr, 0))
+			{
+				throw IOException("FlushViewOfFile failed with Windows error " + std::to_string(::GetLastError()));
+			}
+			if (!::UnmapViewOfFile(m_BasePtr))
+			{
+				throw IOException("UnmapViewOfFile failed with Windows error " + std::to_string(::GetLastError()));
+			}
+			m_BasePtr = nullptr;
+			m_ExposedPtr = nullptr;
+			m_ExposedBytes = 0;
+			const HANDLE mappingHandle = std::exchange(m_MappingHandle, nullptr);
+			if (!::CloseHandle(mappingHandle))
+			{
+				throw IOException("CloseHandle failed with Windows error " + std::to_string(::GetLastError()));
+			}
+		}
+
+	private:
+		void Reset() noexcept
+		{
+			if (m_BasePtr != nullptr)
+			{
+				::UnmapViewOfFile(m_BasePtr);
+			}
+			if (m_MappingHandle != nullptr)
+			{
+				::CloseHandle(m_MappingHandle);
+			}
+			m_MappingHandle = nullptr;
+			m_BasePtr = nullptr;
+			m_ExposedPtr = nullptr;
+			m_ExposedBytes = 0;
+		}
+
+		HANDLE m_MappingHandle = nullptr;
+		void* m_BasePtr = nullptr;
+		Byte* m_ExposedPtr = nullptr;
+		std::size_t m_ExposedBytes = 0;
+	};
+
+	using WindowsReadOnlyMappedRegion = WindowsMappedRegion<false>;
+	using WindowsWritableMappedRegion = WindowsMappedRegion<true>;
+
 	struct WindowsFileIdentity
 	{
 		DWORD VolumeSerialNumber = 0;
@@ -253,7 +364,100 @@ namespace SecUtility::IO::PersistentStoreDetail
 			return isSame;
 		}
 
+		static UInt64 GetMappingGranularity()
+		{
+			SYSTEM_INFO information{};
+			::GetSystemInfo(&information);
+			if (information.dwAllocationGranularity == 0)
+			{
+				throw IOException("PersistentStore could not query the Windows allocation granularity");
+			}
+			return information.dwAllocationGranularity;
+		}
+
+		WindowsReadOnlyMappedRegion MapReadOnly(const UInt64 offset,
+		                                               const std::size_t byteCount,
+		                                               const UInt64 alignment) const
+		{
+			return Map<false>(offset, byteCount, alignment);
+		}
+
+		WindowsWritableMappedRegion MapWritable(const UInt64 offset,
+		                                              const std::size_t byteCount,
+		                                              const UInt64 alignment)
+		{
+			RequireWritable("map writable file region");
+			return Map<true>(offset, byteCount, alignment);
+		}
+
 	private:
+		template <bool IsWritable>
+		WindowsMappedRegion<IsWritable> Map(const UInt64 offset,
+		                                          const std::size_t byteCount,
+		                                          const UInt64 alignment) const
+		{
+			ValidateMappingRequest(offset, byteCount, alignment);
+			if (byteCount == 0)
+			{
+				return {};
+			}
+
+			const UInt64 granularity = GetMappingGranularity();
+			const UInt64 mappedOffset = offset - offset % granularity;
+			const UInt64 delta = offset - mappedOffset;
+			const UInt64 mappedBytes64 = CheckedAdd(delta, byteCount, "PersistentStore mapped byte count");
+			const std::size_t mappedBytes = CheckedNarrow<std::size_t>(
+			        mappedBytes64, "PersistentStore native mapped byte count");
+			const DWORD protection = IsWritable ? PAGE_READWRITE : PAGE_READONLY;
+			const HANDLE mappingHandle = ::CreateFileMappingW(m_Handle, nullptr, protection, 0, 0, nullptr);
+			if (mappingHandle == nullptr)
+			{
+				throw IOException(WindowsFileBackendDetail::ErrorMessage("CreateFileMappingW", ::GetLastError()));
+			}
+			const DWORD access = IsWritable ? FILE_MAP_WRITE | FILE_MAP_READ : FILE_MAP_READ;
+			void* const basePtr = ::MapViewOfFile(mappingHandle, access,
+			                                      static_cast<DWORD>(mappedOffset >> 32U),
+			                                      static_cast<DWORD>(mappedOffset & 0xFFFFFFFFULL), mappedBytes);
+			if (basePtr == nullptr)
+			{
+				const DWORD error = ::GetLastError();
+				::CloseHandle(mappingHandle);
+				throw IOException(WindowsFileBackendDetail::ErrorMessage("MapViewOfFile", error));
+			}
+			Byte* const exposedPtr = static_cast<Byte*>(basePtr) + static_cast<std::size_t>(delta);
+			if (reinterpret_cast<std::uintptr_t>(exposedPtr) % alignment != 0)
+			{
+				::UnmapViewOfFile(basePtr);
+				::CloseHandle(mappingHandle);
+				throw IOException("PersistentStore mapped address does not satisfy the requested alignment");
+			}
+			return {mappingHandle, basePtr, exposedPtr, byteCount};
+		}
+
+		void ValidateMappingRequest(const UInt64 offset,
+		                            const std::size_t byteCount,
+		                            const UInt64 alignment) const
+		{
+			if (alignment == 0 || alignment > MaximumPayloadAlignment || (alignment & (alignment - 1)) != 0)
+			{
+				throw IOException("PersistentStore mapping alignment must be a power of two from 1 through 4096");
+			}
+			if (offset % alignment != 0)
+			{
+				throw IOException("PersistentStore mapping offset does not satisfy the requested alignment");
+			}
+			if (offset > static_cast<UInt64>(std::numeric_limits<LONGLONG>::max())
+			    || byteCount > static_cast<UInt64>(std::numeric_limits<LONGLONG>::max()) - offset)
+			{
+				throw IOException("PersistentStore mapping exceeds the Windows offset range");
+			}
+			const UInt64 physicalFileBytes = GetPhysicalFileBytes();
+			if (offset > physicalFileBytes || byteCount > physicalFileBytes - offset)
+			{
+				throw IOException("PersistentStore mapping extends past the physical file length");
+			}
+		}
+
 		WindowsFileBackend(const HANDLE handle,
 		                   const WindowsFileIdentity identity,
 		                   const FileAccess access) noexcept
