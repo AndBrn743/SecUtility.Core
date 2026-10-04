@@ -61,7 +61,9 @@ namespace
 	        FailurePoint::RebuildAllocator, FailurePoint::ReservePayload, FailurePoint::GrowPayload,
 	        FailurePoint::MapPayload, FailurePoint::EncodePayload, FailurePoint::CompletePayload,
 	        FailurePoint::SerializeDirectory, FailurePoint::ReserveDirectory, FailurePoint::GrowDirectory,
-	        FailurePoint::WriteDirectory, FailurePoint::ReadBackDirectory, FailurePoint::PrepareRuntimeState};
+	        FailurePoint::WriteDirectory, FailurePoint::ExactWriteProgress,
+	        FailurePoint::ReadBackDirectory, FailurePoint::ExactReadProgress,
+	        FailurePoint::PrepareRuntimeState};
 }
 
 
