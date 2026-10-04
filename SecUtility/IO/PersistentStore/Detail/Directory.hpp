@@ -17,6 +17,23 @@ namespace SecUtility::IO::PersistentStoreDetail
 		UInt64 Capacity = 0;
 	};
 
+	struct ExtentIdentity
+	{
+		UInt64 Offset = 0;
+		UInt64 Capacity = 0;
+
+		friend bool operator<(const ExtentIdentity& left, const ExtentIdentity& right) noexcept
+		{
+			return left.Offset < right.Offset
+			       || (left.Offset == right.Offset && left.Capacity < right.Capacity);
+		}
+
+		friend bool operator==(const ExtentIdentity& left, const ExtentIdentity& right) noexcept
+		{
+			return left.Offset == right.Offset && left.Capacity == right.Capacity;
+		}
+	};
+
 	struct Allocation
 	{
 		Extent AllocatedExtent;

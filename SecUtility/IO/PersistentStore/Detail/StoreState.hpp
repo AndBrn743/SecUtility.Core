@@ -6,6 +6,7 @@
 #include <SecUtility/Diagnostic/Exception.hpp>
 #include <SecUtility/IO/PersistentStore/Detail/Adapter.hpp>
 #include <SecUtility/IO/PersistentStore/Detail/FileBackend.hpp>
+#include <SecUtility/IO/PersistentStore/Detail/ExtentAllocator.hpp>
 #include <SecUtility/IO/PersistentStore/Detail/FormatCodec.hpp>
 #include <SecUtility/IO/PersistentStore/Detail/Mapping.hpp>
 #include <SecUtility/Misc/Endian.hpp>
@@ -15,6 +16,7 @@
 #include <atomic>
 #include <filesystem>
 #include <memory>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -136,10 +138,10 @@ namespace SecUtility::IO::PersistentStoreDetail
 					throw KeyNotFoundException("PersistentStore key was not found", key);
 				}
 				entry = *entryPtr;
+				AcquirePinLocked({entry.AllocatedExtent.Offset, entry.AllocatedExtent.Capacity});
 			}
-			const auto region = m_Backend.MapReadOnly(
-			        entry.PayloadOffset, CheckedNarrow<std::size_t>(entry.PayloadBytes, "payload mapping size"), 1);
-			return PersistentTraits<T>::Decode(ConstByteView(region.Data(), region.Size()));
+			const auto leasePtr = MapPinned(entry);
+			return PersistentTraits<T>::Decode(ConstByteView(leasePtr->Data(), leasePtr->Size()));
 		}
 
 		template <typename T>
@@ -155,11 +157,17 @@ namespace SecUtility::IO::PersistentStoreDetail
 					throw KeyNotFoundException("PersistentStore key was not found", key);
 				}
 				entry = *entryPtr;
+				AcquirePinLocked({entry.AllocatedExtent.Offset, entry.AllocatedExtent.Capacity});
 			}
-			auto region = m_Backend.MapReadOnly(
-			        entry.PayloadOffset, CheckedNarrow<std::size_t>(entry.PayloadBytes, "payload mapping size"), 1);
-			auto leasePtr = std::make_shared<MappingLease>(shared_from_this(), std::move(region));
-			return PersistentTraits<T>::DecodeLeased(std::move(leasePtr));
+			return PersistentTraits<T>::DecodeLeased(MapPinned(entry));
+		}
+
+		void ReleasePin(const ExtentIdentity identity) const noexcept
+		{
+			StateLockGuard lock(m_StateMutex);
+			const auto iterator = m_PinCounts.find(identity);
+			if (iterator == m_PinCounts.end()) return;
+			if (--iterator->second == 0) m_PinCounts.erase(iterator);
 		}
 
 	private:
@@ -185,7 +193,49 @@ namespace SecUtility::IO::PersistentStoreDetail
 		      m_SlotB(std::move(slotB)),
 		      m_CurrentDirectoryPtr(std::move(currentDirectoryPtr))
 		{
-			/* NO CODE */
+			m_Allocator.Rebuild(m_Backend.GetPhysicalFileBytes(), CollectProtectedExtents());
+		}
+
+		void AcquirePinLocked(const ExtentIdentity identity) const
+		{
+			++m_PinCounts[identity];
+		}
+
+		std::shared_ptr<MappingLease> MapPinned(const DirectoryEntry& entry) const
+		{
+			const ExtentIdentity identity{entry.AllocatedExtent.Offset, entry.AllocatedExtent.Capacity};
+			try
+			{
+				auto region = m_Backend.MapReadOnly(
+				        entry.PayloadOffset, CheckedNarrow<std::size_t>(entry.PayloadBytes, "payload mapping size"), 1);
+				return std::make_shared<MappingLease>(shared_from_this(), std::move(region), identity);
+			}
+			catch (...)
+			{
+				ReleasePin(identity);
+				throw;
+			}
+		}
+
+		static void AppendRootExtents(const RootCandidate& root, std::vector<Extent>& ref_extents)
+		{
+			if (!root.IsValid) return;
+			ref_extents.push_back({root.Header.DirectoryOffset, root.Header.DirectoryBytes});
+			for (const DirectoryEntry& entry : root.ParsedDirectory.Entries)
+				ref_extents.push_back(entry.AllocatedExtent);
+		}
+
+		std::vector<Extent> CollectProtectedExtents() const
+		{
+			std::vector<Extent> extents;
+			AppendRootExtents(m_SlotA, extents);
+			AppendRootExtents(m_SlotB, extents);
+			for (const auto& [identity, count] : m_PinCounts)
+			{
+				(void)count;
+				extents.push_back({identity.Offset, identity.Capacity});
+			}
+			return extents;
 		}
 
 		static void RequireLittleEndianHost()
@@ -325,6 +375,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 				RequireMutable();
 				currentDirectoryPtr = m_CurrentDirectoryPtr;
 				ValidateMutationPrecondition(*currentDirectoryPtr, key, kind);
+				m_Allocator.Rebuild(m_Backend.GetPhysicalFileBytes(), CollectProtectedExtents());
 			}
 
 			const PayloadLayout layout = PersistentTraits<T>::Measure(value);
@@ -334,27 +385,24 @@ namespace SecUtility::IO::PersistentStoreDetail
 				throw FormatException("adapter requested an invalid PersistentStore payload layout");
 			}
 
-			const UInt64 allocationOffset = m_Backend.GetPhysicalFileBytes();
-			const UInt64 payloadOffset = CheckedAlignUp(allocationOffset, layout.Alignment, "payload alignment");
-			const UInt64 storedBytes = std::max<UInt64>(layout.Bytes, 1);
-			const UInt64 allocationCapacity = CheckedAdd(payloadOffset - allocationOffset, storedBytes,
-			                                                   "payload allocation capacity");
-			const UInt64 afterPayload = CheckedAdd(allocationOffset, allocationCapacity, "payload allocation end");
-			if (afterPayload > MaximumFileBytes)
+			const Allocation payloadAllocation = m_Allocator.Reserve(layout.Bytes, layout.Alignment);
+			if (m_Allocator.GetPhysicalBytes() > MaximumFileBytes)
 			{
 				throw IOException("PersistentStore maximum file length exceeded");
 			}
-			m_Backend.SetPhysicalFileBytes(afterPayload);
+			m_Backend.SetPhysicalFileBytes(m_Allocator.GetPhysicalBytes());
 			{
 				auto region = m_Backend.MapReadWrite(
-				        payloadOffset, CheckedNarrow<std::size_t>(layout.Bytes, "payload mapping size"), layout.Alignment);
+				        payloadAllocation.PayloadOffset,
+				        CheckedNarrow<std::size_t>(layout.Bytes, "payload mapping size"), layout.Alignment);
 				PersistentTraits<T>::Encode(std::forward<TValue>(value), MutableByteView(region.Data(), region.Size()));
 				region.Complete();
 			}
 
 			Directory replacement = *currentDirectoryPtr;
 			replacement.Generation = CheckedAdd(replacement.Generation, 1, "directory generation");
-			DirectoryEntry replacementEntry{std::string(key), {allocationOffset, allocationCapacity}, payloadOffset,
+			DirectoryEntry replacementEntry{std::string(key), payloadAllocation.AllocatedExtent,
+			                                    payloadAllocation.PayloadOffset,
 			                                    layout.Bytes};
 			auto iterator = std::lower_bound(
 			        replacement.Entries.begin(), replacement.Entries.end(), key,
@@ -371,8 +419,9 @@ namespace SecUtility::IO::PersistentStoreDetail
 			}
 
 			const std::vector<Byte> directoryBytes = SerializeDirectory(replacement);
-			const UInt64 directoryOffset = afterPayload;
-			const UInt64 committedBytes = CheckedAdd(directoryOffset, directoryBytes.size(), "commit file length");
+			const Allocation directoryAllocation = m_Allocator.Reserve(directoryBytes.size(), 1, false);
+			const UInt64 directoryOffset = directoryAllocation.PayloadOffset;
+			const UInt64 committedBytes = m_Allocator.GetPhysicalBytes();
 			if (committedBytes > MaximumFileBytes)
 			{
 				throw IOException("PersistentStore maximum file length exceeded");
@@ -486,5 +535,12 @@ namespace SecUtility::IO::PersistentStoreDetail
 		RootCandidate m_SlotA;
 		RootCandidate m_SlotB;
 		std::shared_ptr<const Directory> m_CurrentDirectoryPtr;
+		ExtentAllocator m_Allocator;
+		mutable std::map<ExtentIdentity, std::size_t> m_PinCounts;
 	};
+
+	inline MappingLease::~MappingLease() noexcept
+	{
+		m_StatePtr->ReleasePin(m_Identity);
+	}
 }
