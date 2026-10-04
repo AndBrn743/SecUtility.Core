@@ -38,6 +38,19 @@ namespace SecUtility::IO
 		inline constexpr bool HasLeasedType = has_leased_type<T>::value;
 	}
 
+	/// Movable handle to an R1 local persistent store.
+	///
+	/// Create is exclusive and fails when the path exists; CreateIfNotExist opens an existing store for
+	/// read/write. OpenForReadOnly takes a shared process/file lock and OpenForReadWrite takes an exclusive
+	/// one. Lock acquisition never waits. Calls on one handle/state are thread-safe, but a sequence of calls
+	/// is not a transaction. Mutations publish immutable snapshots and provide process-crash old-or-new
+	/// recovery; R1 does not promise power-loss durability.
+	///
+	/// Adapter encoding identifiers and schemas define compatibility. R1 runs only on little-endian hosts and
+	/// enforces the format limits declared in Detail/Format.hpp. Owning Get results are independent. Adapter-
+	/// defined leased results retain the file, lock, mapping, and historical extent; borrowed pointers or Eigen
+	/// expressions derived from a lease must not outlive that lease. Repair, migration, transactions, mutable
+	/// leases, compaction, and portable big-endian conversion are deferred.
 	class PersistentStore final
 	{
 	public:
