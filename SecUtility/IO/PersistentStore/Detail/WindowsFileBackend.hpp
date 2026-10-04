@@ -530,7 +530,22 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		DWORD Transfer(const bool isWrite, const UInt64 offset, Byte* bytesPtr, const DWORD byteCount) const
 		{
+			struct EventGuard final
+			{
+				HANDLE Handle = nullptr;
+				~EventGuard() noexcept
+				{
+					if (Handle != nullptr) ::CloseHandle(Handle);
+				}
+			};
+
 			OVERLAPPED overlapped{};
+			EventGuard event{::CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+			if (event.Handle == nullptr)
+			{
+				throw IOException(WindowsFileBackendDetail::ErrorMessage("CreateEventW", ::GetLastError()));
+			}
+			overlapped.hEvent = event.Handle;
 			overlapped.Offset = static_cast<DWORD>(offset & 0xFFFFFFFFULL);
 			overlapped.OffsetHigh = static_cast<DWORD>(offset >> 32U);
 			DWORD transferred = 0;
