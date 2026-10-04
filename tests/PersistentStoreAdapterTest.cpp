@@ -19,6 +19,14 @@
 #include <vector>
 
 
+#if defined(__GNUC__) && !defined(__clang__)
+// This test intentionally implements the replaceable global new/delete family with malloc/free so it can
+// observe allocation sizes. GCC's interprocedural -Wmismatched-new-delete analysis treats that conforming
+// replacement implementation as if malloc were called directly by each optimized allocation site.
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
+
+
 using namespace SecUtility;
 using namespace SecUtility::IO;
 using namespace SecUtility::IO::PersistentStoreDetail;
