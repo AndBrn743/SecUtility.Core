@@ -114,6 +114,7 @@ target_compile_definitions(PersistentStoreCrashTest PRIVATE
         PERSISTENT_STORE_CRASH_WORKER_PATH="$<TARGET_FILE:PersistentStoreCrashWorker>")
 catch_discover_tests(PersistentStoreCrashTest PROPERTIES RUN_SERIAL TRUE)
 add_secutility_test(MathCoreTest MathCoreTest.cpp)
+add_secutility_test(MathCheckedIntegralArithmeticTest MathCheckedIntegralArithmeticTest.cpp)
 add_secutility_test(MathComplexTest MathComplexTest.cpp)
 add_secutility_test(MathContinuedFractionTest MathContinuedFractionTest.cpp)
 add_secutility_test(MathSpecialTest MathSpecialTest.cpp)
