@@ -4,6 +4,7 @@
 #pragma once
 
 #include <SecUtility/Diagnostic/Exception.hpp>
+#include <SecUtility/IO/PersistentStore/Detail/FailureInjection.hpp>
 #include <SecUtility/Raw/Int.hpp>
 
 #include <cstddef>
@@ -34,6 +35,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 		std::size_t completed = 0;
 		while (completed < byteCount)
 		{
+			ScopedFailureInjection::Observe(
+			        isRead ? FailurePoint::ExactReadProgress : FailurePoint::ExactWriteProgress, completed);
 			const ExactTransferResult result = operation(
 			        offset + completed, bytesPtr + completed, byteCount - completed);
 			if (result.ShouldRetry)
@@ -50,6 +53,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 				throw IOException("PersistentStore backend reported more transferred bytes than requested");
 			}
 			completed += result.Bytes;
+			ScopedFailureInjection::Observe(
+			        isRead ? FailurePoint::ExactReadProgress : FailurePoint::ExactWriteProgress, completed);
 		}
 	}
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2024-2026 Andy Brown
 
+// ReSharper disable CppUseDesignatedInitializers
 #pragma once
 
 #include <SecUtility/Diagnostic/Exception.hpp>
@@ -327,6 +328,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		void RebuildAllocatorForWriter()
 		{
+			ScopedFailureInjection::Observe(FailurePoint::RebuildAllocator);
 			std::vector<Extent> protectedExtents = CollectProtectedExtentsForWriter();
 			const UInt64 physicalBytes = m_Backend.GetPhysicalFileBytes();
 			ExtentAllocator replacement;
@@ -538,21 +540,26 @@ namespace SecUtility::IO::PersistentStoreDetail
 				throw FormatException("adapter requested an invalid PersistentStore payload layout");
 			}
 
+			ScopedFailureInjection::Observe(FailurePoint::ReservePayload);
 			const Allocation payloadAllocation = m_Allocator.Reserve(layout.Bytes, layout.Alignment);
 			if (m_Allocator.GetPhysicalBytes() > MaximumFileBytes)
 			{
 				throw IOException("PersistentStore maximum file length exceeded");
 			}
+			ScopedFailureInjection::Observe(FailurePoint::GrowPayload);
 			m_Backend.SetPhysicalFileBytes(m_Allocator.GetPhysicalBytes());
 			{
+				ScopedFailureInjection::Observe(FailurePoint::MapPayload);
 				auto region = m_Backend.MapReadWrite(
 				        payloadAllocation.PayloadOffset,
 				        CheckedNarrow<std::size_t>(layout.Bytes, "payload mapping size"), layout.Alignment);
 				{
 					AdapterCallbackGuard callbackGuard(this);
+					ScopedFailureInjection::Observe(FailurePoint::EncodePayload);
 					PersistentTraits<T>::Encode(
 					        std::forward<TValue>(value), MutableByteView(region.Data(), region.Size()));
 				}
+				ScopedFailureInjection::Observe(FailurePoint::CompletePayload);
 				region.Complete();
 			}
 
@@ -580,7 +587,9 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		void PublishDirectory(Directory replacement)
 		{
+			ScopedFailureInjection::Observe(FailurePoint::SerializeDirectory);
 			const std::vector<Byte> directoryBytes = SerializeDirectory(replacement);
+			ScopedFailureInjection::Observe(FailurePoint::ReserveDirectory);
 			const Allocation directoryAllocation = m_Allocator.Reserve(directoryBytes.size(), 1, false);
 			const UInt64 directoryOffset = directoryAllocation.PayloadOffset;
 			const UInt64 committedBytes = m_Allocator.GetPhysicalBytes();
@@ -588,9 +597,12 @@ namespace SecUtility::IO::PersistentStoreDetail
 			{
 				throw IOException("PersistentStore maximum file length exceeded");
 			}
+			ScopedFailureInjection::Observe(FailurePoint::GrowDirectory);
 			m_Backend.SetPhysicalFileBytes(committedBytes);
+			ScopedFailureInjection::Observe(FailurePoint::WriteDirectory);
 			m_Backend.WriteExact(directoryOffset, directoryBytes.data(), directoryBytes.size());
 			std::vector<Byte> checkedDirectoryBytes(directoryBytes.size());
+			ScopedFailureInjection::Observe(FailurePoint::ReadBackDirectory);
 			m_Backend.ReadExact(directoryOffset, checkedDirectoryBytes.data(), checkedDirectoryBytes.size());
 			if (checkedDirectoryBytes != directoryBytes)
 			{
@@ -605,6 +617,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 			header.DirectoryChecksum = FormatCodecDetail::ComputeCrc32C(ConstByteView(directoryBytes));
 			const auto headerBytes = SerializeHeader(header);
 			(void)ParseDirectory(header, ConstByteView(checkedDirectoryBytes), committedBytes);
+			ScopedFailureInjection::Observe(FailurePoint::PrepareRuntimeState);
 			auto replacementDirectoryPtr = std::make_shared<const Directory>(replacement);
 			RootCandidate replacementRoot;
 			replacementRoot.IsValid = true;
@@ -618,8 +631,21 @@ namespace SecUtility::IO::PersistentStoreDetail
 			replacementRoot.SlotOffset = slotOffset;
 			try
 			{
-				m_Backend.WriteExact(slotOffset, headerBytes.data(), headerBytes.size());
+				ScopedFailureInjection::Observe(FailurePoint::BeginPublication);
+				if (ScopedFailureInjection::IsEnabled())
+				{
+					for (std::size_t index = 0; index < headerBytes.size(); ++index)
+					{
+						m_Backend.WriteExact(slotOffset + index, headerBytes.data() + index, 1);
+						ScopedFailureInjection::Observe(FailurePoint::PublicationWriteProgress, index + 1);
+					}
+				}
+				else
+				{
+					m_Backend.WriteExact(slotOffset, headerBytes.data(), headerBytes.size());
+				}
 				std::array<Byte, HeaderSlotBytes> checkedHeaderBytes{};
+				ScopedFailureInjection::Observe(FailurePoint::ReadBackPublication);
 				m_Backend.ReadExact(slotOffset, checkedHeaderBytes.data(), checkedHeaderBytes.size());
 				const HeaderSlot checkedHeader = ParseHeader(ConstByteView(checkedHeaderBytes), committedBytes);
 				(void)ParseDirectory(checkedHeader, ConstByteView(checkedDirectoryBytes), committedBytes);
