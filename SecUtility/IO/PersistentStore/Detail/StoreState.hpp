@@ -61,6 +61,36 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 	class StoreState final : public std::enable_shared_from_this<StoreState>
 	{
+		class AdapterCallbackGuard final
+		{
+		public:
+			explicit AdapterCallbackGuard(const StoreState* const storePtr)
+			    : m_StorePtr(storePtr), m_PreviousPtr(ActivePtr)
+			{
+				RejectReentry(storePtr);
+				ActivePtr = this;
+			}
+			~AdapterCallbackGuard() noexcept { ActivePtr = m_PreviousPtr; }
+			AdapterCallbackGuard(const AdapterCallbackGuard&) = delete;
+			AdapterCallbackGuard& operator=(const AdapterCallbackGuard&) = delete;
+
+			static void RejectReentry(const StoreState* const storePtr)
+			{
+				for (const AdapterCallbackGuard* framePtr = ActivePtr; framePtr != nullptr;
+				     framePtr = framePtr->m_PreviousPtr)
+				{
+					if (framePtr->m_StorePtr == storePtr)
+						throw InvalidOperationException(
+						        "adapter callback reentry into the same PersistentStore is prohibited");
+				}
+			}
+
+		private:
+			inline static thread_local AdapterCallbackGuard* ActivePtr = nullptr;
+			const StoreState* m_StorePtr;
+			AdapterCallbackGuard* m_PreviousPtr;
+		};
+
 	public:
 		static std::shared_ptr<StoreState> Open(const std::filesystem::path& path, const FileAccess access)
 		{
@@ -92,6 +122,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		bool Contains(const std::string_view key) const
 		{
+			AdapterCallbackGuard::RejectReentry(this);
 			ValidateKey(key);
 			StateLockGuard lock(m_StateMutex);
 			return FindEntry(*m_CurrentDirectoryPtr, key) != nullptr;
@@ -99,6 +130,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		std::size_t Size() const
 		{
+			AdapterCallbackGuard::RejectReentry(this);
 			StateLockGuard lock(m_StateMutex);
 			return m_CurrentDirectoryPtr->Entries.size();
 		}
@@ -128,6 +160,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 		template <typename T>
 		T Get(const std::string_view key) const
 		{
+			AdapterCallbackGuard::RejectReentry(this);
 			ValidateKey(key);
 			DirectoryEntry entry;
 			{
@@ -141,12 +174,14 @@ namespace SecUtility::IO::PersistentStoreDetail
 				AcquirePinLocked({entry.AllocatedExtent.Offset, entry.AllocatedExtent.Capacity});
 			}
 			const auto leasePtr = MapPinned(entry);
+			AdapterCallbackGuard callbackGuard(this);
 			return PersistentTraits<T>::Decode(ConstByteView(leasePtr->Data(), leasePtr->Size()));
 		}
 
 		template <typename T>
 		auto GetLeased(const std::string_view key) const -> typename PersistentTraits<T>::LeasedType
 		{
+			AdapterCallbackGuard::RejectReentry(this);
 			ValidateKey(key);
 			DirectoryEntry entry;
 			{
@@ -159,7 +194,34 @@ namespace SecUtility::IO::PersistentStoreDetail
 				entry = *entryPtr;
 				AcquirePinLocked({entry.AllocatedExtent.Offset, entry.AllocatedExtent.Capacity});
 			}
-			return PersistentTraits<T>::DecodeLeased(MapPinned(entry));
+			auto leasePtr = MapPinned(entry);
+			AdapterCallbackGuard callbackGuard(this);
+			return PersistentTraits<T>::DecodeLeased(std::move(leasePtr));
+		}
+
+		bool Erase(const std::string_view key)
+		{
+			AdapterCallbackGuard::RejectReentry(this);
+			ValidateKey(key);
+			std::lock_guard<std::mutex> writerLock(m_WriterMutex);
+			std::shared_ptr<const Directory> currentDirectoryPtr;
+			{
+				StateLockGuard stateLock(m_StateMutex);
+				RequireMutable();
+				currentDirectoryPtr = m_CurrentDirectoryPtr;
+				if (FindEntry(*currentDirectoryPtr, key) == nullptr) return false;
+				m_Allocator.Rebuild(m_Backend.GetPhysicalFileBytes(), CollectProtectedExtents());
+			}
+
+			Directory replacement = *currentDirectoryPtr;
+			const auto iterator = std::lower_bound(
+			        replacement.Entries.begin(), replacement.Entries.end(), key,
+			        [](const DirectoryEntry& entry, const std::string_view soughtKey)
+			        { return FormatCodecDetail::IsUnsignedByteLess(entry.Key, soughtKey); });
+			replacement.Entries.erase(iterator);
+			replacement.Generation = CheckedAdd(replacement.Generation, 1, "directory generation");
+			PublishDirectory(std::move(replacement));
+			return true;
 		}
 
 		void ReleasePin(const ExtentIdentity identity) const noexcept
@@ -362,6 +424,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 		template <typename T, typename TValue>
 		void Mutate(const std::string_view key, TValue&& value, const MutationKind kind)
 		{
+			AdapterCallbackGuard::RejectReentry(this);
 			ValidateKey(key);
 			{
 				StateLockGuard stateLock(m_StateMutex);
@@ -378,7 +441,11 @@ namespace SecUtility::IO::PersistentStoreDetail
 				m_Allocator.Rebuild(m_Backend.GetPhysicalFileBytes(), CollectProtectedExtents());
 			}
 
-			const PayloadLayout layout = PersistentTraits<T>::Measure(value);
+			PayloadLayout layout;
+			{
+				AdapterCallbackGuard callbackGuard(this);
+				layout = PersistentTraits<T>::Measure(value);
+			}
 			if (layout.Alignment == 0 || layout.Alignment > MaximumPayloadAlignment
 			    || (layout.Alignment & (layout.Alignment - 1)) != 0 || layout.Bytes > MaximumFileBytes)
 			{
@@ -395,7 +462,11 @@ namespace SecUtility::IO::PersistentStoreDetail
 				auto region = m_Backend.MapReadWrite(
 				        payloadAllocation.PayloadOffset,
 				        CheckedNarrow<std::size_t>(layout.Bytes, "payload mapping size"), layout.Alignment);
-				PersistentTraits<T>::Encode(std::forward<TValue>(value), MutableByteView(region.Data(), region.Size()));
+				{
+					AdapterCallbackGuard callbackGuard(this);
+					PersistentTraits<T>::Encode(
+					        std::forward<TValue>(value), MutableByteView(region.Data(), region.Size()));
+				}
 				region.Complete();
 			}
 
@@ -418,6 +489,11 @@ namespace SecUtility::IO::PersistentStoreDetail
 				replacement.Entries.insert(iterator, std::move(replacementEntry));
 			}
 
+			PublishDirectory(std::move(replacement));
+		}
+
+		void PublishDirectory(Directory replacement)
+		{
 			const std::vector<Byte> directoryBytes = SerializeDirectory(replacement);
 			const Allocation directoryAllocation = m_Allocator.Reserve(directoryBytes.size(), 1, false);
 			const UInt64 directoryOffset = directoryAllocation.PayloadOffset;

@@ -120,6 +120,12 @@ namespace SecUtility::IO
 		return m_StatePtr->Size();
 	}
 
+	// ReSharper disable once CppMemberFunctionMayBeConst
+	inline bool PersistentStore::Erase(const std::string_view key)
+	{
+		return m_StatePtr->Erase(key);
+	}
+
 	template <typename T, typename TValue>
 	void PersistentStore::Insert(const std::string_view key, TValue&& value)
 	{
