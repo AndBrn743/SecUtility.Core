@@ -1,5 +1,6 @@
 #include <SecUtility/IO/PersistentStore/Adapter/Array.hpp>
 #include <SecUtility/IO/PersistentStore/Adapter/ByteSequence.hpp>
+#include <SecUtility/IO/PersistentStore/Adapter/EigenDense.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -255,8 +256,12 @@ TEST_CASE("PersistentStore adapter encoding identifiers are stable and distinct"
 	CHECK(NativeObjectEncodingId != ArrayEncodingId);
 	CHECK(NativeObjectEncodingId != ByteSequenceEncodingId);
 	CHECK(ArrayEncodingId != ByteSequenceEncodingId);
+	CHECK(EigenDenseEncodingId != NativeScalarEncodingId);
+	CHECK(EigenDenseEncodingId != NativeObjectEncodingId);
+	CHECK(EigenDenseEncodingId != ArrayEncodingId);
+	CHECK(EigenDenseEncodingId != ByteSequenceEncodingId);
 
-	constexpr std::array<UInt32, 10> scalarCodes{
+	constexpr std::array<UInt32, 12> scalarCodes{
 	        scalar_encoding<std::int8_t>::Code,
 	        scalar_encoding<std::uint8_t>::Code,
 	        scalar_encoding<std::int16_t>::Code,
@@ -266,8 +271,12 @@ TEST_CASE("PersistentStore adapter encoding identifiers are stable and distinct"
 	        scalar_encoding<std::int64_t>::Code,
 	        scalar_encoding<std::uint64_t>::Code,
 	        scalar_encoding<float>::Code,
-	        scalar_encoding<double>::Code};
+	        scalar_encoding<double>::Code,
+	        scalar_encoding<std::complex<float>>::Code,
+	        scalar_encoding<std::complex<double>>::Code};
 	static_assert(AreNonzeroAndUnique(scalarCodes));
+	static_assert(!IsPersistentScalar<std::complex<float>>);
+	static_assert(!IsPersistentScalar<std::complex<double>>);
 	CHECK(AreNonzeroAndUnique(scalarCodes));
 }
 

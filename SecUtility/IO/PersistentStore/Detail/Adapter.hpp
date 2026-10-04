@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <complex>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -71,12 +72,11 @@ namespace SecUtility::IO::PersistentStoreDetail
 	template <typename T>
 	struct scalar_encoding;
 
-	// Persistent arithmetic support is an explicit wire-format whitelist, not a consequence of
-	// std::is_arithmetic_v<T>. The latter also admits bool, character types, implementation-dependent
-	// long double representations, and newer extended floating-point types for which R1 assigns no
-	// stable scalar code or byte encoding. Supporting a newer C++ language mode does not implicitly
-	// add a persistent representation; each additional type requires a format decision, golden byte
-	// vectors, and cross-platform representation tests.
+	// Scalar codes are shared by structured adapters. Native arithmetic support is the intersection of
+	// this explicit wire-format registry and std::is_arithmetic_v<T>; complex codes are used by Eigen
+	// without implicitly enabling the native-object or array adapters for complex objects. Supporting a
+	// newer C++ language mode does not add a representation: each type requires a format decision,
+	// golden byte vectors, and cross-platform representation tests.
 #define SECUTILITY_DEFINE_PERSISTENT_SCALAR(type, code) \
 	template <> struct scalar_encoding<type> { static constexpr UInt32 Code = code; }
 	SECUTILITY_DEFINE_PERSISTENT_SCALAR(std::int8_t, 1);
@@ -90,12 +90,15 @@ namespace SecUtility::IO::PersistentStoreDetail
 	SECUTILITY_DEFINE_PERSISTENT_SCALAR(float, 9);
 	SECUTILITY_DEFINE_PERSISTENT_SCALAR(double, 10);
 #undef SECUTILITY_DEFINE_PERSISTENT_SCALAR
+	template <> struct scalar_encoding<std::complex<float>> { static constexpr UInt32 Code = 11; };
+	template <> struct scalar_encoding<std::complex<double>> { static constexpr UInt32 Code = 12; };
 
 	template <typename T, typename = void>
 	struct is_persistent_scalar : std::false_type {};
 
 	template <typename T>
-	struct is_persistent_scalar<T, std::void_t<decltype(scalar_encoding<T>::Code)>> : std::true_type {};
+	struct is_persistent_scalar<T, std::void_t<decltype(scalar_encoding<T>::Code)>>
+	    : std::bool_constant<std::is_arithmetic_v<T>> {};
 
 	template <typename T>
 	inline constexpr bool IsPersistentScalar = is_persistent_scalar<T>::value;
