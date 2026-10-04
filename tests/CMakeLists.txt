@@ -93,6 +93,8 @@ add_dependencies(PersistentStoreFileTest PersistentStoreLockHelper)
 target_compile_definitions(PersistentStoreFileTest PRIVATE
         PERSISTENT_STORE_LOCK_HELPER_PATH="$<TARGET_FILE:PersistentStoreLockHelper>")
 add_secutility_test(PersistentStoreMappingTest PersistentStoreMappingTest.cpp)
+add_secutility_test(PersistentStoreBasicTest PersistentStoreBasicTest.cpp)
+add_secutility_test(PersistentStoreAdapterTest PersistentStoreAdapterTest.cpp)
 add_secutility_test(MathCoreTest MathCoreTest.cpp)
 add_secutility_test(MathComplexTest MathComplexTest.cpp)
 add_secutility_test(MathContinuedFractionTest MathContinuedFractionTest.cpp)

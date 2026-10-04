@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <SecUtility/IO/PersistentStore/EncodingId.hpp>
+
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -13,7 +15,7 @@
 
 namespace SecUtility::IO
 {
-	template <typename T>
+	template <typename T, typename = void>
 	struct PersistentTraits;
 
 	namespace PersistentStoreDetail
@@ -50,22 +52,13 @@ namespace SecUtility::IO
 		PersistentStore& operator=(const PersistentStore&) = delete;
 		~PersistentStore() = default;
 
-		template <typename T, typename TValue>
+		template <typename T = void, typename TValue>
 		void Insert(std::string_view key, TValue&& value);
 
-		template <typename T, typename TValue>
+		template <typename T = void, typename TValue>
 		void InsertOrReassign(std::string_view key, TValue&& value);
 
-		template <typename T, typename TValue>
-		void Reassign(std::string_view key, TValue&& value);
-
-		template <typename TValue>
-		void Insert(std::string_view key, TValue&& value);
-
-		template <typename TValue>
-		void InsertOrReassign(std::string_view key, TValue&& value);
-
-		template <typename TValue>
+		template <typename T = void, typename TValue>
 		void Reassign(std::string_view key, TValue&& value);
 
 		template <typename T>
@@ -125,5 +118,38 @@ namespace SecUtility::IO
 	inline std::size_t PersistentStore::Size() const
 	{
 		return m_StatePtr->Size();
+	}
+
+	template <typename T, typename TValue>
+	void PersistentStore::Insert(const std::string_view key, TValue&& value)
+	{
+		using StoredType = std::conditional_t<std::is_void_v<T>, std::decay_t<TValue>, T>;
+		m_StatePtr->template Insert<StoredType>(key, std::forward<TValue>(value));
+	}
+
+	template <typename T, typename TValue>
+	void PersistentStore::InsertOrReassign(const std::string_view key, TValue&& value)
+	{
+		using StoredType = std::conditional_t<std::is_void_v<T>, std::decay_t<TValue>, T>;
+		m_StatePtr->template InsertOrReassign<StoredType>(key, std::forward<TValue>(value));
+	}
+
+	template <typename T, typename TValue>
+	void PersistentStore::Reassign(const std::string_view key, TValue&& value)
+	{
+		using StoredType = std::conditional_t<std::is_void_v<T>, std::decay_t<TValue>, T>;
+		m_StatePtr->template Reassign<StoredType>(key, std::forward<TValue>(value));
+	}
+
+	template <typename T>
+	T PersistentStore::Get(const std::string_view key) const
+	{
+		return m_StatePtr->template Get<T>(key);
+	}
+
+	template <typename T, std::enable_if_t<PersistentStoreDetail::HasLeasedType<T>, int>>
+	auto PersistentStore::GetLeased(const std::string_view key) const -> typename PersistentTraits<T>::LeasedType
+	{
+		return m_StatePtr->template GetLeased<T>(key);
 	}
 }
