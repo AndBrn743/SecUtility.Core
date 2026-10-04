@@ -74,3 +74,27 @@ TEST_CASE("PersistentStore leases retain each reassigned and erased extent")
 	CHECK(firstLease[0] == Byte{0x11});
 	CHECK(secondLease[0] == Byte{0x22});
 }
+
+
+TEST_CASE("PersistentStore retains copied and moved leases across repeated generations")
+{
+	TemporaryPath temporary;
+	auto store = PersistentStore::Create(temporary.Get());
+	std::vector<LeasedByteView> leases;
+	for (unsigned int generation = 0; generation != 8; ++generation)
+	{
+		const std::vector<Byte> value(128, Byte{static_cast<unsigned char>(generation)});
+		if (generation == 0) store.Insert("value", value);
+		else store.Reassign("value", value);
+		auto lease = store.GetLeased<std::vector<Byte>>("value");
+		auto copy = lease;
+		leases.push_back(std::move(copy));
+		CHECK(lease[0] == Byte{static_cast<unsigned char>(generation)});
+	}
+	CHECK(store.Erase("value"));
+	for (unsigned int generation = 0; generation != leases.size(); ++generation)
+	{
+		CHECK(leases[generation].size() == 128);
+		CHECK(leases[generation][0] == Byte{static_cast<unsigned char>(generation)});
+	}
+}

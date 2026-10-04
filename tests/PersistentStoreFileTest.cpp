@@ -125,10 +125,25 @@ namespace
 			m_ProcessHandle = process.hProcess;
 			m_InputHandle = childStdInWrite;
 			m_OutputHandle = childStdOutRead;
-			char ready[5]{};
-			DWORD readBytes = 0;
-			REQUIRE(::ReadFile(m_OutputHandle, ready, sizeof(ready), &readBytes, nullptr));
-			REQUIRE(std::string(ready, readBytes) == "ready");
+			std::string line;
+			while (true)
+			{
+				char character = 0;
+				DWORD readBytes = 0;
+				REQUIRE(::ReadFile(m_OutputHandle, &character, 1, &readBytes, nullptr));
+				REQUIRE(readBytes == 1);
+				if (character == '\n')
+				{
+					if (!line.empty() && line.back() == '\r') line.pop_back();
+					if (line == "ready") break;
+					line.clear();
+				}
+				else
+				{
+					REQUIRE(line.size() < 4096);
+					line.push_back(character);
+				}
+			}
 #else
 			int inputPipe[2]{};
 			int outputPipe[2]{};
@@ -153,9 +168,22 @@ namespace
 			::close(outputPipe[1]);
 			m_InputDescriptor = inputPipe[1];
 			m_OutputDescriptor = outputPipe[0];
-			char ready[5]{};
-			REQUIRE(::read(m_OutputDescriptor, ready, sizeof(ready)) == 5);
-			REQUIRE(std::string(ready, 5) == "ready");
+			std::string line;
+			while (true)
+			{
+				char character = 0;
+				REQUIRE(::read(m_OutputDescriptor, &character, 1) == 1);
+				if (character == '\n')
+				{
+					if (line == "ready") break;
+					line.clear();
+				}
+				else
+				{
+					REQUIRE(line.size() < 4096);
+					line.push_back(character);
+				}
+			}
 #endif
 		}
 

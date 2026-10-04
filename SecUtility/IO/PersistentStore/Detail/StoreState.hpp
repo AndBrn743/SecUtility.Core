@@ -91,6 +91,13 @@ namespace SecUtility::IO::PersistentStoreDetail
 			AdapterCallbackGuard* m_PreviousPtr;
 		};
 
+		struct PinnedPayload
+		{
+			Extent AllocatedExtent;
+			UInt64 PayloadOffset = 0;
+			UInt64 PayloadBytes = 0;
+		};
+
 	public:
 		static std::shared_ptr<StoreState> Open(const std::filesystem::path& path, const FileAccess access)
 		{
@@ -136,6 +143,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 		}
 		FileAccess GetAccess() const noexcept { return m_Backend.GetAccess(); }
 
+		// Direct root references are intended only for single-threaded diagnostics/tests. Concurrent
+		// mutation can replace either object; these accessors may be removed in a future revision.
 		const RootCandidate& GetSlotA() const noexcept { return m_SlotA; }
 		const RootCandidate& GetSlotB() const noexcept { return m_SlotB; }
 
@@ -162,17 +171,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 		{
 			AdapterCallbackGuard::RejectReentry(this);
 			ValidateKey(key);
-			DirectoryEntry entry;
-			{
-				StateLockGuard lock(m_StateMutex);
-				const DirectoryEntry* const entryPtr = FindEntry(*m_CurrentDirectoryPtr, key);
-				if (entryPtr == nullptr)
-				{
-					throw KeyNotFoundException("PersistentStore key was not found", key);
-				}
-				entry = *entryPtr;
-				AcquirePinLocked({entry.AllocatedExtent.Offset, entry.AllocatedExtent.Capacity});
-			}
+			const PinnedPayload entry = FindAndPinPayload(key);
 			const auto leasePtr = MapPinned(entry);
 			AdapterCallbackGuard callbackGuard(this);
 			return PersistentTraits<T>::Decode(ConstByteView(leasePtr->Data(), leasePtr->Size()));
@@ -183,17 +182,7 @@ namespace SecUtility::IO::PersistentStoreDetail
 		{
 			AdapterCallbackGuard::RejectReentry(this);
 			ValidateKey(key);
-			DirectoryEntry entry;
-			{
-				StateLockGuard lock(m_StateMutex);
-				const DirectoryEntry* const entryPtr = FindEntry(*m_CurrentDirectoryPtr, key);
-				if (entryPtr == nullptr)
-				{
-					throw KeyNotFoundException("PersistentStore key was not found", key);
-				}
-				entry = *entryPtr;
-				AcquirePinLocked({entry.AllocatedExtent.Offset, entry.AllocatedExtent.Capacity});
-			}
+			const PinnedPayload entry = FindAndPinPayload(key);
 			auto leasePtr = MapPinned(entry);
 			AdapterCallbackGuard callbackGuard(this);
 			return PersistentTraits<T>::DecodeLeased(std::move(leasePtr));
@@ -210,8 +199,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 				RequireMutable();
 				currentDirectoryPtr = m_CurrentDirectoryPtr;
 				if (FindEntry(*currentDirectoryPtr, key) == nullptr) return false;
-				m_Allocator.Rebuild(m_Backend.GetPhysicalFileBytes(), CollectProtectedExtents());
 			}
+			RebuildAllocatorForWriter();
 
 			Directory replacement = *currentDirectoryPtr;
 			const auto iterator = std::lower_bound(
@@ -226,10 +215,13 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 		void ReleasePin(const ExtentIdentity identity) const noexcept
 		{
-			StateLockGuard lock(m_StateMutex);
-			const auto iterator = m_PinCounts.find(identity);
-			if (iterator == m_PinCounts.end()) return;
-			if (--iterator->second == 0) m_PinCounts.erase(iterator);
+			std::map<ExtentIdentity, std::size_t>::node_type releasedNode;
+			{
+				StateLockGuard lock(m_StateMutex);
+				const auto iterator = m_PinCounts.find(identity);
+				if (iterator == m_PinCounts.end()) return;
+				if (--iterator->second == 0) releasedNode = m_PinCounts.extract(iterator);
+			}
 		}
 
 	private:
@@ -255,15 +247,33 @@ namespace SecUtility::IO::PersistentStoreDetail
 		      m_SlotB(std::move(slotB)),
 		      m_CurrentDirectoryPtr(std::move(currentDirectoryPtr))
 		{
-			m_Allocator.Rebuild(m_Backend.GetPhysicalFileBytes(), CollectProtectedExtents());
+			RebuildAllocatorForWriter();
 		}
 
-		void AcquirePinLocked(const ExtentIdentity identity) const
+		PinnedPayload FindAndPinPayload(const std::string_view key) const
 		{
-			++m_PinCounts[identity];
+			std::map<ExtentIdentity, std::size_t> preparedNodeOwner;
+			preparedNodeOwner.emplace(ExtentIdentity{}, 1);
+			auto preparedNode = preparedNodeOwner.extract(preparedNodeOwner.begin());
+			StateLockGuard lock(m_StateMutex);
+			const DirectoryEntry* const entryPtr = FindEntry(*m_CurrentDirectoryPtr, key);
+			if (entryPtr == nullptr)
+				throw KeyNotFoundException("PersistentStore key was not found", key);
+			const ExtentIdentity identity{entryPtr->AllocatedExtent.Offset, entryPtr->AllocatedExtent.Capacity};
+			const auto iterator = m_PinCounts.find(identity);
+			if (iterator == m_PinCounts.end())
+			{
+				preparedNode.key() = identity;
+				m_PinCounts.insert(std::move(preparedNode));
+			}
+			else
+			{
+				++iterator->second;
+			}
+			return {entryPtr->AllocatedExtent, entryPtr->PayloadOffset, entryPtr->PayloadBytes};
 		}
 
-		std::shared_ptr<MappingLease> MapPinned(const DirectoryEntry& entry) const
+		std::shared_ptr<MappingLease> MapPinned(const PinnedPayload& entry) const
 		{
 			const ExtentIdentity identity{entry.AllocatedExtent.Offset, entry.AllocatedExtent.Capacity};
 			try
@@ -287,17 +297,42 @@ namespace SecUtility::IO::PersistentStoreDetail
 				ref_extents.push_back(entry.AllocatedExtent);
 		}
 
-		std::vector<Extent> CollectProtectedExtents() const
+		std::vector<Extent> CollectProtectedExtentsForWriter() const
 		{
 			std::vector<Extent> extents;
+			extents.reserve(m_SlotA.ParsedDirectory.Entries.size() + m_SlotB.ParsedDirectory.Entries.size() + 2);
 			AppendRootExtents(m_SlotA, extents);
 			AppendRootExtents(m_SlotB, extents);
-			for (const auto& [identity, count] : m_PinCounts)
+			const std::size_t rootExtentCount = extents.size();
+			while (true)
 			{
-				(void)count;
-				extents.push_back({identity.Offset, identity.Capacity});
+				std::size_t pinExtentCount = 0;
+				{
+					StateLockGuard stateLock(m_StateMutex);
+					pinExtentCount = m_PinCounts.size();
+				}
+				if (extents.capacity() < rootExtentCount + pinExtentCount)
+					extents.reserve(rootExtentCount + pinExtentCount);
+				extents.resize(rootExtentCount);
+				StateLockGuard stateLock(m_StateMutex);
+				if (m_PinCounts.size() > extents.capacity() - rootExtentCount) continue;
+				for (const auto& [identity, count] : m_PinCounts)
+				{
+					(void)count;
+					extents.push_back({identity.Offset, identity.Capacity});
+				}
+				return extents;
 			}
-			return extents;
+		}
+
+		void RebuildAllocatorForWriter()
+		{
+			std::vector<Extent> protectedExtents = CollectProtectedExtentsForWriter();
+			const UInt64 physicalBytes = m_Backend.GetPhysicalFileBytes();
+			ExtentAllocator replacement;
+			replacement.Rebuild(physicalBytes, std::move(protectedExtents));
+			using std::swap;
+			swap(m_Allocator, replacement);
 		}
 
 		static void RequireLittleEndianHost()
@@ -340,11 +375,62 @@ namespace SecUtility::IO::PersistentStoreDetail
 			return loaded;
 		}
 
+		struct ClassifiedExtent
+		{
+			Extent Range;
+			const DirectoryEntry* EntryPtr = nullptr;
+			unsigned int RootIndex = 0;
+		};
+
+		static bool AreSharedEntriesConsistent(const DirectoryEntry& left, const DirectoryEntry& right)
+		{
+			return left.Key == right.Key && left.AllocatedExtent.Offset == right.AllocatedExtent.Offset
+			       && left.AllocatedExtent.Capacity == right.AllocatedExtent.Capacity
+			       && left.PayloadOffset == right.PayloadOffset && left.PayloadBytes == right.PayloadBytes;
+		}
+
+		static void ValidateCrossRootExtents(const RootCandidate& slotA, const RootCandidate& slotB)
+		{
+			if (!slotA.IsValid || !slotB.IsValid) return;
+			std::vector<ClassifiedExtent> extents;
+			extents.reserve(slotA.ParsedDirectory.Entries.size() + slotB.ParsedDirectory.Entries.size() + 2);
+			extents.push_back({{slotA.Header.DirectoryOffset, slotA.Header.DirectoryBytes}, nullptr, 0});
+			extents.push_back({{slotB.Header.DirectoryOffset, slotB.Header.DirectoryBytes}, nullptr, 1});
+			for (const DirectoryEntry& entry : slotA.ParsedDirectory.Entries)
+				extents.push_back({entry.AllocatedExtent, &entry, 0});
+			for (const DirectoryEntry& entry : slotB.ParsedDirectory.Entries)
+				extents.push_back({entry.AllocatedExtent, &entry, 1});
+			std::sort(extents.begin(), extents.end(), [](const ClassifiedExtent& left, const ClassifiedExtent& right)
+			{
+				return left.Range.Offset < right.Range.Offset
+				       || (left.Range.Offset == right.Range.Offset && left.Range.Capacity < right.Range.Capacity);
+			});
+			for (std::size_t index = 1; index < extents.size(); ++index)
+			{
+				const ClassifiedExtent& previous = extents[index - 1];
+				const ClassifiedExtent& current = extents[index];
+				if (previous.RootIndex == current.RootIndex
+				    || !DoRangesOverlap(previous.Range.Offset, previous.Range.Capacity,
+				                        current.Range.Offset, current.Range.Capacity))
+					continue;
+				const bool isConsistentSharedPayload = previous.EntryPtr != nullptr && current.EntryPtr != nullptr
+				        && AreSharedEntriesConsistent(*previous.EntryPtr, *current.EntryPtr);
+				const bool isConsistentSharedDirectory = previous.EntryPtr == nullptr && current.EntryPtr == nullptr
+				        && previous.Range.Offset == current.Range.Offset
+				        && previous.Range.Capacity == current.Range.Capacity
+				        && slotA.Header.Generation == slotB.Header.Generation
+				        && slotA.Header.DirectoryChecksum == slotB.Header.DirectoryChecksum;
+				if (!isConsistentSharedPayload && !isConsistentSharedDirectory)
+					throw FormatException("PersistentStore roots contain inconsistent overlapping extents");
+			}
+		}
+
 		static std::shared_ptr<StoreState> Load(FileBackend backend)
 		{
 			const UInt64 physicalFileBytes = backend.GetPhysicalFileBytes();
 			LoadedCandidate slotA = ReadCandidate(backend, HeaderSlotAOffset, physicalFileBytes);
 			LoadedCandidate slotB = ReadCandidate(backend, HeaderSlotBOffset, physicalFileBytes);
+			ValidateCrossRootExtents(slotA.Candidate, slotB.Candidate);
 
 			if (!slotA.Candidate.IsValid && !slotB.Candidate.IsValid)
 			{
@@ -438,8 +524,8 @@ namespace SecUtility::IO::PersistentStoreDetail
 				RequireMutable();
 				currentDirectoryPtr = m_CurrentDirectoryPtr;
 				ValidateMutationPrecondition(*currentDirectoryPtr, key, kind);
-				m_Allocator.Rebuild(m_Backend.GetPhysicalFileBytes(), CollectProtectedExtents());
 			}
+			RebuildAllocatorForWriter();
 
 			PayloadLayout layout;
 			{

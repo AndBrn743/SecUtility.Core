@@ -19,6 +19,12 @@ namespace SecUtility::IO
 	// with MakePersistentEncodingId("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"), and increment its
 	// SchemaVersion whenever the persisted object representation changes. Generate the UUID once;
 	// never derive it from a compiler type name or generate it at build time or runtime.
+	//
+	// Specializing this descriptor explicitly opts into persisting the complete native object
+	// representation. That representation is ABI-specific and includes padding bytes. The caller must
+	// ensure every representation byte is initialized before insertion; otherwise padding can make files
+	// nondeterministic or disclose unrelated memory. Types that cannot meet that contract must use a
+	// field-wise adapter instead of NativeObjectDescriptor.
 	template <typename T>
 	struct NativeObjectDescriptor;
 
@@ -108,6 +114,7 @@ namespace SecUtility::IO
 			FormatCodecDetail::WriteLittleEndian<UInt32>(bytes, 68, ByteOrderMarker, "native object byte order");
 			FormatCodecDetail::WriteLittleEndian<UInt64>(bytes, 72, sizeof(T), "native object representation bytes");
 			FormatCodecDetail::WriteLittleEndian<UInt64>(bytes, 80, 0, "native object reserved");
+			// This copies padding deliberately under NativeObjectDescriptor's explicit representation contract.
 			std::memcpy(bytes.data() + 88, &value, sizeof(T));
 		}
 

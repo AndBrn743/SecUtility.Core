@@ -50,15 +50,14 @@ TEST_CASE("PersistentStore allocator handles alignment, small fragments, zero by
 }
 
 
-TEST_CASE("PersistentStore allocator coalesces pending releases atomically")
+TEST_CASE("PersistentStore allocator rebuild coalesces adjacent protected extents")
 {
 	ExtentAllocator allocator;
-	allocator.Rebuild(4300, {}, {{4096, 64}, {4160, 140}});
-	allocator.RetryPendingReleases();
+	allocator.Rebuild(4500, {{4200, 50}, {4250, 50}});
 
-	REQUIRE(allocator.GetFreeByOffset().size() == 1);
-	CHECK(allocator.GetFreeByOffset().at(4096) == 204);
-	CHECK(allocator.GetMetrics().PendingBytes == 0);
+	REQUIRE(allocator.GetFreeByOffset().size() == 2);
+	CHECK(allocator.GetFreeByOffset().at(4096) == 104);
+	CHECK(allocator.GetFreeByOffset().at(4300) == 200);
 }
 
 

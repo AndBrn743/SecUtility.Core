@@ -1,9 +1,12 @@
 #include <SecUtility/IO/PersistentStore/Detail/ExtentAllocator.hpp>
+#include <SecUtility/IO/PersistentStore/Detail/FileBackend.hpp>
+#include <SecUtility/IO/PersistentStore/Detail/FormatCodec.hpp>
 #include <SecUtility/IO/PersistentStore/Adapter/ByteSequence.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <random>
@@ -44,17 +47,11 @@ namespace
 TEST_CASE("PersistentStore allocator audit accounts independently for every physical byte")
 {
 	ExtentAllocator allocator;
-	allocator.Rebuild(8192, {{5000, 400}, {6000, 300}}, {{5500, 100}});
+	allocator.Rebuild(8192, {{5000, 400}, {6000, 300}});
 	const ExtentAllocatorMetrics metrics = allocator.Audit();
 	CHECK(metrics.PhysicalBytes == 8192);
 	CHECK(metrics.ProtectedBytes == SuperblockBytes + 700);
-	CHECK(metrics.PendingBytes == 100);
-	CHECK(metrics.ProtectedBytes + metrics.PendingBytes + metrics.ReusableBytes == metrics.PhysicalBytes);
-
-	allocator.RetryPendingReleases();
-	const ExtentAllocatorMetrics releasedMetrics = allocator.Audit();
-	CHECK(releasedMetrics.PendingBytes == 0);
-	CHECK(releasedMetrics.ProtectedBytes + releasedMetrics.ReusableBytes == releasedMetrics.PhysicalBytes);
+	CHECK(metrics.ProtectedBytes + metrics.ReusableBytes == metrics.PhysicalBytes);
 }
 
 
@@ -107,4 +104,45 @@ TEST_CASE("PersistentStore reconstructs reusable extents across root rotation an
 		CHECK(store.Get<std::vector<Byte>>("value") == first);
 	}
 	CHECK(std::filesystem::file_size(temporary.Get()) == beforeReuse);
+}
+
+
+TEST_CASE("PersistentStore rejects inconsistent extents shared across recoverable roots")
+{
+	TemporaryPath temporary;
+	{
+		auto store = PersistentStore::Create(temporary.Get());
+		store.Insert("value", std::vector<Byte>{Byte{0x11}, Byte{0x12}});
+		store.Reassign("value", std::vector<Byte>{Byte{0x21}, Byte{0x22}});
+	}
+	{
+		auto backend = FileBackend::Open(temporary.Get(), FileAccess::ReadWrite);
+		const UInt64 physicalBytes = backend.GetPhysicalFileBytes();
+		std::array<Byte, HeaderSlotBytes> slotABytes{};
+		std::array<Byte, HeaderSlotBytes> slotBBytes{};
+		backend.ReadExact(HeaderSlotAOffset, slotABytes.data(), slotABytes.size());
+		backend.ReadExact(HeaderSlotBOffset, slotBBytes.data(), slotBBytes.size());
+		HeaderSlot slotA = ParseHeader(ConstByteView(slotABytes), physicalBytes);
+		HeaderSlot slotB = ParseHeader(ConstByteView(slotBBytes), physicalBytes);
+		const HeaderSlot& older = slotA.Generation < slotB.Generation ? slotA : slotB;
+		HeaderSlot* newerPtr = slotA.Generation < slotB.Generation ? &slotB : &slotA;
+		const UInt64 newerSlotOffset = newerPtr == &slotA ? HeaderSlotAOffset : HeaderSlotBOffset;
+		std::vector<Byte> olderBytes(older.DirectoryBytes);
+		std::vector<Byte> newerBytes(newerPtr->DirectoryBytes);
+		backend.ReadExact(older.DirectoryOffset, olderBytes.data(), olderBytes.size());
+		backend.ReadExact(newerPtr->DirectoryOffset, newerBytes.data(), newerBytes.size());
+		const Directory olderDirectory = ParseDirectory(older, ConstByteView(olderBytes), physicalBytes);
+		Directory newerDirectory = ParseDirectory(*newerPtr, ConstByteView(newerBytes), physicalBytes);
+		REQUIRE(olderDirectory.Entries.size() == 1);
+		REQUIRE(newerDirectory.Entries.size() == 1);
+		newerDirectory.Entries[0].AllocatedExtent = olderDirectory.Entries[0].AllocatedExtent;
+		newerDirectory.Entries[0].PayloadOffset = olderDirectory.Entries[0].PayloadOffset;
+		newerDirectory.Entries[0].PayloadBytes = olderDirectory.Entries[0].PayloadBytes - 1;
+		newerBytes = SerializeDirectory(newerDirectory);
+		newerPtr->DirectoryChecksum = FormatCodecDetail::ComputeCrc32C(ConstByteView(newerBytes));
+		const auto corruptedHeaderBytes = SerializeHeader(*newerPtr);
+		backend.WriteExact(newerPtr->DirectoryOffset, newerBytes.data(), newerBytes.size());
+		backend.WriteExact(newerSlotOffset, corruptedHeaderBytes.data(), corruptedHeaderBytes.size());
+	}
+	CHECK_THROWS_AS(PersistentStore::OpenForReadOnly(temporary.Get()), FormatException);
 }
