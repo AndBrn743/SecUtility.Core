@@ -40,10 +40,14 @@ namespace SecUtility::IO::PersistentStoreDetail
 
 	template <typename T>
 	inline constexpr bool IsPersistentEigenRepresentation =
-	        (std::is_same_v<T, float> || std::is_same_v<T, double>
-	         || std::is_same_v<T, std::complex<float>> || std::is_same_v<T, std::complex<double>>)
-	        && std::numeric_limits<typename eigen_component<T>::Type>::is_iec559
-	        && (!Eigen::NumTraits<T>::IsComplex || sizeof(T) == 2 * sizeof(typename eigen_component<T>::Type));
+	        HasScalarEncoding<T>
+	        && (std::is_integral_v<T>
+	            || std::is_same_v<T, float> || std::is_same_v<T, double>
+	            || std::is_same_v<T, std::complex<float>> || std::is_same_v<T, std::complex<double>>)
+	        && (std::is_integral_v<T>
+	            || std::numeric_limits<typename eigen_component<T>::Type>::is_iec559)
+	        && (!Eigen::NumTraits<T>::IsComplex
+	            || sizeof(T) == 2 * sizeof(typename eigen_component<T>::Type));
 
 	inline constexpr UInt64 EigenRequiredAlignment =
 	        EIGEN_MAX_ALIGN_BYTES > 0 ? static_cast<UInt64>(EIGEN_MAX_ALIGN_BYTES) : UInt64{1};

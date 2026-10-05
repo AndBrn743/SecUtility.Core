@@ -78,11 +78,23 @@ namespace
 		CHECK(Eigen::MatrixX<Scalar>(store.GetLeased<Eigen::MatrixX<Scalar>>("matrix")) == expected);
 	}
 
+	template <typename Scalar>
+	void CheckIntegralExtremes()
+	{
+		TemporaryPath temporary;
+		Eigen::MatrixX<Scalar> expected(2, 2);
+		expected << std::numeric_limits<Scalar>::lowest(), std::numeric_limits<Scalar>::max(),
+		        Scalar{0}, Scalar{1};
+		auto store = PersistentStore::Create(temporary.Get());
+		store.Insert("matrix", expected);
+		CHECK(store.Get<Eigen::MatrixX<Scalar>>("matrix") == expected);
+	}
+
 	using Lease = PersistentTraits<Eigen::MatrixXd>::LeasedType;
 	using RowMajorLease = PersistentTraits<Eigen::Matrix<double, 2, 3, Eigen::RowMajor>>::LeasedType;
 	using ConstMap = Eigen::Map<const Eigen::MatrixXd, Eigen::AlignedMax>;
 	static_assert(PersistentStoreDetail::HasLeasedType<Eigen::MatrixXd>);
-	static_assert(!PersistentStoreDetail::HasLeasedType<Eigen::MatrixXi>);
+	static_assert(PersistentStoreDetail::HasLeasedType<Eigen::MatrixXi>);
 	static_assert(!std::is_convertible_v<Lease&, ConstMap&>);
 	static_assert(!std::is_assignable_v<decltype(std::declval<Lease&>().coeff(0, 0)), double>);
 	static_assert((Eigen::internal::traits<Lease>::Flags & Eigen::RowMajorBit) == 0);
@@ -114,10 +126,31 @@ namespace
 
 TEST_CASE("PersistentStore Eigen dense adapter preserves every supported scalar")
 {
+	CheckIntegralExtremes<std::int8_t>();
+	CheckIntegralExtremes<std::uint8_t>();
+	CheckIntegralExtremes<std::int16_t>();
+	CheckIntegralExtremes<std::uint16_t>();
+	CheckIntegralExtremes<std::int32_t>();
+	CheckIntegralExtremes<std::uint32_t>();
+	CheckIntegralExtremes<std::int64_t>();
+	CheckIntegralExtremes<std::uint64_t>();
 	CheckScalarRoundTrip<float>();
 	CheckScalarRoundTrip<double>();
 	CheckScalarRoundTrip<std::complex<float>>();
 	CheckScalarRoundTrip<std::complex<double>>();
+}
+
+
+TEST_CASE("PersistentStore Eigen integral scalars follow their fixed-width aliases")
+{
+	CheckIntegralExtremes<short>();
+	CheckIntegralExtremes<unsigned short>();
+	CheckIntegralExtremes<int>();
+	CheckIntegralExtremes<unsigned int>();
+	CheckIntegralExtremes<long>();
+	CheckIntegralExtremes<unsigned long>();
+	CheckIntegralExtremes<long long>();
+	CheckIntegralExtremes<unsigned long long>();
 }
 
 
