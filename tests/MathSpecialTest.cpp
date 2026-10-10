@@ -8,7 +8,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cmath>
 #include <iterator>
+#include <limits>
 #include <vector>
 
 #include <SecUtility/Math/Special.hpp>
@@ -19,6 +21,15 @@ using Catch::Approx;
 #define DUAL_CHECK(...)                                                                                                \
 	CHECK(__VA_ARGS__);                                                                                                \
 	STATIC_CHECK(__VA_ARGS__)
+
+
+template <typename T>
+static T AsVolatile(const T value)
+{
+	volatile T result = value;
+	return result;
+}
+
 
 TEST_CASE("Erf function")
 {
@@ -210,6 +221,25 @@ TEST_CASE("Gamma")
 	SKIP("Test requires C++20 or compiler magic (GCC 9 or higher, Clang 9 or higher, MSVC 19.25 or higher)");
 #endif
 }
+
+
+TEST_CASE("GammaOfHalfInteger runtime paths")
+{
+	SECTION("Lookup table boundaries")
+	{
+		CHECK(GammaOfHalfInteger(AsVolatile(0.5)) == Approx(std::tgamma(0.5)));
+		CHECK(GammaOfHalfInteger(AsVolatile(63.5)) == Approx(std::tgamma(63.5)));
+		CHECK(GammaOfHalfInteger(AsVolatile(-0.5)) == Approx(std::tgamma(-0.5)));
+		CHECK(GammaOfHalfInteger(AsVolatile(-62.5)) == Approx(std::tgamma(-62.5)));
+	}
+
+	SECTION("Fallback outside lookup tables")
+	{
+		CHECK(GammaOfHalfInteger(AsVolatile(64.5)) == Approx(std::tgamma(64.5)));
+		CHECK(GammaOfHalfInteger(AsVolatile(-63.5)) == Approx(std::tgamma(-63.5)));
+	}
+}
+
 
 TEST_CASE("ExpIntegral")
 {
@@ -484,6 +514,30 @@ TEST_CASE("Digamma")
 
 TEST_CASE("GammaRegularizedQ")
 {
+	SECTION("Domain and algorithm branches")
+	{
+		CHECK(std::isnan(GammaQ(AsVolatile(1.0), AsVolatile(-1.0))));
+		CHECK(std::isnan(GammaQ(AsVolatile(0.0), AsVolatile(2.0))));
+		CHECK(GammaQ(AsVolatile(1.0), AsVolatile(0.0)) == 1.0);
+
+		// For a == 1, Q(a, x) == exp(-x). These values select the series,
+		// continued-fraction, and asymptotic implementations, respectively.
+		CHECK(GammaQ(AsVolatile(1.0), AsVolatile(0.5)) == Approx(std::exp(-0.5)));
+		CHECK(GammaQ(AsVolatile(1.0), AsVolatile(2.0)) == Approx(std::exp(-2.0)));
+		CHECK(GammaQ(AsVolatile(1.0), AsVolatile(52.0)) == Approx(std::exp(-52.0)));
+	}
+
+	SECTION("LogGammaQ")
+	{
+		CHECK(std::isnan(LogGammaQ(AsVolatile(1.0), AsVolatile(-1.0))));
+		CHECK(std::isnan(LogGammaQ(AsVolatile(0.0), AsVolatile(2.0))));
+		CHECK(LogGammaQ(AsVolatile(1.0), AsVolatile(0.0)) == 0.0);
+
+		CHECK(LogGammaQ(AsVolatile(1.0), AsVolatile(0.5)) == Approx(-0.5));
+		CHECK(LogGammaQ(AsVolatile(1.0), AsVolatile(2.0)) == Approx(-2.0));
+		CHECK(LogGammaQ(AsVolatile(1.0), AsVolatile(52.0)) == Approx(-52.0));
+	}
+
 	SECTION("Q(1e-9, x)")
 	{
 		CHECK(GammaQ(1e-9, 0.) == 1);
@@ -596,6 +650,13 @@ TEST_CASE("GammaRegularizedQ")
 
 TEST_CASE("GammaUpperIncomplete")
 {
+	SECTION("Domain and special cases")
+	{
+		CHECK(std::isnan(GammaUpperIncomplete(AsVolatile(1.0), AsVolatile(-1.0))));
+		CHECK(std::isnan(GammaUpperIncomplete(AsVolatile(0.0), AsVolatile(1.0))));
+		CHECK(GammaUpperIncomplete(AsVolatile(1e-7), AsVolatile(1.0)) == Approx(0.2193839343955203));
+	}
+
 	SECTION("Typical")
 	{
 		CHECK(GammaUpperIncomplete(0.5, 0.) == Catch::Approx(std::tgamma(0.5)));
