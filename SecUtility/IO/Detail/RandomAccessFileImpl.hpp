@@ -930,24 +930,24 @@ namespace SecUtility::IO
 		{
 			return;
 		}
-		std::lock_guard<std::mutex> stateGuard(m_StatePtr->LockMutex);
+		auto statePtr = std::move(m_StatePtr);
+		std::lock_guard<std::mutex> stateGuard(statePtr->LockMutex);
 #if defined(_WIN32)
 		OVERLAPPED overlapped{};
-		::UnlockFileEx(m_StatePtr->Handle, 0, MAXDWORD, MAXDWORD, &overlapped);
+		::UnlockFileEx(statePtr->Handle, 0, MAXDWORD, MAXDWORD, &overlapped);
 #else
 #if defined(F_OFD_SETLK) && defined(__linux__)
 		struct flock lock{};
 		lock.l_type = F_UNLCK;
 		lock.l_whence = SEEK_SET;
 		lock.l_len = 0;
-		::fcntl(m_StatePtr->Descriptor, F_OFD_SETLK, &lock);
+		::fcntl(statePtr->Descriptor, F_OFD_SETLK, &lock);
 #else
-		::flock(m_StatePtr->Descriptor, LOCK_UN);
+		::flock(statePtr->Descriptor, LOCK_UN);
 #endif
 #endif
-		RandomAccessFileDetail::ReleaseRegistry(m_StatePtr->Identity, m_Mode);
-		m_StatePtr->HasLock = false;
-		m_StatePtr.reset();
+		RandomAccessFileDetail::ReleaseRegistry(statePtr->Identity, m_Mode);
+		statePtr->HasLock = false;
 	}
 }
 
