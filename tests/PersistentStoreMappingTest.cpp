@@ -16,6 +16,8 @@
 
 using namespace SecUtility;
 using namespace SecUtility::IO::PersistentStoreDetail;
+using IO::ReadWriteMappedRegion;
+using IO::ReadOnlyMappedRegion;
 
 
 namespace
@@ -69,8 +71,8 @@ namespace
 TEST_CASE("PersistentStore mapping exposes bounded aligned regions")
 {
 	TemporaryPath temporary;
-	const UInt64 granularity = FileBackend::GetMappingGranularity();
-	const UInt64 physicalBytes = granularity * 3 + MaximumPayloadAlignment;
+	constexpr UInt64 boundaryProbe = 64 * 1024;
+	const UInt64 physicalBytes = boundaryProbe * 3 + MaximumPayloadAlignment;
 	auto backend = CreateBackend(temporary.Get(), physicalBytes);
 
 	const auto emptyAtStart = backend.MapReadOnly(0, 0, 1);
@@ -80,8 +82,8 @@ TEST_CASE("PersistentStore mapping exposes bounded aligned regions")
 	CHECK(emptyAtEnd.Data() == nullptr);
 	CHECK(emptyAtEnd.Size() == 0);
 
-	const std::array<UInt64, 5> offsets{1, granularity - 1, granularity, granularity + 1,
-	                                           granularity * 2 + 1};
+	const std::array<UInt64, 5> offsets{1, boundaryProbe - 1, boundaryProbe, boundaryProbe + 1,
+	                                           boundaryProbe * 2 + 1};
 	for (const UInt64 offset : offsets)
 	{
 		auto writable = backend.MapReadWrite(offset, 3, 1);
@@ -97,7 +99,7 @@ TEST_CASE("PersistentStore mapping exposes bounded aligned regions")
 
 	for (UInt64 alignment = 1; alignment <= MaximumPayloadAlignment; alignment *= 2)
 	{
-		const UInt64 offset = granularity * 2;
+		const UInt64 offset = boundaryProbe * 2;
 		const auto readable = backend.MapReadOnly(offset, 1, alignment);
 		CHECK(reinterpret_cast<std::uintptr_t>(readable.Data()) % alignment == 0);
 	}
@@ -126,12 +128,12 @@ TEST_CASE("PersistentStore mapping rejects invalid ranges and access")
 TEST_CASE("PersistentStore retained mappings survive growth and coherent mapped reuse")
 {
 	TemporaryPath temporary;
-	const UInt64 granularity = FileBackend::GetMappingGranularity();
+	constexpr UInt64 boundaryProbe = 64 * 1024;
 	const UInt64 oldOffset = 32;
 	const UInt64 oldBytes = 16;
-	const UInt64 reusableOffset = granularity;
+	const UInt64 reusableOffset = boundaryProbe;
 	const UInt64 reusableBytes = 16;
-	const UInt64 initialBytes = granularity * 2;
+	const UInt64 initialBytes = boundaryProbe * 2;
 	auto backend = CreateBackend(temporary.Get(), initialBytes);
 
 	{
@@ -150,8 +152,8 @@ TEST_CASE("PersistentStore retained mappings survive growth and coherent mapped 
 	const Byte* const oldDataPtr = oldView.Data();
 	CheckFilled(oldView, Byte{0x11});
 
-	backend.SetPhysicalFileBytes(granularity * 3);
-	const UInt64 grownOffset = granularity * 2 + 64;
+	backend.SetPhysicalFileBytes(boundaryProbe * 3);
+	const UInt64 grownOffset = boundaryProbe * 2 + 64;
 	{
 		auto writable = backend.MapReadWrite(grownOffset, 16, 1);
 		Fill(writable, Byte{0x33});
@@ -162,7 +164,7 @@ TEST_CASE("PersistentStore retained mappings survive growth and coherent mapped 
 	CHECK(oldView.Data() == oldDataPtr);
 	CheckFilled(oldView, Byte{0x11});
 
-	const std::array<UInt64, 3> reuseOffsets{granularity - 1, granularity, granularity + 1};
+	const std::array<UInt64, 3> reuseOffsets{boundaryProbe - 1, boundaryProbe, boundaryProbe + 1};
 	for (std::size_t index = 0; index < reuseOffsets.size(); ++index)
 	{
 		const UInt64 offset = reuseOffsets[index];

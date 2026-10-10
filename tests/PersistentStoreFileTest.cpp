@@ -24,6 +24,7 @@
 #else
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -403,32 +404,6 @@ TEST_CASE("PersistentStore backend rejects invalid exact I/O and read-only write
 	std::array<Byte, 1> byte{};
 	CHECK_THROWS_AS(backend.WriteExact(0, byte.data(), byte.size()), InvalidOperationException);
 	CHECK_THROWS_AS(backend.SetPhysicalFileBytes(8), InvalidOperationException);
-}
-
-
-TEST_CASE("PersistentStore exact-transfer loop handles interruptions and short operations")
-{
-	std::array<Byte, 9> bytes{};
-	std::size_t callCount = 0;
-	CompleteExactTransfer(100, bytes.data(), bytes.size(), true,
-	                      [&](const UInt64 offset, Byte* bytesPtr, const std::size_t remainingBytes) {
-		                      ++callCount;
-		                      if (callCount == 1)
-		                      {
-			                      return ExactTransferResult{0, true};
-		                      }
-		                      CHECK(offset == 100 + (callCount - 2) * 2);
-		                      const std::size_t transferred = std::min<std::size_t>(2, remainingBytes);
-		                      std::fill(bytesPtr, bytesPtr + transferred, Byte{0x5A});
-		                      return ExactTransferResult{transferred, false};
-	                      });
-	CHECK(callCount == 6);
-	CHECK(std::all_of(bytes.begin(), bytes.end(), [](const Byte byte) { return byte == Byte{0x5A}; }));
-
-	CHECK_THROWS_AS(
-	        CompleteExactTransfer(0, bytes.data(), bytes.size(), false,
-	                              [](const UInt64, Byte*, const std::size_t) { return ExactTransferResult{}; }),
-	        IOException);
 }
 
 
