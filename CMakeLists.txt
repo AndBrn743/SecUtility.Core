@@ -7,10 +7,24 @@ endif ()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(SecUtility.Core INTERFACE)
+option(SECUTILITY_CORE_HEADER_ONLY "Provide SecUtility.Core as a header-only library" ON)
+
+if (SECUTILITY_CORE_HEADER_ONLY)
+    add_library(SecUtility.Core INTERFACE)
+    set(_secutility_core_usage_scope INTERFACE)
+else ()
+    add_library(SecUtility.Core SecUtility/IO/RandomAccessFile.cpp)
+    set(_secutility_core_usage_scope PUBLIC)
+    target_compile_definitions(SecUtility.Core PUBLIC SECUTILITY_CORE_COMPILED)
+    if (BUILD_SHARED_LIBS)
+        target_compile_definitions(SecUtility.Core
+                PUBLIC SECUTILITY_CORE_SHARED
+                PRIVATE SECUTILITY_CORE_BUILDING)
+    endif ()
+endif ()
 add_library(SecUtility::Core ALIAS SecUtility.Core)
 include(GNUInstallDirs)
-target_include_directories(SecUtility.Core INTERFACE
+target_include_directories(SecUtility.Core ${_secutility_core_usage_scope}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
@@ -61,7 +75,7 @@ else ()
         FetchContent_MakeAvailable(eigen)
     endif ()
 endif ()
-target_link_libraries(SecUtility.Core INTERFACE Eigen3::Eigen)
+target_link_libraries(SecUtility.Core ${_secutility_core_usage_scope} Eigen3::Eigen)
 
 if (WIN32)
     find_program(PATCH_EXECUTABLE
@@ -118,7 +132,7 @@ else ()
     )
     FetchContent_MakeAvailable(range-v3)
 endif ()
-target_link_libraries(SecUtility.Core INTERFACE range-v3::range-v3)
+target_link_libraries(SecUtility.Core ${_secutility_core_usage_scope} range-v3::range-v3)
 
 if (TARGET gcem::gcem)
     message(STATUS "SecUtility will use the gcem target defined by ancestor project")
@@ -155,9 +169,9 @@ else ()
         add_library(gcem::gcem ALIAS gcem)
     endif ()
 endif ()
-target_link_libraries(SecUtility.Core INTERFACE gcem::gcem)
+target_link_libraries(SecUtility.Core ${_secutility_core_usage_scope} gcem::gcem)
 
-target_compile_definitions(SecUtility.Core INTERFACE __STDCPP_WANT_MATH_SPEC_FUNCS__)
+target_compile_definitions(SecUtility.Core ${_secutility_core_usage_scope} __STDCPP_WANT_MATH_SPEC_FUNCS__)
 
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(_secutility_core_default_test ON)
@@ -178,4 +192,4 @@ install(TARGETS SecUtility.Core EXPORT SecUtilityCoreTargets)
 export(TARGETS SecUtility.Core NAMESPACE SecUtility:: FILE SecUtilityCoreTargets.cmake)
 export(PACKAGE SecUtility.Core)
 install(EXPORT SecUtilityCoreTargets NAMESPACE SecUtility:: DESTINATION "${CMAKE_INSTALL_DATADIR}/SecUtility.Core/cmake")
-install(DIRECTORY "SecUtility" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(DIRECTORY "SecUtility" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" PATTERN "*.cpp" EXCLUDE)
