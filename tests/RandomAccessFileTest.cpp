@@ -129,7 +129,11 @@ namespace
 			::WaitForSingleObject(m_ProcessHandle, 5000);
 			::CloseHandle(m_ProcessHandle);
 #else
-			(void)::write(m_InputDescriptor, "stop\n", 5);
+			// wtf is going on with gcc 13.3.0 from github's ubuntu runner?
+			// RandomAccessFileTest.cpp:132:38: error: ignoring return value of ‘ssize_t write(int, const void*, size_t)’ declared with attribute ‘warn_unused_result’ [-Werror=unused-result]
+			// 132 |                         (void)::write(m_InputDescriptor, "stop\n", 5);
+			//     |                               ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+			[[maybe_unused]] auto _unused = [this]{ return ::write(m_InputDescriptor, "stop\n", 5); }();
 			::close(m_InputDescriptor);
 			::close(m_OutputDescriptor);
 			int status = 0;
