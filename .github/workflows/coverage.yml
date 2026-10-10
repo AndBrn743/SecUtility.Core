@@ -45,7 +45,7 @@ jobs:
             -G Ninja
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel 2
 
       - name: Run tests
         working-directory: build/tests
