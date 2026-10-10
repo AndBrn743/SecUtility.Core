@@ -145,6 +145,42 @@ jobs:
         working-directory: build/tests
         run: ctest --output-on-failure
 
+  local-clang-libcxx-tsan:
+    name: Clang (libc++, tsan)
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Clean build directory
+        run: rm -rf build
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++ -fsanitize=thread -fno-omit-frame-pointer -fno-optimize-sibling-calls -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG -march=native" \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            ${{ env.CATCH2_SOURCE != '' && format('-DCATCH2_SOURCE={0}', env.CATCH2_SOURCE) || '' }} \
+            ${{ env.NLOHMANN_JSON_SOURCE != '' && format('-DNLOHMANN_JSON_SOURCE={0}', env.NLOHMANN_JSON_SOURCE) || '' }} \
+            ${{ env.RANGE_V3_SOURCE != '' && format('-DRANGE_V3_SOURCE={0}', env.RANGE_V3_SOURCE) || '' }} \
+            ${{ env.GCEM_SOURCE != '' && format('-DGCEM_SOURCE={0}', env.GCEM_SOURCE) || '' }} \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel 3
+
+      - name: Set stack limit
+        run: ulimit -s 1048576
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure
+
   local-coverage-clang:
     name: Local Coverage (Clang/LLVM)
     runs-on: self-hosted
