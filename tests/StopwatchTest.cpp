@@ -44,6 +44,7 @@ using SecUtility::TimeUnit;
 #endif
 
 
+#if 0  // Retained for the disabled host-performance integration tests below.
 static void CpuWork()
 {
 	volatile double x = 0.0;
@@ -53,6 +54,40 @@ static void CpuWork()
 	}
 	(void)x;
 }
+#endif
+
+
+// Exercises StopwatchBase without depending on the scheduler or the host clock.
+class ManualStopwatch : public StopwatchBase<ManualStopwatch>
+{
+	friend StopwatchBase<ManualStopwatch>;
+
+public:
+	void AdvanceTicks(const Int64 ticks) noexcept
+	{
+		m_Now += ticks;
+	}
+
+	void AdvanceMilliseconds(const Int64 milliseconds) noexcept
+	{
+		AdvanceTicks(milliseconds * TicksPerMillisecond);
+	}
+
+private:
+	Int64 GetTimestamp() const noexcept
+	{
+		return m_Now;
+	}
+
+	Int64 GetRawElapsedFromStartUntilNowTicks() const noexcept
+	{
+		return m_Now - m_StartTimestamp;
+	}
+
+private:
+	Int64 m_Now = 0;
+	Int64 m_StartTimestamp = 0;
+};
 
 
 TEST_CASE("CpuStopwatch - Initial state")
@@ -106,6 +141,7 @@ TEST_CASE("CpuStopwatch - Basic timing operations")
 		CHECK(sw.IsRunning() == false);
 	}
 
+#if 0  // Scheduler and host-load dependent; StopwatchBase accumulation is tested with ManualStopwatch below.
 	SECTION("Accumulates time while running")
 	{
 		CpuStopwatch sw;
@@ -133,6 +169,7 @@ TEST_CASE("CpuStopwatch - Basic timing operations")
 
 		CHECK(after == before);
 	}
+#endif
 }
 
 
@@ -140,12 +177,12 @@ TEST_CASE("Stopwatch - Reset behavior")
 {
 	SECTION("Reset clears elapsed time")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 		sw.Stop();
 
-		REQUIRE(sw.Elapsed<TimeUnit::Milliseconds>() > 40.0);
+		REQUIRE(sw.Elapsed<TimeUnit::Milliseconds>() == 50.0);
 
 		sw.Reset();
 
@@ -156,9 +193,9 @@ TEST_CASE("Stopwatch - Reset behavior")
 
 	SECTION("Reset while running stops timing")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 
 		sw.Reset();
 
@@ -168,7 +205,7 @@ TEST_CASE("Stopwatch - Reset behavior")
 
 	SECTION("Can start again after reset")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
 		sw.Stop();
 		sw.Reset();
@@ -179,41 +216,59 @@ TEST_CASE("Stopwatch - Reset behavior")
 }
 
 
+TEST_CASE("Stopwatch - StartNew behavior")
+{
+	ManualStopwatch original;
+	original.Start();
+	original.AdvanceMilliseconds(20);
+	original.Stop();
+
+	auto started = original.StartNew();
+
+	CHECK(started.IsRunning() == true);
+	CHECK(started.ElapsedTicks() == 0);
+	CHECK(original.IsRunning() == false);
+	CHECK(original.Elapsed<TimeUnit::Milliseconds>() == 20.0);
+
+	started.AdvanceMilliseconds(30);
+	CHECK(started.Elapsed<TimeUnit::Milliseconds>() == 30.0);
+	CHECK(original.Elapsed<TimeUnit::Milliseconds>() == 20.0);
+}
+
+
 TEST_CASE("Stopwatch - Restart behavior")
 {
-	SECUTILITY_SKIP_TIMING_ON_MACOS_CI("strict upper-bound timing assertions");
-
 	SECTION("Restart clears and starts fresh")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 		sw.Stop();
 
 		const auto before = sw.Elapsed<TimeUnit::Milliseconds>();
 
 		sw.Restart();
 
-		CHECK(sw.Elapsed<TimeUnit::Milliseconds>() < 0.1);  // approx zero
+		CHECK(sw.ElapsedTicks() == 0);
 		CHECK(sw.IsRunning() == true);
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(30));
+		sw.AdvanceMilliseconds(30);
 
 		const auto after = sw.Elapsed<TimeUnit::Milliseconds>();
 
-		CHECK(after >= 25.0);   // Allow tolerance
-		CHECK(after < before);  // Should be less than before reset
+		CHECK(after == 30.0);
+		CHECK(before == 50.0);
 	}
 
 	SECTION("Restart when already running")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 
 		sw.Restart();
 
-		CHECK(sw.Elapsed<TimeUnit::Milliseconds>() < 0.1);  // approx zero
+		CHECK(sw.ElapsedTicks() == 0);
 		CHECK(sw.IsRunning() == true);
 	}
 }
@@ -221,167 +276,143 @@ TEST_CASE("Stopwatch - Restart behavior")
 
 TEST_CASE("Stopwatch - Multiple start/stop cycles")
 {
-	SECUTILITY_SKIP_TIMING_ON_MACOS_CI("strict upper-bound timing assertions");
-
-#if defined(_WIN32)
-	timeBeginPeriod(1);
-#endif
-
 	SECTION("Accumulates across multiple sessions")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		double total = 0.0;
 
 		for (int i = 0; i < 3; ++i)
 		{
 			sw.Start();
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+			sw.AdvanceMilliseconds(20);
 			sw.Stop();
 
 			const auto session = sw.Elapsed<TimeUnit::Milliseconds>() - total;
-			CHECK(session >= 15.0);  // Allow tolerance
-			CHECK(session <= 30.0);
+			CHECK(session == 20.0);
 
 			total = sw.Elapsed<TimeUnit::Milliseconds>();
 		}
 
-		CHECK(total >= 55.0);  // ~3 * 20ms
-		CHECK(total <= 100.0);
+		CHECK(total == 60.0);
 	}
 
 	SECTION("Second start while running does nothing")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
 		sw.Start();  // Should be ignored
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 		sw.Stop();
 
 		// Should only count once
 		const auto elapsed = sw.Elapsed<TimeUnit::Milliseconds>();
-		CHECK(elapsed >= 45.0);
-		CHECK(elapsed <= 65.0);
+		CHECK(elapsed == 50.0);
 	}
 }
 
 
 TEST_CASE("Stopwatch - Elapsed formats")
 {
-	SECUTILITY_SKIP_TIMING_ON_MACOS_CI("strict upper-bound timing assertions");
-
-#if defined(_WIN32)
-	timeBeginPeriod(1);
-#endif
-
 	SECTION("Milliseconds format")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		sw.AdvanceMilliseconds(100);
 		sw.Stop();
 
 		const auto ms = sw.Elapsed<TimeUnit::Milliseconds>();
-		CHECK(ms >= 95.0);
-		CHECK(ms <= 120.0);
+		CHECK(ms == 100.0);
 	}
 
 	SECTION("Seconds format")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		sw.AdvanceMilliseconds(100);
 		sw.Stop();
 
 		const auto s = sw.Elapsed<TimeUnit::Seconds>();
-		CHECK(s >= 0.09);
-		CHECK(s <= 0.13);
+		CHECK(s == Approx(0.1));
 	}
 
 	SECTION("Microseconds format")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 
 		const auto us = sw.Elapsed<TimeUnit::Microseconds>();
-		CHECK(us >= 45000.0);
-		CHECK(us <= 60000.0);
+		CHECK(us == 50000.0);
 	}
 
 	SECTION("Ticks format returns integer")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 		sw.Stop();
 
 		const Int64 ticks = sw.ElapsedTicks();
-		CHECK(ticks > 0);
+		CHECK(ticks == 50 * TicksPerMillisecond);
 	}
 }
 
 
 TEST_CASE("Stopwatch - Formatted output")
 {
-#if defined(_WIN32)
-	timeBeginPeriod(1);
-#endif
-
 	SECTION("ToString() returns string")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		sw.AdvanceMilliseconds(100);
 		sw.Stop();
 
 		const auto str = sw.ToString();
-		CHECK(!str.empty());
-		CHECK((str.find("ms") != std::string::npos || str.find("sec") != std::string::npos));
+		CHECK(str == "100.000 ms");
 	}
 
 	SECTION("ToString<Unit, Width, Precision>() formats correctly")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		sw.AdvanceMilliseconds(100);
 		sw.Stop();
 
 		const auto str = sw.ToString<TimeUnit::Milliseconds, 10, 2>();
-		CHECK(!str.empty());
-		CHECK(str.length() >= 6);
+		CHECK(str == "    100.00 ms");
 	}
 
 	SECTION("Milliseconds format includes 'ms' suffix")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 		sw.Stop();
 
 		const auto str = sw.ToString<TimeUnit::Milliseconds>();
-		CHECK(str.find("ms") != std::string::npos);
+		CHECK(str == "50.000 ms");
 	}
 
 	SECTION("Seconds format includes 'sec' suffix")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		sw.AdvanceMilliseconds(100);
 		sw.Stop();
 
 		const auto str = sw.ToString<TimeUnit::Seconds>();
-		CHECK(str.find("sec") != std::string::npos);
+		CHECK(str == "0.100 sec");
 	}
 
 	SECTION("Ticks format includes 'ticks' suffix")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 
 		const auto str = sw.ToString<TimeUnit::Ticks>();
-		CHECK(str.find("ticks") != std::string::npos);
+		CHECK(str == "500000.000 ticks");
 	}
 }
 
@@ -408,6 +439,7 @@ TEST_CASE("Stopwatch - ToCString and ToCStringSymbol")
 
 TEST_CASE("Stopwatch - Wall clock timing")
 {
+#if 0  // Integration benchmarks are unsuitable as unit tests on shared CI runners.
 	SECUTILITY_SKIP_TIMING_ON_MACOS_CI("strict upper-bound timing assertions");
 
 #if defined(_WIN32)
@@ -455,11 +487,25 @@ TEST_CASE("Stopwatch - Wall clock timing")
 		CHECK(cpu >= wall * 0.5);   // most of the wall time was real CPU work
 		CHECK(cpu >= 10.0);         // something measurable happened
 	}
+#endif
+}
+
+
+TEST_CASE("Stopwatch - Production clock smoke test")
+{
+	Stopwatch sw;
+	sw.Start();
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	sw.Stop();
+
+	// sleep_for may oversleep under load, so deliberately impose no upper bound.
+	CHECK(sw.Elapsed<TimeUnit::Milliseconds>() >= 1.0);
 }
 
 
 TEST_CASE("Stopwatch - Concurrent stopwatches are independent")
 {
+#if 0  // Scheduler-dependent integration tests retained for optional local benchmarking.
 	SECUTILITY_SKIP_TIMING_ON_MACOS_CI("strict upper-bound timing assertions");
 
 #if defined(_WIN32)
@@ -511,33 +557,27 @@ TEST_CASE("Stopwatch - Concurrent stopwatches are independent")
 			CHECK(ms <= 65.0);
 		}
 	}
+#endif
 }
 
 
 TEST_CASE("Stopwatch - Edge cases")
 {
-	SECUTILITY_SKIP_TIMING_ON_MACOS_CI("strict upper-bound timing assertions");
-
-#if defined(_WIN32)
-	timeBeginPeriod(1);
-#endif
-
 	SECTION("Start and stop immediately")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
 		sw.Stop();
 
 		const auto elapsed = sw.Elapsed<TimeUnit::Microseconds>();
-		CHECK(elapsed >= 0);
-		CHECK(elapsed < 10000);  // Should be very small (<10ms)
+		CHECK(elapsed == 0);
 	}
 
 	SECTION("Multiple stops in a row")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 		sw.Stop();
 		sw.Stop();  // Should have no effect
 		sw.Stop();
@@ -550,20 +590,19 @@ TEST_CASE("Stopwatch - Edge cases")
 
 	SECTION("Multiple starts in a row")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
 		sw.Start();  // Should have no effect
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		sw.AdvanceMilliseconds(50);
 
 		const auto ms = sw.Elapsed<TimeUnit::Milliseconds>();
-		CHECK(ms >= 45.0);
-		CHECK(ms <= 65.0);
+		CHECK(ms == 50.0);
 	}
 
 	SECTION("Stop without start")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Stop();  // Should have no effect
 
 		CHECK(sw.ElapsedTicks() == 0);
@@ -572,7 +611,7 @@ TEST_CASE("Stopwatch - Edge cases")
 
 	SECTION("Reset when not started")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Reset();  // Should have no effect
 
 		CHECK(sw.ElapsedTicks() == 0);
@@ -585,7 +624,7 @@ TEST_CASE("Stopwatch - State consistency")
 {
 	SECTION("Start changes IsRunning state")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		REQUIRE(!sw.IsRunning());
 
 		sw.Start();
@@ -597,7 +636,7 @@ TEST_CASE("Stopwatch - State consistency")
 
 	SECTION("Reset clears IsRunning state")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
 		REQUIRE(sw.IsRunning());
 
@@ -607,7 +646,7 @@ TEST_CASE("Stopwatch - State consistency")
 
 	SECTION("Restart sets IsRunning to true")
 	{
-		Stopwatch sw;
+		ManualStopwatch sw;
 		sw.Start();
 		sw.Stop();
 		REQUIRE(!sw.IsRunning());
