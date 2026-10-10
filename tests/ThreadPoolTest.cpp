@@ -4,6 +4,7 @@
 
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_version_macros.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 
 #include <SecUtility/Threading/ThreadPool.hpp>
@@ -11,6 +12,8 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <future>
 #include <numeric>
 #include <thread>
 #include <vector>
@@ -343,7 +346,7 @@ TEST_CASE("ThreadPool destruction behavior", "[threadpool][destruction]")
 
 			for (int i = 0; i < 10; ++i)
 			{
-				pool.Submit(
+				pool.SubmitDetached(
 				        [&completed]
 				        {
 					        std::this_thread::sleep_for(10ms);
@@ -380,7 +383,7 @@ TEST_CASE("ThreadPool destruction behavior", "[threadpool][destruction]")
 
 			for (int i = 0; i < 5; ++i)
 			{
-				pool.Submit(
+				pool.SubmitDetached(
 				        [i, &results, &resultsMutex]
 				        {
 					        std::this_thread::sleep_for(10ms);
@@ -509,25 +512,30 @@ TEST_CASE("ThreadPool recursive patterns", "[threadpool][recursive]")
 	SECTION("Fire-and-forget recursive tasks")
 	{
 		ThreadPool pool(4);
-		std::atomic<int> counter{0};
+		std::mutex completionMutex;
+		std::condition_variable completionCondition;
+		int counter = 0;
 
 		std::function<void(int)> task;
 		task = [&](const int depth)
 		{
-			counter++;
 			if (depth > 0)
 			{
-				// Submit children without waiting
-				pool.Submit(task, depth - 1);
-				pool.Submit(task, depth - 1);
+				pool.SubmitDetached(task, depth - 1);
+				pool.SubmitDetached(task, depth - 1);
 			}
+
+			std::lock_guard lock(completionMutex);
+			++counter;
+			completionCondition.notify_one();
 		};
 
-		pool.Submit(task, 3);
-		std::this_thread::sleep_for(100ms);
+		pool.SubmitDetached(task, 3);
 
-		// 2^4 - 1 = 15 nodes in complete binary tree of depth 3
-		REQUIRE(counter >= 7);  // At least the first few levels
+		std::unique_lock lock(completionMutex);
+		completionCondition.wait(lock, [&counter] { return counter == 15; });
+
+		REQUIRE(counter == 15);
 	}
 
 	SECTION("Demonstrates thread pool saturation")
@@ -608,9 +616,17 @@ TEST_CASE("ThreadPool thread safety", "[threadpool][threadsafety]")
 			submitters.emplace_back(
 			        [&pool, &counter]
 			        {
+				        std::vector<std::future<void>> futures;
+				        futures.reserve(100);
+
 				        for (int j = 0; j < 100; ++j)
 				        {
-					        pool.Submit([&counter] { counter++; });
+					        futures.emplace_back(pool.Submit([&counter] { counter++; }));
+				        }
+
+				        for (auto& future : futures)
+				        {
+					        future.get();
 				        }
 			        });
 		}
@@ -619,9 +635,6 @@ TEST_CASE("ThreadPool thread safety", "[threadpool][threadsafety]")
 		{
 			t.join();
 		}
-
-		// Give tasks time to complete
-		std::this_thread::sleep_for(100ms);
 
 		REQUIRE(counter == 400);
 	}
