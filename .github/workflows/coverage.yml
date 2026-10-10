@@ -30,6 +30,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build ccache lcov
 
+      - name: Configure ccache
+        run: |
+          ccache --set-config=cache_dir="${{ runner.temp }}/ccache"
+          ccache --set-config=max_size=500M
+          ccache --set-config=compression=true
+          ccache -p
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: linux-ccache-coverage-gcc-${{ github.sha }}
+          restore-keys: |
+            linux-ccache-coverage-gcc-
+            linux-ccache-
+
       - name: Configure CMake with coverage
         run: |
           # -march=native enables hardware CRC32 intrinsics (SSE4.2/ARMv8) exercised by some tests.
@@ -42,10 +58,14 @@ jobs:
             -DCMAKE_CXX_EXTENSIONS=OFF \
             -DCMAKE_CXX_FLAGS="-march=native --coverage" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -G Ninja
 
       - name: Build
         run: cmake --build build --parallel 2
+
+      - name: ccache statistics
+        run: ccache -s
 
       - name: Run tests
         working-directory: build/tests
