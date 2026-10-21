@@ -61,13 +61,13 @@ fi
 echo_info "All required packages are installed"
 
 # Check for cached Catch2 tarball
-CATCH2_TARBALL="$PROJECT_ROOT/.cache/catch2-v3.7.1.tar.gz"
+CATCH2_TARBALL="$PROJECT_ROOT/.cache/catch2-v3.15.1.tar.gz"
 if [ -f "$CATCH2_TARBALL" ]; then
     echo_info "Using cached Catch2: $CATCH2_TARBALL"
     export CATCH2_SOURCE="$CATCH2_TARBALL"
 else
     echo_warn "No cached Catch2 found at $CATCH2_TARBALL"
-    echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o catch2-v3.7.1.tar.gz https://github.com/catchorg/Catch2/archive/refs/tags/v3.7.1.tar.gz"
+    echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o catch2-v3.15.1.tar.gz https://github.com/catchorg/Catch2/archive/refs/tags/v3.15.1.tar.gz"
 fi
 
 # Check for cached nlohmann/json tarball
