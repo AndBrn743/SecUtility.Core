@@ -83,7 +83,7 @@ if (WIN32 AND MINGW)
     target_link_libraries(StopwatchTest PRIVATE winmm)
 endif ()
 add_secutility_test(StaticForeachTest StaticForeachTest.cpp)
-# Exercise template-lambda and bounded-range overloads in the default C++17 build too.
+# Exercise template-lambda call sites in the default C++17 build too.
 if (CMAKE_CXX_STANDARD LESS 20 AND "cxx_std_20" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
     add_secutility_test(StaticForeachCxx20Test StaticForeachTest.cpp TEST_PREFIX "C++20: ")
     target_compile_features(StaticForeachCxx20Test PRIVATE cxx_std_20)

@@ -17,6 +17,8 @@
 
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -117,6 +119,32 @@ namespace
 	    : std::true_type
 	{
 	};
+
+	template <typename Operation, typename, auto... Bounds>
+	struct CanStaticForeachInRange : std::false_type
+	{
+	};
+
+	template <typename Operation, auto... Bounds>
+	struct CanStaticForeachInRange<Operation,
+	                               std::void_t<decltype(StaticForeachInRange<Bounds...>(std::declval<Operation>()))>,
+	                               Bounds...> : std::true_type
+	{
+	};
+
+	template <typename Operation, auto... Bounds>
+	constexpr bool CanIterateRange = CanStaticForeachInRange<Operation, void, Bounds...>::value;
+
+	template <auto... Bounds>
+	void CheckRange(const std::vector<int>& expected)
+	{
+		std::vector<int> visited;
+		StaticForeachInRange<Bounds...>(TemplateRecorder{visited});
+		CHECK(visited == expected);
+		visited.clear();
+		StaticForeachInRange<Bounds...>(RuntimeRecorder{visited});
+		CHECK(visited == expected);
+	}
 
 	constexpr int TemplateSumAtCompileTime()
 	{
@@ -273,8 +301,142 @@ TEST_CASE("StaticForeach invokes move-only lambdas without copying or moving the
 	CHECK(sum == 3);
 	StaticForeachInRange<3>(std::move(add));
 	CHECK(sum == 6);
+	StaticForeachInRange<2, 4>(std::move(add));
+	CHECK(sum == 11);
+	StaticForeachInRange<5, 0, -2>(std::move(add));
+	CHECK(sum == 20);
 	add(1);
-	CHECK(sum == 7);
+	CHECK(sum == 21);
+}
+
+TEST_CASE("StaticForeachInRange bounded and stepped forms work in C++17")
+{
+	CheckRange<3, 5>({3, 4});
+	CheckRange<-3, 2>({-3, -2, -1, 0, 1});
+	CheckRange<0, 1>({0});
+	CheckRange<-3, -3>({});
+	CheckRange<-3, 5, 2>({-3, -1, 1, 3});
+	CheckRange<-3, 4, 2>({-3, -1, 1, 3});
+	CheckRange<5, -2, -2>({5, 3, 1, -1});
+	CheckRange<3, -3, -2>({3, 1, -1});
+	CheckRange<1, 2, 6>({1});
+	CheckRange<5, 2, -6>({5});
+	CheckRange<3, 3, 6>({});
+	CheckRange<-3, -3, -6>({});
+}
+
+TEST_CASE("StaticForeachInRange keeps step arithmetic independent of bound types")
+{
+	CheckRange<5u, 1u, -2>({5, 3});
+	CheckRange<5u, 0u, -2>({5, 3, 1});
+	CheckRange<1u, 5u, 2>({1, 3});
+	CheckRange<5u, 1, -2>({5, 3});
+	CheckRange<-3, 4, 2u>({-3, -1, 1, 3});
+	CheckRange<1u, 4u>({1, 2, 3});
+	CheckRange<static_cast<signed char>(-128), static_cast<signed char>(127), 127>({-128, -1, 126});
+	int calls = 0;
+	StaticForeachInRange<5u, 1u, -2>(
+	        [&](auto i)
+	        {
+		        STATIC_CHECK(std::is_same_v<decltype(i), unsigned>);
+		        ++calls;
+	        });
+	StaticForeachInRange<static_cast<short>(1), static_cast<short>(4), 2LL>(
+	        [&](auto i)
+	        {
+		        STATIC_CHECK(std::is_same_v<decltype(i), short>);
+		        ++calls;
+	        });
+	CHECK(calls == 4);
+}
+
+TEST_CASE("StaticForeachInRange handles extreme bounds without signed overflow")
+{
+	constexpr auto Min = std::numeric_limits<std::intmax_t>::min();
+	constexpr auto Max = std::numeric_limits<std::intmax_t>::max();
+	std::vector<std::intmax_t> visited;
+	StaticForeachInRange<Min, Max, Max>([&](auto i) { visited.push_back(i); });
+	CHECK(visited == std::vector<std::intmax_t>{Min, -1, Max - 1});
+	visited.clear();
+	StaticForeachInRange<Max, Min, Min>([&](auto i) { visited.push_back(i); });
+	CHECK(visited == std::vector<std::intmax_t>{Max, -1});
+}
+
+TEST_CASE("StaticForeachInRange consistently constrains ranges and callbacks")
+{
+	STATIC_CHECK(CanIterateRange<TemplateSum, 0, 3>);
+	STATIC_CHECK(CanIterateRange<RuntimeRecorder, 3u, 0u, -1>);
+	STATIC_CHECK_FALSE(CanIterateRange<TemplateValue, 3>);
+	STATIC_CHECK_FALSE(CanIterateRange<TemplateValue, 0, 3>);
+	STATIC_CHECK_FALSE(CanIterateRange<RuntimeValue, 0, 3>);
+	STATIC_CHECK_FALSE(CanIterateRange<RuntimeValue, 3, 0, -1>);
+	STATIC_CHECK_FALSE(CanIterateRange<IndexDependentReturn, 0, 2>);
+	STATIC_CHECK_FALSE(CanIterateRange<TemplateSum, -1>);
+	STATIC_CHECK_FALSE(CanIterateRange<TemplateSum, 3, 1>);
+	STATIC_CHECK_FALSE(CanIterateRange<TemplateSum, 0, 3, 0>);
+	STATIC_CHECK_FALSE(CanIterateRange<TemplateSum, 0, 3, -1>);
+	// The common bound type is unsigned, which cannot represent the negative bound.
+	STATIC_CHECK_FALSE(CanIterateRange<TemplateSum, -3, 4u>);
+	STATIC_CHECK_FALSE(CanIterateRange<TemplateSum, -3, 4u, 2>);
+	STATIC_CHECK(CanIterateRange<int, -3, -3>);
+	STATIC_CHECK(CanIterateRange<int, 3u, 3u, -1>);
+	StaticForeachInRange<-3, -3>(42);
+	StaticForeachInRange<3u, 3u, -1>(42);
+}
+
+TEST_CASE("StaticForeachInRange bounded forms preserve constexpr and noexcept")
+{
+	constexpr auto templateSum = []() constexpr
+	{
+		int sum = 0;
+		StaticForeachInRange<-2, 2>(TemplateSum{sum});
+		StaticForeachInRange<5, -2, -2>(TemplateSum{sum});
+		return sum;
+	};
+	constexpr auto runtimeSum = []() constexpr
+	{
+		int sum = 0;
+		auto add = [&](int i) constexpr noexcept { sum += i; };
+		StaticForeachInRange<-2, 2>(add);
+		StaticForeachInRange<5, -2, -2>(add);
+		return sum;
+	};
+	STATIC_CHECK(templateSum() == 6);
+	STATIC_CHECK(runtimeSum() == 6);
+	STATIC_CHECK(noexcept(StaticForeachInRange<-2, 2>(std::declval<TemplateSum>())));
+	STATIC_CHECK(noexcept(StaticForeachInRange<5, -2, -2>(std::declval<TemplateSum>())));
+	STATIC_CHECK(noexcept(StaticForeachInRange<-3, -3>(42)));
+	STATIC_CHECK(noexcept(StaticForeachInRange<3, 3, -1>(42)));
+	STATIC_CHECK_FALSE(noexcept(StaticForeachInRange<0, 2>(IndexDependentNoexcept{})));
+	STATIC_CHECK_FALSE(noexcept(StaticForeachInRange<1, -1, -1>(IndexDependentNoexcept{})));
+	auto nonthrowing = [](int) noexcept {};
+	auto throwing = [](int) {};
+	STATIC_CHECK(noexcept(StaticForeachInRange<-2, 2>(nonthrowing)));
+	STATIC_CHECK(noexcept(StaticForeachInRange<5, -2, -2>(nonthrowing)));
+	STATIC_CHECK_FALSE(noexcept(StaticForeachInRange<-2, 2>(throwing)));
+	STATIC_CHECK_FALSE(noexcept(StaticForeachInRange<5, -2, -2>(throwing)));
+}
+
+TEST_CASE("StaticForeachInRange bounded forms propagate exceptions")
+{
+	std::vector<int> visited;
+	SECTION("template index")
+	{
+		CHECK_THROWS_AS((StaticForeachInRange<0, 3>(ThrowingTemplateRecorder{visited})), std::runtime_error);
+	}
+	SECTION("runtime index")
+	{
+		auto record = [&](int i)
+		{
+			visited.push_back(i);
+			if (i == 1)
+			{
+				throw std::runtime_error("stop iteration");
+			}
+		};
+		CHECK_THROWS_AS((StaticForeachInRange<0, 3, 1>(record)), std::runtime_error);
+	}
+	CHECK(visited == std::vector<int>{0, 1});
 }
 
 
@@ -473,6 +635,20 @@ TEST_CASE("Legacy runtime-index entry points")
 	visited.clear();
 	StaticForeachInRangeWithRuntimeIndex<3>(record);
 	CHECK(visited == std::vector<int>{0, 1, 2});
+	visited.clear();
+#if defined(__cpp_generic_lambdas) && __cpp_generic_lambdas >= 201707L
+	StaticForeachInRangeWithRuntimeIndex<-2, 2>(record);
+	CHECK(visited == std::vector<int>{-2, -1, 0, 1});
+	visited.clear();
+#endif
+	// Legacy callbacks may still return values that are discarded.
+	// StaticForeachInRangeWithRuntimeIndex<1, 3>(
+	//         [&](int i)
+	//         {
+	// 	        visited.push_back(i);
+	// 	        return i;
+	//         });
+	// CHECK(visited == std::vector<int>{1, 2});
 }
 
 #if defined(__GNUC__)
