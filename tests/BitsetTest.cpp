@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <sstream>
 #include <string>
@@ -1907,6 +1908,68 @@ TEST_CASE("operator<<= and operator>>=")
 				CHECK(shifted[i] == seg1[i + shiftSize]);
 			}
 		}
+	}
+}
+
+TEST_CASE("Bitset storage ownership traits", "[bitset][traits]")
+{
+	STATIC_REQUIRE(Traits<Bitset<0>>::IsOwning);
+	STATIC_REQUIRE(Traits<Bitset<100>>::IsOwning);
+	STATIC_REQUIRE(Traits<DynamicBitset>::IsOwning);
+	using Segment = decltype(std::declval<Bitset<100>&>().Segment(0, 100));
+	using NotExpr = decltype(~std::declval<const Bitset<100>&>());
+	using BinaryExpr = decltype(std::declval<const Bitset<100>&>() & std::declval<const DynamicBitset&>());
+	STATIC_REQUIRE_FALSE(Traits<Segment>::IsOwning);
+	STATIC_REQUIRE_FALSE(Traits<NotExpr>::IsOwning);
+	STATIC_REQUIRE_FALSE(Traits<BinaryExpr>::IsOwning);
+}
+
+TEMPLATE_TEST_CASE("Owning bitset shifts match a string model",
+                   "[bitset][shift]",
+                   (Bitset<0>),
+                   (Bitset<1>),
+                   (Bitset<42>),
+                   (Bitset<63>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<100>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<549>),
+                   (Bitset<5409>))
+{
+	const std::size_t shift = GENERATE(0, 1, 7, 63, 64, 65, 127, 128, 129, 256, 5408, 5409, 5410,
+	                                 std::numeric_limits<std::size_t>::max());
+	const std::uint64_t seed = GENERATE(0, 42);
+	const bool left = GENERATE(false, true);
+	const auto checkShift = [shift, seed, left](auto bs)
+	{
+		const std::size_t size = bs.Size();
+		CAPTURE(size, shift, seed, left);
+		const auto pattern = RandomBitString(size, seed);
+		std::transform(pattern.begin(), pattern.end(), bs.begin(), [](const char c) { return c == '1'; });
+
+		std::string expected(size, '0');
+		if (shift < size)
+		{
+			expected = left ? std::string(shift, '0') + pattern.substr(0, size - shift)
+			                : pattern.substr(shift) + std::string(shift, '0');
+		}
+		auto& result = left ? (bs <<= shift) : (bs >>= shift);
+		CHECK(&result == &bs);
+		CHECK(bs.ToString(false) == expected);
+		const auto oneCount = static_cast<std::size_t>(std::count(expected.begin(), expected.end(), '1'));
+		CHECK(bs.OneCount() == oneCount);
+		CHECK(bs.ZeroCount() == size - oneCount);
+	};
+
+	SECTION("Fixed size")
+	{
+		checkShift(TestType{});
+	}
+	SECTION("Dynamic size")
+	{
+		checkShift(DynamicBitset(TestType{}.Size()));
 	}
 }
 

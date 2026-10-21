@@ -97,6 +97,8 @@ namespace SecUtility
 	template <std::size_t N>
 	struct Traits<Bitset<N>>
 	{
+		// Owns contiguous blocks, with zero head padding and cleared tail padding.
+		static constexpr bool IsOwning = true;
 		static constexpr bool IsNestedByRef = true;
 		static constexpr bool IsCheaplyRealignable = false;
 		static constexpr bool IsMaskedForRead = true;
@@ -265,6 +267,7 @@ namespace SecUtility
 	template <>
 	struct Traits<DynamicBitset>
 	{
+		static constexpr bool IsOwning = true;
 		static constexpr bool IsNestedByRef = true;
 		static constexpr bool IsCheaplyRealignable = false;
 		static constexpr bool IsMaskedForRead = true;
@@ -348,6 +351,7 @@ namespace SecUtility
 	template <typename Nested>
 	struct Traits<Detail::Bitset::BitsetSegmentExpr<Nested>>
 	{
+		static constexpr bool IsOwning = false;
 		static constexpr bool IsNestedByRef = false;
 		static constexpr bool IsCheaplyRealignable = false;
 		static constexpr bool IsMaskedForRead = false;
@@ -412,6 +416,7 @@ namespace SecUtility
 	template <typename Nested>
 	struct Traits<Detail::Bitset::BitsetNotExpr<Nested>>
 	{
+		static constexpr bool IsOwning = false;
 		static constexpr bool IsNestedByRef = false;
 		static constexpr bool IsCheaplyRealignable = false;
 		static constexpr bool IsMaskedForRead = false;
@@ -493,6 +498,7 @@ namespace SecUtility
 	template <typename Op, typename Lhs, typename Rhs>
 	struct Traits<Detail::Bitset::BitsetBinaryExpr<Op, Lhs, Rhs>>
 	{
+		static constexpr bool IsOwning = false;
 		static constexpr bool IsNestedByRef = false;
 		static constexpr bool IsCheaplyRealignable = true;
 		static constexpr bool IsMaskedForRead = false;

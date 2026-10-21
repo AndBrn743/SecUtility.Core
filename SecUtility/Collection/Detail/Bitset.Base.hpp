@@ -167,6 +167,50 @@ namespace SecUtility
 			}
 		}
 
+		// Called only for owning storage and 0 < n < Size(), so Block(0) exists.
+		constexpr void ShiftLeftOwning(const std::size_t blockShift, const std::size_t bitShift) noexcept
+		{
+			auto* const data = &Block(0);
+			const std::size_t count = BlockCount();
+			if (bitShift == 0)
+			{
+				std::copy_backward(data, data + count - blockShift, data + count);
+			}
+			else
+			{
+				for (std::size_t i = count - 1; i > blockShift; --i)
+				{
+					data[i] = (data[i - blockShift] << bitShift)
+					          | (data[i - blockShift - 1] >> (Detail::Bitset::BitsPerBlock - bitShift));
+				}
+				data[blockShift] = data[0] << bitShift;
+			}
+			std::fill_n(data, blockShift, std::uint64_t{0});
+			RestPaddingBitsOfLastBlock();
+		}
+
+		constexpr void ShiftRightOwning(const std::size_t blockShift, const std::size_t bitShift) noexcept
+		{
+			auto* const data = &Block(0);
+			const std::size_t count = BlockCount();
+			const std::size_t limit = count - blockShift - 1;
+			if (bitShift == 0)
+			{
+				std::copy(data + blockShift, data + count, data);
+			}
+			else
+			{
+				const std::uint64_t last = data[count - 1] >> bitShift;
+				for (std::size_t i = 0; i < limit; ++i)
+				{
+					data[i] = (data[i + blockShift] >> bitShift)
+					          | (data[i + blockShift + 1] << (Detail::Bitset::BitsPerBlock - bitShift));
+				}
+				data[limit] = last;
+			}
+			std::fill_n(data + limit + 1, blockShift, std::uint64_t{0});
+		}
+
 		constexpr std::uint64_t ShiftedBlock(const int shift, const std::size_t i) const SEC_NOEXCEPT
 		{
 			if (shift == 0)
@@ -749,6 +793,11 @@ namespace SecUtility
 
 			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
+			if constexpr (Traits<Derived>::IsOwning)
+			{
+				ShiftLeftOwning(blockShift, bitShift);
+				return AsDerived();
+			}
 			const auto masks = MakeBlockMaskCaches();
 			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
@@ -827,6 +876,11 @@ namespace SecUtility
 
 			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
+			if constexpr (Traits<Derived>::IsOwning)
+			{
+				ShiftRightOwning(blockShift, bitShift);
+				return AsDerived();
+			}
 			const auto masks = MakeBlockMaskCaches();
 			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
