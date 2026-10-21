@@ -41,20 +41,11 @@ namespace SecUtility
 	}
 
 	template <auto UpperBound, typename Operation>
-	constexpr SEC_FORCE_INLINE void StaticForeachInRange(Operation&& op)
+	constexpr SEC_FORCE_INLINE std::enable_if_t<std::is_integral_v<decltype(UpperBound)> && (UpperBound >= 0)>
+	StaticForeachInRange(Operation&& op) noexcept(noexcept(
+	        StaticForeach(std::make_integer_sequence<decltype(UpperBound), UpperBound>{}, std::forward<Operation>(op))))
 	{
-		using Index = std::decay_t<decltype(UpperBound)>;
-		static_assert(std::is_integral_v<Index>);
-		static_assert(UpperBound >= 0);
-
-		if constexpr (UpperBound == 0)
-		{
-			(void)op;
-		}
-		else
-		{
-			StaticForeach(std::make_integer_sequence<Index, UpperBound>{}, std::forward<Operation>(op));
-		}
+		StaticForeach(std::make_integer_sequence<decltype(UpperBound), UpperBound>{}, std::forward<Operation>(op));
 	}
 
 #if defined(__cpp_generic_lambdas) && __cpp_generic_lambdas >= 201707L
@@ -123,6 +114,7 @@ namespace SecUtility
 	}
 
 	template <auto UpperBound, typename Operation>
+	[[deprecated("Use StaticForeach instead")]]
 	constexpr SEC_FORCE_INLINE void StaticForeachInRangeWithRuntimeIndex(Operation&& op) noexcept(
 	        noexcept(StaticForeachWithRuntimeIndex(std::make_integer_sequence<decltype(UpperBound), UpperBound>{},
 	                                               std::forward<Operation>(op))))
