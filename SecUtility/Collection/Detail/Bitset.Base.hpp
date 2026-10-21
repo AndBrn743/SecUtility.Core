@@ -213,6 +213,16 @@ namespace SecUtility
 
 		constexpr std::uint64_t ShiftedBlock(const int shift, const std::size_t i) const SEC_NOEXCEPT
 		{
+			if (const std::size_t count = BlockCount(); i >= count)
+			{
+				// Left realignment can add a block containing only carry bits.
+				// All other reads beyond the source contribute zero.
+				if (shift > 0 && i == count && count != 0)
+				{
+					return Block(count - 1) >> (Detail::Bitset::BitsPerBlock - static_cast<std::size_t>(shift));
+				}
+				return 0;
+			}
 			if (shift == 0)
 			{
 				return Block(i);

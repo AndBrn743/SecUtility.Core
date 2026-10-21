@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <string>
@@ -2132,6 +2133,68 @@ TEST_CASE("IndexOfNextOne, IndexOfNextZero, IndexOfPreviousOne, and IndexOfPrevi
 		CHECK(bs.IndexOfNextZero(10) == 11);
 		CHECK(bs.IndexOfPreviousOne(10) == 223);
 		CHECK(bs.IndexOfPreviousZero(10) == 9);
+	}
+}
+
+TEMPLATE_TEST_CASE("Misaligned bitwise operations do not read past source storage",
+                   "[bitset][alignment][regression]",
+                   (Bitset<0>),
+                   (Bitset<42>),
+                   (Bitset<63>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<100>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<142>))
+{
+	const std::size_t offset = GENERATE(1, 31, 42, 63);
+	const int operation = GENERATE(0, 1, 2, 3, 4);
+	// An allocation isolates the source from adjacent objects so ASan catches
+	// reads past its final block, even when the result masks those bits away.
+	const auto fixed = std::make_unique<TestType>();
+	const auto pattern = RandomBitString(fixed->Size(), 42);
+	std::transform(pattern.begin(), pattern.end(), fixed->begin(), [](const char c) { return c == '1'; });
+	if (fixed->Size() != 0)
+	{
+		fixed->Set(fixed->Size() - 1);
+	}
+	const auto checkOperation = [offset, operation](const auto& source)
+	{
+		CAPTURE(source.Size(), offset, operation);
+		DynamicBitset dest(offset + source.Size() + 7);
+		const auto initial = RandomBitString(dest.Size(), 69);
+		std::transform(initial.begin(), initial.end(), dest.begin(), [](const char c) { return c == '1'; });
+		auto expected = initial;
+		for (std::size_t i = 0; i < source.Size(); ++i)
+		{
+			const bool lhs = initial[offset + i] == '1';
+			const bool rhs = source[i];
+			const bool value = operation == 1 ? lhs && rhs
+			                   : operation == 2 ? lhs || rhs
+			                   : operation == 3 ? lhs != rhs
+			                                    : rhs;
+			expected[offset + i] = value ? '1' : '0';
+		}
+		auto segment = dest.Segment(offset, source.Size());
+		switch (operation)
+		{
+			case 0: segment = source; break;
+			case 1: segment &= source; break;
+			case 2: segment |= source; break;
+			case 3: segment ^= source; break;
+			case 4: segment = source | source; break;
+		}
+		CHECK(dest.ToString(false) == expected);
+	};
+	SECTION("Fixed source")
+	{
+		checkOperation(*fixed);
+	}
+	SECTION("Dynamic source")
+	{
+		const DynamicBitset source(*fixed);
+		checkOperation(source);
 	}
 }
 
