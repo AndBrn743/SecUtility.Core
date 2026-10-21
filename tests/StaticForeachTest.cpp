@@ -3,20 +3,286 @@
 //
 
 
+// Exercise deprecated entry points too. GCC also diagnoses their internal calls
+// at the template definition, so suppress the warning before including the header.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+
 #include <SecUtility/Meta/StaticForeach.hpp>
 
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 using namespace SecUtility;
 
+namespace
+{
+	struct TemplateRecorder
+	{
+		std::vector<int>& visited;
+
+		template <auto I>
+		void operator()() &
+		{
+			visited.push_back(I);
+		}
+	};
+
+	struct RuntimeRecorder
+	{
+		std::vector<int>& visited;
+		void operator()(int i) &
+		{
+			visited.push_back(i);
+		}
+	};
+
+	struct TemplateSum
+	{
+		int& sum;
+
+		template <auto I>
+		constexpr void operator()() noexcept
+		{
+			sum += I;
+		}
+	};
+
+	struct TemplateValue
+	{
+		template <auto I>
+		int operator()() const
+		{
+			return I;
+		}
+	};
+
+	struct RuntimeValue
+	{
+		int operator()(int i) const
+		{
+			return i;
+		}
+	};
+
+	struct IndexDependentReturn
+	{
+		template <int I>
+		auto operator()() const -> std::conditional_t<I == 0, void, int>;
+	};
+
+	struct IndexDependentNoexcept
+	{
+		template <int I>
+		void operator()() const noexcept(I == 0)
+		{
+		}
+	};
+
+	struct ThrowingTemplateRecorder
+	{
+		std::vector<int>& visited;
+
+		template <int I>
+		void operator()()
+		{
+			visited.push_back(I);
+			if constexpr (I == 1)
+			{
+				throw std::runtime_error("stop iteration");
+			}
+		}
+	};
+
+	template <typename Sequence, typename Operation, typename = void>
+	struct CanStaticForeach : std::false_type
+	{
+	};
+
+	template <typename Sequence, typename Operation>
+	struct CanStaticForeach<Sequence,
+	                        Operation,
+	                        std::void_t<decltype(StaticForeach(std::declval<Sequence>(), std::declval<Operation>()))>>
+	    : std::true_type
+	{
+	};
+
+	constexpr int TemplateSumAtCompileTime()
+	{
+		int sum = 0;
+		StaticForeach(std::integer_sequence<int, -2, 4, 4>{}, TemplateSum{sum});
+		StaticForeachInRange<4>(TemplateSum{sum});
+		return sum;
+	}
+
+	constexpr int RuntimeSumAtCompileTime()
+	{
+		int sum = 0;
+		auto add = [&](int i) constexpr noexcept { sum += i; };
+		StaticForeach(std::integer_sequence<int, -2, 4, 4>{}, add);
+		StaticForeachInRange<4>(add);
+		return sum;
+	}
+}
+
+TEST_CASE("StaticForeach preserves sequence order and duplicates")
+{
+	std::vector<int> visited;
+	using Sequence = std::integer_sequence<int, 4, -2, 4, 0>;
+	SECTION("template index")
+	{
+		StaticForeach(Sequence{}, TemplateRecorder{visited});
+	}
+	SECTION("runtime index")
+	{
+		StaticForeach(Sequence{}, RuntimeRecorder{visited});
+	}
+	CHECK(visited == std::vector<int>{4, -2, 4, 0});
+}
+
+TEST_CASE("StaticForeach empty sequences do not require a callable")
+{
+	STATIC_CHECK(noexcept(StaticForeach(std::integer_sequence<int>{}, 42)));
+	STATIC_CHECK(noexcept(StaticForeachInRange<0>(42)));
+	StaticForeach(std::integer_sequence<int>{}, 42);
+	StaticForeachInRange<0>(42);
+
+	int calls = 0;
+	auto record = [&](int) { ++calls; };
+	StaticForeach(std::integer_sequence<int>{}, record);
+	StaticForeachInRange<0>(record);
+	CHECK(calls == 0);
+}
+
+TEST_CASE("StaticForeachInRange visits zero through upper bound exclusively")
+{
+	std::vector<int> visited;
+	std::vector<int> expected = {0};
+	SECTION("template index, singleton")
+	{
+		StaticForeachInRange<1>(TemplateRecorder{visited});
+	}
+	SECTION("runtime index, singleton")
+	{
+		StaticForeachInRange<1>(RuntimeRecorder{visited});
+	}
+	SECTION("template index, multiple indices")
+	{
+		StaticForeachInRange<4>(TemplateRecorder{visited});
+		expected = {0, 1, 2, 3};
+	}
+	SECTION("runtime index, multiple indices")
+	{
+		StaticForeachInRange<4>(RuntimeRecorder{visited});
+		expected = {0, 1, 2, 3};
+	}
+	CHECK(visited == expected);
+}
+
+TEST_CASE("StaticForeach preserves runtime index types")
+{
+	int calls = 0;
+	StaticForeach(std::integer_sequence<short, -1, 2>{},
+	              [&](auto i)
+	              {
+		              STATIC_CHECK(std::is_same_v<decltype(i), short>);
+		              ++calls;
+	              });
+	StaticForeachInRange<3u>(
+	        [&](auto i)
+	        {
+		        STATIC_CHECK(std::is_same_v<decltype(i), unsigned int>);
+		        ++calls;
+	        });
+	CHECK(calls == 5);
+}
+
+TEST_CASE("StaticForeach requires void results at every index")
+{
+	using Sequence = std::integer_sequence<int, 0, 1>;
+	STATIC_CHECK(CanStaticForeach<Sequence, TemplateSum>::value);
+	STATIC_CHECK(CanStaticForeach<Sequence, RuntimeRecorder>::value);
+	STATIC_CHECK_FALSE(CanStaticForeach<Sequence, TemplateValue>::value);
+	STATIC_CHECK_FALSE(CanStaticForeach<Sequence, RuntimeValue>::value);
+	STATIC_CHECK_FALSE(CanStaticForeach<Sequence, IndexDependentReturn>::value);
+	STATIC_CHECK(CanStaticForeach<std::integer_sequence<int, 0>, IndexDependentReturn>::value);
+	STATIC_CHECK_FALSE(CanStaticForeach<Sequence, int>::value);
+}
+
+TEST_CASE("StaticForeach supports constexpr evaluation and propagates noexcept")
+{
+	STATIC_CHECK(TemplateSumAtCompileTime() == 12);
+	STATIC_CHECK(RuntimeSumAtCompileTime() == 12);
+	STATIC_CHECK(noexcept(StaticForeach(std::make_index_sequence<3>{}, std::declval<TemplateSum>())));
+	STATIC_CHECK(noexcept(StaticForeachInRange<3>(std::declval<TemplateSum>())));
+	STATIC_CHECK(noexcept(StaticForeach(std::integer_sequence<int, 0>{}, IndexDependentNoexcept{})));
+	STATIC_CHECK_FALSE(noexcept(StaticForeach(std::integer_sequence<int, 0, 1>{}, IndexDependentNoexcept{})));
+	STATIC_CHECK_FALSE(noexcept(StaticForeachInRange<2>(IndexDependentNoexcept{})));
+
+	auto nonthrowing = [](int) noexcept {};
+	auto throwing = [](int) {};
+	STATIC_CHECK(noexcept(StaticForeach(std::make_index_sequence<3>{}, nonthrowing)));
+	STATIC_CHECK(noexcept(StaticForeachInRange<3>(nonthrowing)));
+	STATIC_CHECK_FALSE(noexcept(StaticForeach(std::make_index_sequence<3>{}, throwing)));
+	STATIC_CHECK_FALSE(noexcept(StaticForeachInRange<3>(throwing)));
+}
+
+TEST_CASE("StaticForeach propagates exceptions and stops at the throwing index")
+{
+	std::vector<int> visited;
+	SECTION("template index")
+	{
+		CHECK_THROWS_AS(StaticForeachInRange<3>(ThrowingTemplateRecorder{visited}), std::runtime_error);
+	}
+	SECTION("runtime index")
+	{
+		CHECK_THROWS_AS(StaticForeachInRange<3>(
+		                        [&](int i)
+		                        {
+			                        visited.push_back(i);
+			                        if (i == 1)
+			                        {
+				                        throw std::runtime_error("stop iteration");
+			                        }
+		                        }),
+		                std::runtime_error);
+	}
+	CHECK(visited == std::vector<int>{0, 1});
+}
+
+TEST_CASE("StaticForeach invokes move-only lambdas without copying or moving them")
+{
+	int sum = 0;
+	auto add = [state = std::make_unique<int>(0), &sum](int i) mutable
+	{
+		*state += i;
+		sum = *state;
+	};
+	StaticForeachInRange<3>(add);
+	CHECK(sum == 3);
+	StaticForeachInRange<3>(std::move(add));
+	CHECK(sum == 6);
+	add(1);
+	CHECK(sum == 7);
+}
+
+
+#if defined(__cpp_generic_lambdas) && __cpp_generic_lambdas >= 201707L
 static constexpr std::array<int, 8> TestSourceArray = {1, 20, 300, 4000, 50000, 600000, 7000000, 80000000};
 
-
-TEST_CASE("StaticForeach")
+TEST_CASE("StaticForeach with template lambdas")
 {
-#if __cplusplus >= 202002L
 	SECTION("empty range")
 	{
 		std::stringstream ss;
@@ -38,14 +304,10 @@ TEST_CASE("StaticForeach")
 		StaticForeach(std::make_index_sequence<3>{}, [&]<std::size_t I>() { x += TestSourceArray[I]; });
 		CHECK(x == 42 + 321);
 	}
-#else
-	SKIP("Test requires C++20");
-#endif
 }
 
-TEST_CASE("StaticForeachInRange")
+TEST_CASE("StaticForeachInRange with template lambdas")
 {
-#if __cplusplus >= 202002L
 	SECTION("empty range")
 	{
 		std::stringstream ss;
@@ -161,16 +423,13 @@ TEST_CASE("StaticForeachInRange")
 			CHECK(ss.str() == "3 1 -1 ");
 		}
 	}
-#else
-	SKIP("Test requires C++20");
-#endif
 }
 
-//-------------------------------------------------------------------------------------------
+#endif
 
+#if defined(__cpp_generic_lambdas) && __cpp_generic_lambdas >= 201707L
 TEST_CASE("StaticForeachInRangeWithRuntimeIndex")
 {
-#if __cplusplus >= 202002L
 	SECTION("positive lower bound, non-empty range")
 	{
 		std::stringstream ss;
@@ -199,63 +458,25 @@ TEST_CASE("StaticForeachInRangeWithRuntimeIndex")
 		StaticForeachInRangeWithRuntimeIndex<-3, 5>([&](const int i) { ss << i; });
 		CHECK(ss.str() == "-3-2-101234");
 	}
-#else
-SKIP("Test requires C++20");
+}
 #endif
+
+TEST_CASE("Legacy runtime-index entry points")
+{
+	std::vector<int> visited;
+	auto record = [&](int i) { visited.push_back(i); };
+	StaticForeachWithRuntimeIndex(std::integer_sequence<int>{}, record);
+	StaticForeachInRangeWithRuntimeIndex<0>(record);
+	CHECK(visited.empty());
+	StaticForeachWithRuntimeIndex(std::integer_sequence<int, 4, -2, 4>{}, record);
+	CHECK(visited == std::vector<int>{4, -2, 4});
+	visited.clear();
+	StaticForeachInRangeWithRuntimeIndex<3>(record);
+	CHECK(visited == std::vector<int>{0, 1, 2});
 }
 
-// TEST_CASE("InhomogeneousStaticForeachWithRuntimeIndex w/ empty single segment")
-// {
-// 	std::stringstream ss;
-// 	InhomogeneousStaticForeachWithRuntimeIndex<-3, -3>([&](const int i) { ss << "[0]" << i; });
-// 	CHECK(ss.str().empty());
-// }
-
-// TEST_CASE("InhomogeneousStaticForeachWithRuntimeIndex w/ non-empty single segment")
-// {
-// 	std::stringstream ss;
-// 	InhomogeneousStaticForeachWithRuntimeIndex<-3, -1>([&](const int i) { ss << "[0]" << i; });
-// 	CHECK(ss.str() == "[0]-3[0]-2");
-// }
-
-// TEST_CASE("InhomogeneousStaticForeachWithRuntimeIndex w/ two non-empty segments")
-// {
-// 	std::stringstream ss;
-// 	InhomogeneousStaticForeachWithRuntimeIndex<-3, -1, 2>([&](const int i) { ss << "[0]" << i; },
-// 	                                                      [&](const int i) { ss << "[1]" << i; });
-// 	CHECK(ss.str() == "[0]-3[0]-2[1]-1[1]0[1]1");
-// }
-
-// TEST_CASE("InhomogeneousStaticForeachWithRuntimeIndex w/ one empty segment, one non-empty segment")
-// {
-// 	std::stringstream ss;
-// 	InhomogeneousStaticForeachWithRuntimeIndex<-3, -4, 2>([&](const int i) { ss << "[0]" << i; },
-// 	                                                      [&](const int i) { ss << "[1]" << i; });
-// 	CHECK(ss.str() == "[1]-4[1]-3[1]-2[1]-1[1]0[1]1");
-// }
-
-// TEST_CASE("InhomogeneousStaticForeachWithRuntimeIndex w/ one non-empty segment, one empty segment")
-// {
-// 	std::stringstream ss;
-// 	InhomogeneousStaticForeachWithRuntimeIndex<-3, -1, -2>([&](const int i) { ss << "[0]" << i; },
-// 	                                                       [&](const int i) { ss << "[1]" << i; });
-// 	CHECK(ss.str() == "[0]-3[0]-2");
-// }
-
-// //----------------------------
-
-// TEST_CASE("StaticForeachInRangeWithTaggedRuntimeIndex w/ empty range")
-// {
-// 	std::stringstream ss;
-// 	StaticForeachInRangeWithTaggedRuntimeIndex<[](const int x) { return x == 0 ? 'A' : (x == 1 ? 'B' : 'C'); }, 0>(
-// 	        [&]<char Tag>(const int index) { ss << Tag << index; });
-// 	CHECK(ss.str().empty());
-// }
-
-// TEST_CASE("StaticForeachInRangeWithTaggedRuntimeIndex w/ non-empty range")
-// {
-// 	std::stringstream ss;
-// 	StaticForeachInRangeWithTaggedRuntimeIndex<[](const int x) { return x == 0 ? 'A' : (x == 1 ? 'B' : 'C'); }, 5>(
-// 	        [&]<char Tag>(const int index) { ss << Tag << index; });
-// 	CHECK(ss.str() == "A0B1C2C3C4");
-// }
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
