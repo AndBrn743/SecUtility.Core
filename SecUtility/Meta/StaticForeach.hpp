@@ -24,11 +24,20 @@ namespace SecUtility
 #pragma GCC diagnostic ignored "-Winvalid-constexpr"
 #endif
 	template <typename Index, Index... Indices, typename Operation>
-	constexpr SEC_FORCE_INLINE void StaticForeach(
+	constexpr SEC_FORCE_INLINE auto StaticForeach(
 	        std::integer_sequence<Index, Indices...>,
 	        Operation&& operation) noexcept(noexcept((operation.template operator()<Indices>(), ...)))
+	        -> std::enable_if_t<(std::is_void_v<decltype(operation.template operator()<Indices>())> && ...)>
 	{
 		(operation.template operator()<Indices>(), ...);
+	}
+
+	template <typename Index, Index... Indices, typename Operation>
+	constexpr SEC_FORCE_INLINE auto StaticForeach(std::integer_sequence<Index, Indices...>,
+	                                              Operation&& operation) noexcept((noexcept(operation(Indices)) && ...))
+	        -> std::enable_if_t<std::is_void_v<decltype(operation(std::declval<Index>()))>>
+	{
+		(operation(Indices), ...);
 	}
 
 	template <auto UpperBound, typename Operation>
@@ -99,12 +108,14 @@ namespace SecUtility
 #endif
 
 	template <typename Index, typename Operation>
+	[[deprecated("Use StaticForeach instead")]]
 	constexpr SEC_FORCE_INLINE void StaticForeachWithRuntimeIndex(std::integer_sequence<Index>, Operation&&) noexcept
 	{
 		/* NO-OP */
 	}
 
 	template <typename Index, Index... Indices, typename Operation>
+	[[deprecated("Use StaticForeach instead")]]
 	constexpr SEC_FORCE_INLINE void StaticForeachWithRuntimeIndex(std::integer_sequence<Index, Indices...>,
 	                                                              Operation&& op) noexcept(noexcept((op(Indices), ...)))
 	{
