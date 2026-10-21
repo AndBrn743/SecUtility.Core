@@ -8,23 +8,6 @@
 #include <limits>
 #include <type_traits>
 
-namespace
-{
-	template <typename T, typename, auto... Arguments>
-	struct CanMakeIntegerSequence : std::false_type
-	{
-	};
-
-	template <typename T, auto... Arguments>
-	struct CanMakeIntegerSequence<T, std::void_t<SecUtility::MakeIntegerSequence<T, Arguments...>>, Arguments...>
-	    : std::true_type
-	{
-	};
-
-	template <typename T, auto... Arguments>
-	constexpr bool CanMake = CanMakeIntegerSequence<T, void, Arguments...>::value;
-}
-
 TEST_CASE("IntegerSequence")
 {
 	STATIC_CHECK(std::is_same_v<SecUtility::MakeIndexSequence<0>, std::make_index_sequence<0>>);
@@ -73,6 +56,9 @@ TEST_CASE("MakeIntegerSequence preserves its specified integer type")
 {
 	using namespace SecUtility;
 	STATIC_CHECK(std::is_same_v<MakeIntegerSequence<short, 3>, std::integer_sequence<short, 0, 1, 2>>);
+	STATIC_CHECK(std::is_same_v<MakeIntegerSequence<unsigned long long, 0>, std::integer_sequence<unsigned long long>>);
+	STATIC_CHECK(std::is_same_v<MakeIntegerSequence<unsigned long long, 3>,
+	                            std::integer_sequence<unsigned long long, 0, 1, 2>>);
 	STATIC_CHECK(std::is_same_v<MakeIntegerSequence<long, -1, 2>, std::integer_sequence<long, -1, 0, 1>>);
 	STATIC_CHECK(std::is_same_v<MakeIntegerSequence<char, 1, 3>, std::integer_sequence<char, 1, 2>>);
 	STATIC_CHECK(std::is_same_v<MakeIntegerSequence<unsigned, 5u, 1u, -2>, std::integer_sequence<unsigned, 5, 3>>);
@@ -129,29 +115,4 @@ TEST_CASE("Integer ranges avoid overflow at integer limits")
 	        std::is_same_v<MakeIndexSequence<IndexMax - 2, IndexMax>, std::index_sequence<IndexMax - 2, IndexMax - 1>>);
 	STATIC_CHECK(
 	        std::is_same_v<MakeIndexSequence<IndexMax, IndexMax - 2, -1>, std::index_sequence<IndexMax, IndexMax - 1>>);
-}
-
-TEST_CASE("Integer ranges reject invalid parameters without narrowing them")
-{
-	STATIC_CHECK_FALSE(CanMake<int>);
-	STATIC_CHECK_FALSE(CanMake<int, 0, 1, 1, 1>);
-	STATIC_CHECK_FALSE(CanMake<double, 3>);
-	STATIC_CHECK_FALSE(CanMake<int, nullptr>);
-	STATIC_CHECK_FALSE(CanMake<int, 0, 3, nullptr>);
-	STATIC_CHECK_FALSE(CanMake<int, -1>);
-	STATIC_CHECK_FALSE(CanMake<int, 0, 3, 0>);
-	STATIC_CHECK_FALSE(CanMake<int, 3, 3, 0>);
-	STATIC_CHECK_FALSE(CanMake<int, 3, 1>);
-	STATIC_CHECK_FALSE(CanMake<int, 1, 3, -1>);
-	STATIC_CHECK_FALSE(CanMake<int, 3, 1, 1>);
-	STATIC_CHECK_FALSE(CanMake<unsigned, -1, 3>);
-	STATIC_CHECK_FALSE(CanMake<unsigned, 3, -1, -1>);
-	STATIC_CHECK_FALSE(CanMake<unsigned char, 256>);
-	STATIC_CHECK_FALSE(CanMake<unsigned char, 0, 256>);
-	STATIC_CHECK_FALSE(CanMake<unsigned char, 256, 0, -1>);
-	STATIC_CHECK_FALSE(CanMake<bool, 2>);
-	STATIC_CHECK_FALSE(CanMake<std::size_t, -1>);
-	STATIC_CHECK_FALSE(CanMake<std::size_t, -1, 3>);
-	STATIC_CHECK_FALSE(CanMake<std::size_t, 3, -1, -1>);
-	STATIC_CHECK_FALSE(CanMake<std::intmax_t, 0, std::numeric_limits<std::uintmax_t>::max()>);
 }

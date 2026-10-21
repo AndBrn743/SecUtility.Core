@@ -29,20 +29,14 @@ namespace SecUtility
 			return distance / magnitude + (distance % magnitude != 0 ? 1 : 0);
 		}
 
-		template <typename T,
-		          T Start,
-		          T End,
-		          auto Step,
-		          bool = std::is_integral_v<T> && std::is_integral_v<decltype(Step)> && Step != 0
-		                 && (Step < 0 ? Start >= End : Start <= End)>
+		template <typename T, T Start, T End, auto Step>
 		struct MakeIntegerRangeHelper
 		{
-			/* NO CODE */
-		};
+			static_assert(std::is_integral_v<T>, "Index type must be integral");
+			static_assert(std::is_integral_v<decltype(Step)>, "Step must be integral");
+			static_assert(Step != 0, "Step must be nonzero");
+			static_assert(Step < 0 ? Start >= End : Start <= End, "Step must agree with the range direction");
 
-		template <typename T, T Start, T End, auto Step>
-		struct MakeIntegerRangeHelper<T, Start, End, Step, true>
-		{
 			static constexpr auto Count = RangeSize(Start, End, Step);
 
 			static constexpr T Value(const std::size_t i) noexcept
@@ -68,13 +62,30 @@ namespace SecUtility
 			using Type = decltype(Make(std::make_index_sequence<Count>{}));
 		};
 
-		// Typed bounds use converted constant expressions: narrowing is rejected by
-		// template argument conversion, including when used in a detection idiom.
-		template <typename T, T Start, T End, auto Step = 1>
-		auto MakeIntegerSequenceHelper() -> typename MakeIntegerRangeHelper<T, Start, End, Step>::Type;
+		template <typename T, auto... Args>
+		struct MakeIntegerSequenceHelper
+		{
+			static_assert(sizeof...(Args) >= 1 && sizeof...(Args) <= 3,
+			              "Expected End; Start, End; or Start, End, Step");
+		};
 
-		template <typename T, T End>
-		auto MakeIntegerSequenceHelper() -> decltype(MakeIntegerSequenceHelper<T, T{0}, End>());
+		template <typename T, auto Start, auto End, auto Step>
+		struct MakeIntegerSequenceHelper<T, Start, End, Step> : MakeIntegerRangeHelper<T, Start, End, Step>
+		{
+			/* NO CODE */
+		};
+
+		template <typename T, auto Start, auto End>
+		struct MakeIntegerSequenceHelper<T, Start, End> : MakeIntegerRangeHelper<T, Start, End, 1>
+		{
+			/* NO CODE */
+		};
+
+		template <typename T, auto End>
+		struct MakeIntegerSequenceHelper<T, End> : MakeIntegerRangeHelper<T, 0, End, 1>
+		{
+			/* NO CODE */
+		};
 
 		template <typename Sequence>
 		struct MakeReversedIntegerSequenceHelper;
@@ -88,8 +99,9 @@ namespace SecUtility
 
 	// End; Start, End; or Start, End, Step. End is exclusive and Step defaults to +1.
 	// Bounds must fit T; a nonzero integral step must agree with the range direction.
+	// Invalid arguments produce hard compilation errors.
 	template <typename T, auto... Args>
-	using MakeIntegerSequence = decltype(Detail::IntegerSequence::MakeIntegerSequenceHelper<T, Args...>());
+	using MakeIntegerSequence = typename Detail::IntegerSequence::MakeIntegerSequenceHelper<T, Args...>::Type;
 
 	template <auto... Args>
 	using MakeIndexSequence = MakeIntegerSequence<std::size_t, Args...>;
