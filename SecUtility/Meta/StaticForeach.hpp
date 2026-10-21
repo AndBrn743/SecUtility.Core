@@ -96,6 +96,7 @@ namespace SecUtility
 
 #if defined(__cpp_generic_lambdas) && __cpp_generic_lambdas >= 201707L
 	template <auto LowerBound, auto UpperBound, typename Operation>
+	[[deprecated("Use StaticForeachInRange instead")]]
 	constexpr SEC_FORCE_INLINE void StaticForeachInRangeWithRuntimeIndex(Operation&& op)
 	{
 		using Index = std::common_type_t<std::decay_t<decltype(LowerBound)>, std::decay_t<decltype(UpperBound)>>;
