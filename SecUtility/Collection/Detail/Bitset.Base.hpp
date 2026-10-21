@@ -760,9 +760,9 @@ namespace SecUtility
 					const auto pad = Traits<Derived>::IsMaskedForRead ? 0 : Block(i) & ~mask;
 
 					const std::size_t src = i - blockShift;
-					const std::uint64_t val = Traits<Derived>::IsMaskedForRead ? Block(src) : Block(src) & mask;
+					const std::uint64_t val = Block(src);
 
-					Block(i) = pad | val;
+					Block(i) = pad | (val & mask);
 				}
 
 				for (std::size_t i = BlockCount() - 1; BlockCount() >= 2 && i-- > blockShift;)
@@ -803,7 +803,7 @@ namespace SecUtility
 					// no need for mask `Block(src)` since we'll clear the trailing later
 					const std::uint64_t val = Block(src) << bitShift;
 
-					Block(i) = Traits<Derived>::IsMaskedForRead ? val : pad | (val & mask);
+					Block(i) = pad | (val & mask);
 				}
 			}
 

@@ -1910,6 +1910,50 @@ TEST_CASE("operator<<= and operator>>=")
 	}
 }
 
+TEMPLATE_TEST_CASE("Left shifts keep owning bitset tail padding clear",
+                   "[bitset][shift][regression]",
+                   (Bitset<42>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<100>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<164>))
+{
+	const std::size_t shiftSize = GENERATE(0, 1, 7, 63, 64, 65, 127, 128, 129);
+	const auto checkShift = [shiftSize](auto bs)
+	{
+		const std::size_t size = bs.Size();
+		CAPTURE(size, shiftSize);
+		bs.SetAll();
+		bs <<= shiftSize;
+
+		std::string expected(size, '0');
+		if (shiftSize < size)
+		{
+			std::fill(expected.begin() + shiftSize, expected.end(), '1');
+		}
+		VerifyBitset(bs, expected);
+
+		// Counting and leading-zero queries read raw blocks, so these also detect
+		// set padding bits that are invisible through element access.
+		const std::size_t zeroCount = std::min(shiftSize, size);
+		CHECK(bs.OneCount() == size - zeroCount);
+		CHECK(bs.ZeroCount() == zeroCount);
+		CHECK(bs.TrailingZeroCount() == zeroCount);
+		CHECK(bs.LeadingZeroCount() == (zeroCount == size ? size : 0));
+	};
+
+	SECTION("Fixed size")
+	{
+		checkShift(TestType{});
+	}
+	SECTION("Dynamic size")
+	{
+		checkShift(DynamicBitset(TestType{}.Size()));
+	}
+}
+
 TEST_CASE("IndexOfNextOne, IndexOfNextZero, IndexOfPreviousOne, and IndexOfPreviousZero")
 {
 	constexpr std::size_t size = 223;
