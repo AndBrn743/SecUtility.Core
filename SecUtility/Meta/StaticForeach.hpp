@@ -114,7 +114,7 @@ namespace SecUtility
 	}
 
 	template <auto UpperBound, typename Operation>
-	[[deprecated("Use StaticForeach instead")]]
+	[[deprecated("Use StaticForeachInRange instead")]]
 	constexpr SEC_FORCE_INLINE void StaticForeachInRangeWithRuntimeIndex(Operation&& op) noexcept(
 	        noexcept(StaticForeachWithRuntimeIndex(std::make_integer_sequence<decltype(UpperBound), UpperBound>{},
 	                                               std::forward<Operation>(op))))
