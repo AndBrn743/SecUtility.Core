@@ -5,6 +5,7 @@
 
 #include <string>
 #include <string_view>
+#include <cstdlib>
 
 #if defined(__GNUC__) && !defined(_MSC_VER)
 #include <cxxabi.h>
