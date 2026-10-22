@@ -2156,13 +2156,35 @@ TEMPLATE_TEST_CASE("Owning bitset shifts match a string model",
                    (Bitset<64>),
                    (Bitset<65>),
                    (Bitset<100>),
+                   (Bitset<127>),
                    (Bitset<128>),
                    (Bitset<129>),
+                   (Bitset<191>),
+                   (Bitset<192>),
+                   (Bitset<193>),
+                   (Bitset<255>),
+                   (Bitset<256>),
+                   (Bitset<257>),
                    (Bitset<549>),
                    (Bitset<5409>))
 {
-	const std::size_t shift = GENERATE(0, 1, 7, 63, 64, 65, 127, 128, 129, 256, 5408, 5409, 5410,
-	                                 std::numeric_limits<std::size_t>::max());
+	const std::size_t shift = GENERATE(0,
+	                                   1,
+	                                   7,
+	                                   63,
+	                                   64,
+	                                   65,
+	                                   127,
+	                                   128,
+	                                   129,
+	                                   191,
+	                                   192,
+	                                   193,
+	                                   256,
+	                                   5408,
+	                                   5409,
+	                                   5410,
+	                                   std::numeric_limits<std::size_t>::max());
 	const std::uint64_t seed = GENERATE(0, 42);
 	const bool left = GENERATE(false, true);
 	const auto checkShift = [shift, seed, left](auto bs)

@@ -203,6 +203,17 @@ namespace SecUtility
 			const std::size_t limit = count - blockShift - 1;
 			if (bitShift == 0)
 			{
+				if (Detail::Bitset::is_fixed_size_bitset<Derived>::value && count <= 4)
+				{
+					// A fixed trip count exposes both the retained words and zero fill,
+					// allowing small copies and shifts to combine in registers.
+					for (std::size_t i = 0; i < count; ++i)
+					{
+						const std::size_t source = i + blockShift;
+						data[i] = source < count ? data[source] : std::uint64_t{0};
+					}
+					return;
+				}
 				std::copy(data + blockShift, data + count, data);
 			}
 			else
@@ -240,6 +251,7 @@ namespace SecUtility
 		constexpr std::uint64_t ShiftedBlock(const int shift, const std::size_t i) const SEC_NOEXCEPT
 		{
 			if (const std::size_t count = BlockCount(); i >= count)
+
 			{
 				// Left realignment can add a block containing only carry bits.
 				// All other reads beyond the source contribute zero.
