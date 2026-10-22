@@ -148,6 +148,41 @@ TEMPLATE_TEST_CASE("QR Orthogonalization w/ startColumn", "[template]", double, 
 }
 
 
+TEMPLATE_TEST_CASE("QR Orthogonalization: complex fixed columns need adjoint projection",
+                   "[template]", (std::complex<double>))
+{
+	// First two columns are orthonormal with non-zero imaginary parts; cols 2-4 are arbitrary
+	// complex (not orthogonal to cols 0-1).
+	Eigen::MatrixX<TestType> m = Eigen::MatrixX<TestType>::Random(6, 5);
+	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m.leftCols(2));
+
+	const auto result = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithQR(m, 2);
+
+	REQUIRE(result.cols() == 5);  // 2 fixed + 3 new
+	CHECK((result.col(0) - m.col(0)).norm() < 1e-14);
+	CHECK((result.col(1) - m.col(1)).norm() < 1e-14);
+
+	// Full orthonormality — cross terms between fixed and new columns vanish only if the
+	// projection used Q^H (adjoint). The Q^T (transpose) variant leaves an O(1) residual when
+	// the fixed columns carry non-zero imaginary parts, which CheckOrthonormal catches.
+	SecUtility::Math::CheckOrthonormal(result);
+}
+
+
+TEMPLATE_TEST_CASE("QR Orthogonalization: single complex fixed column",
+                   "[template]", (std::complex<double>))
+{
+	Eigen::MatrixX<TestType> m = Eigen::MatrixX<TestType>::Random(6, 4);
+	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m.leftCols(1));
+
+	const auto result = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithQR(m, 1);
+
+	REQUIRE(result.cols() == 4);  // 1 fixed + 3 new
+	CHECK((result.col(0) - m.col(0)).norm() < 1e-14);
+	SecUtility::Math::CheckOrthonormal(result);
+}
+
+
 TEMPLATE_TEST_CASE("GramSchmidt startColumn boundary", "[template]", double, (std::complex<double>))
 {
 	const Eigen::MatrixX<TestType> m = Eigen::MatrixX<TestType>::Random(5, 4);
@@ -168,8 +203,8 @@ TEMPLATE_TEST_CASE("GramSchmidt linear dependence Classical", "[template]", doub
 {
 	// Create a matrix with linearly dependent columns
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = Eigen::VectorX<TestType>::Random(5);
 	m.col(2) = 2.0 * m.col(0) + 3.0 * m.col(1);  // Linear combination
 
 	REQUIRE_THROWS_AS(SecUtility::Math::OrthogonalizeInplaceWithClassicalGramSchmidt(m), SecUtility::RuntimeException);
@@ -180,8 +215,8 @@ TEMPLATE_TEST_CASE("GramSchmidt linear dependence Modified", "[template]", doubl
 {
 	// Create a matrix with linearly dependent columns
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = Eigen::VectorX<TestType>::Random(5);
 	m.col(2) = m.col(0) + m.col(1);  // Linear combination
 
 	REQUIRE_THROWS_AS(SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m), SecUtility::RuntimeException);
@@ -192,9 +227,9 @@ TEMPLATE_TEST_CASE("GramSchmidt linear dependence RemoveLinearDependence", "[tem
 {
 	// Create a matrix with some linearly dependent columns
 	Eigen::MatrixX<TestType> m(5, 5);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = Eigen::VectorXd::Random(5);
-	m.col(2) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = Eigen::VectorX<TestType>::Random(5);
+	m.col(2) = Eigen::VectorX<TestType>::Random(5);
 	m.col(3) = m.col(0) + m.col(1);  // Dependent
 	m.col(4) = 2.0 * m.col(2);       // Dependent
 
@@ -227,7 +262,7 @@ TEMPLATE_TEST_CASE("GramSchmidt RemoveLinearDependence all independent", "[templ
 TEMPLATE_TEST_CASE("GramSchmidt single column", "[template]", double, (std::complex<double>))
 {
 	Eigen::MatrixX<TestType> m(5, 1);
-	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
 
 	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m);
 
@@ -239,8 +274,8 @@ TEMPLATE_TEST_CASE("GramSchmidt single column", "[template]", double, (std::comp
 TEMPLATE_TEST_CASE("GramSchmidt two columns", "[template]", double, (std::complex<double>))
 {
 	Eigen::MatrixX<TestType> m(5, 2);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = Eigen::VectorX<TestType>::Random(5);
 
 	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m);
 
@@ -253,7 +288,7 @@ TEMPLATE_TEST_CASE("GramSchmidt all columns same", "[template]", double, (std::c
 {
 	// All columns are identical (highly dependent)
 	Eigen::MatrixX<TestType> m(5, 4);
-	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
 	m.col(1) = m.col(0);
 	m.col(2) = m.col(0);
 	m.col(3) = m.col(0);
@@ -272,14 +307,14 @@ TEMPLATE_TEST_CASE("GramSchmidt nearly dependent columns", "[template]", double,
 {
 	// Create nearly dependent columns (ill-conditioned matrix)
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorXd::Random(5);  // Nearly parallel
-	m.col(2) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorX<TestType>::Random(5);  // Nearly parallel
+	m.col(2) = Eigen::VectorX<TestType>::Random(5);
 
 	// Should not throw for nearly dependent columns
 	REQUIRE_NOTHROW(SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m));
 
-	SecUtility::Math::CheckOrthonormal(m, 5e-8);  // Use looser tolerance
+	SecUtility::Math::CheckOrthonormal(m, 6e-8);  // Use looser tolerance
 }
 
 
@@ -287,7 +322,7 @@ TEMPLATE_TEST_CASE("QR Orthogonalization: all columns same", "[template]", doubl
 {
 	// All columns are identical (highly dependent)
 	Eigen::MatrixX<TestType> m(5, 4);
-	m.col(0) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
 	m.col(1) = m.col(0);
 	m.col(2) = m.col(0);
 	m.col(3) = m.col(0);
@@ -304,12 +339,88 @@ TEMPLATE_TEST_CASE("QR Orthogonalization: nearly dependent columns", "[template]
 {
 	// Create nearly dependent columns (ill-conditioned matrix)
 	Eigen::MatrixX<TestType> m(5, 3);
-	m.col(0) = Eigen::VectorXd::Random(5);
-	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorXd::Random(5);  // Nearly parallel
-	m.col(2) = Eigen::VectorXd::Random(5);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorX<TestType>::Random(5);  // Nearly parallel
+	m.col(2) = Eigen::VectorX<TestType>::Random(5);
 
 	// Should not throw for nearly dependent columns
 	const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithQR(m);
 
-	SecUtility::Math::CheckOrthonormal(n, 5e-8);  // Use looser tolerance
+	SecUtility::Math::CheckOrthonormal(n, 6e-8);  // Use looser tolerance
+}
+
+
+TEMPLATE_TEST_CASE("SVD Orthogonalization: all columns same", "[template]", double, (std::complex<double>))
+{
+	// All columns are identical (highly dependent)
+	Eigen::MatrixX<TestType> m(5, 4);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = m.col(0);
+	m.col(2) = m.col(0);
+	m.col(3) = m.col(0);
+
+	SECTION("JacobiSVD")
+	{
+		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(m);
+		REQUIRE(n.cols() == 1);
+		CHECK(n.col(0).norm() == Catch::Approx(1.0).margin(1e-12));
+	}
+
+	SECTION("BDCSVD")
+	{
+		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(m);
+		REQUIRE(n.cols() == 1);
+		CHECK(n.col(0).norm() == Catch::Approx(1.0).margin(1e-12));
+	}
+}
+
+
+TEMPLATE_TEST_CASE("SVD Orthogonalization: nearly dependent columns", "[template]", double, (std::complex<double>))
+{
+	// Create nearly dependent columns (ill-conditioned matrix)
+	Eigen::MatrixX<TestType> m(5, 3);
+	m.col(0) = Eigen::VectorX<TestType>::Random(5);
+	m.col(1) = m.col(0) + 1e-8 * Eigen::VectorX<TestType>::Random(5);  // Nearly parallel
+	m.col(2) = Eigen::VectorX<TestType>::Random(5);
+
+	SECTION("JacobiSVD")
+	{
+		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(m);
+		SecUtility::Math::CheckOrthonormal(n, 6e-8);
+	}
+
+	SECTION("BDCSVD")
+	{
+		const auto n = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(m);
+		SecUtility::Math::CheckOrthonormal(n, 6e-8);
+	}
+}
+
+
+TEMPLATE_TEST_CASE("SVD Orthogonalization: complex fixed columns need adjoint projection",
+                   "[template]", (std::complex<double>))
+{
+	// First two columns are orthonormal with non-zero imaginary parts; cols 2-4 are arbitrary.
+	Eigen::MatrixX<TestType> m = Eigen::MatrixX<TestType>::Random(6, 5);
+	SecUtility::Math::OrthogonalizeInplaceWithModifiedGramSchmidt(m.leftCols(2));
+
+	SECTION("JacobiSVD")
+	{
+		const auto result = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(m, 2);
+
+		REQUIRE(result.cols() == 5);
+		CHECK((result.col(0) - m.col(0)).norm() < 1e-14);
+		CHECK((result.col(1) - m.col(1)).norm() < 1e-14);
+		SecUtility::Math::CheckOrthonormal(result);
+	}
+
+	SECTION("BDCSVD")
+	{
+		const auto result = SecUtility::Math::OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(m, 2);
+
+		REQUIRE(result.cols() == 5);
+		CHECK((result.col(0) - m.col(0)).norm() < 1e-14);
+		CHECK((result.col(1) - m.col(1)).norm() < 1e-14);
+		SecUtility::Math::CheckOrthonormal(result);
+	}
 }

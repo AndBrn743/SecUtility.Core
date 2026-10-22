@@ -79,7 +79,7 @@ public:
 
 	template <typename Vector>
 	/* CRTP VIRTUAL */ constexpr auto ApplyOn(const Vector& vector) const
-	        noexcept(noexcept(static_cast<const Derived&>(*this).ApplyOn_Impl(vector)))
+	        noexcept(noexcept(std::declval<const Derived&>().ApplyOn_Impl(vector)))
 	{
 		eigen_assert(vector.rows() == 1 || vector.cols() == 1);
 		eigen_assert(vector.size() == cols());

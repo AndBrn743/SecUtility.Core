@@ -61,13 +61,13 @@ fi
 echo_info "All required packages are installed"
 
 # Check for cached Catch2 tarball
-CATCH2_TARBALL="$PROJECT_ROOT/.cache/catch2-v3.7.1.tar.gz"
+CATCH2_TARBALL="$PROJECT_ROOT/.cache/catch2-v3.15.1.tar.gz"
 if [ -f "$CATCH2_TARBALL" ]; then
     echo_info "Using cached Catch2: $CATCH2_TARBALL"
     export CATCH2_SOURCE="$CATCH2_TARBALL"
 else
     echo_warn "No cached Catch2 found at $CATCH2_TARBALL"
-    echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o catch2-v3.7.1.tar.gz https://github.com/catchorg/Catch2/archive/refs/tags/v3.7.1.tar.gz"
+    echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o catch2-v3.15.1.tar.gz https://github.com/catchorg/Catch2/archive/refs/tags/v3.15.1.tar.gz"
 fi
 
 # Check for cached nlohmann/json tarball
@@ -78,6 +78,26 @@ if [ -f "$NLOHMANN_JSON_TARBALL" ]; then
 else
     echo_warn "No cached nlohmann/json tarball found at $NLOHMANN_JSON_TARBALL"
     echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o nlohmann_json-v3.12.0.tar.xz https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz"
+fi
+
+# Check for cached range-v3 tarball
+RANGE_V3_TARBALL="$PROJECT_ROOT/.cache/range-v3-0.12.0.tar.gz"
+if [ -f "$RANGE_V3_TARBALL" ]; then
+    echo_info "Using cached range-v3 tarball: $RANGE_V3_TARBALL"
+    export RANGE_V3_SOURCE="$RANGE_V3_TARBALL"
+else
+    echo_warn "No cached range-v3 tarball found at $RANGE_V3_TARBALL"
+    echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o range-v3-0.12.0.tar.gz https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz"
+fi
+
+# Check for cached gcem tarball
+GCEM_TARBALL="$PROJECT_ROOT/.cache/gcem-v1.18.0.tar.gz"
+if [ -f "$GCEM_TARBALL" ]; then
+    echo_info "Using cached gcem tarball: $GCEM_TARBALL"
+    export GCEM_SOURCE="$GCEM_TARBALL"
+else
+    echo_warn "No cached gcem tarball found at $GCEM_TARBALL"
+    echo_warn "Run: mkdir -p .cache && cd .cache && curl -L -o gcem-v1.18.0.tar.gz https://github.com/kthohr/gcem/archive/refs/tags/v1.18.0.tar.gz"
 fi
 
 # Parse arguments
@@ -113,7 +133,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-cache)
             unset CATCH2_SOURCE
-            echo_info "Catch2 cache disabled"
+            unset NLOHMANN_JSON_SOURCE
+            unset RANGE_V3_SOURCE
+            unset GCEM_SOURCE
+            echo_info "Dependency caches disabled"
             shift
             ;;
         *)
@@ -134,6 +157,24 @@ ACT_CMD="$ACT_CMD -P self-hosted=-self-hosted"
 if [ -n "$CATCH2_SOURCE" ]; then
     ACT_CMD="$ACT_CMD --env CATCH2_SOURCE=$CATCH2_SOURCE"
     echo_info "Using local Catch2 cache"
+fi
+
+# Pass NLOHMANN_JSON_SOURCE as environment variable if set
+if [ -n "$NLOHMANN_JSON_SOURCE" ]; then
+    ACT_CMD="$ACT_CMD --env NLOHMANN_JSON_SOURCE=$NLOHMANN_JSON_SOURCE"
+    echo_info "Using local nlohmann/json cache"
+fi
+
+# Pass RANGE_V3_SOURCE as environment variable if set
+if [ -n "$RANGE_V3_SOURCE" ]; then
+    ACT_CMD="$ACT_CMD --env RANGE_V3_SOURCE=$RANGE_V3_SOURCE"
+    echo_info "Using local range-v3 cache"
+fi
+
+# Pass GCEM_SOURCE as environment variable if set
+if [ -n "$GCEM_SOURCE" ]; then
+    ACT_CMD="$ACT_CMD --env GCEM_SOURCE=$GCEM_SOURCE"
+    echo_info "Using local gcem cache"
 fi
 
 if [ -n "$JOB" ]; then

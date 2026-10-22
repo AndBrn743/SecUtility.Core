@@ -226,6 +226,19 @@ namespace SecUtility::Diagnostic::Stopwatch
 
 
 		/// <summary>
+		/// Returns formatted the elapsed time in given time unit and precision.
+		/// </summary>
+		template <TimeUnit Unit, int Precision>
+		std::string Elapsed() const
+		{
+			static_assert(Precision >= 0);
+			std::ostringstream ss;
+			ss << std::fixed << std::setprecision(Precision) << Elapsed<Unit>() << ' ' << ToCStringSymbol(Unit);
+			return ss.str();
+		}
+
+
+		/// <summary>
 		/// Returns the elapsed time in given ticks.
 		/// </summary>
 		Int64 ElapsedTicks() const noexcept
@@ -256,9 +269,7 @@ namespace SecUtility::Diagnostic::Stopwatch
 		template <TimeUnit Unit = TimeUnit::Milliseconds, int Precision = 3>
 		std::string ToString() const
 		{
-			std::ostringstream ss;
-			ss << std::fixed << std::setprecision(Precision) << Elapsed<Unit>() << ' ' << ToCStringSymbol(Unit);
-			return ss.str();
+			return Elapsed<Unit, Precision>();
 		}
 
 
@@ -354,9 +365,9 @@ namespace SecUtility::Diagnostic::Stopwatch
 		friend StopwatchBase<Stopwatch>;
 
 	private:
-		static std::chrono::time_point<std::chrono::high_resolution_clock> GetTimestamp() noexcept
+		static std::chrono::time_point<std::chrono::steady_clock> GetTimestamp() noexcept
 		{
-			return std::chrono::high_resolution_clock::now();
+			return std::chrono::steady_clock::now();
 		}
 
 		Int64 GetRawElapsedFromStartUntilNowTicks() const noexcept
@@ -366,6 +377,12 @@ namespace SecUtility::Diagnostic::Stopwatch
 		}
 
 	private:
-		std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTimestamp;
+		std::chrono::time_point<std::chrono::steady_clock> m_StartTimestamp;
 	};
 }  // namespace SecUtility::Diagnostic::Stopwatch
+
+namespace SecUtility
+{
+	using Stopwatch = Diagnostic::Stopwatch::Stopwatch;
+	using CpuStopwatch = Diagnostic::Stopwatch::CpuStopwatch;
+}

@@ -1,0 +1,85 @@
+name: macOS CI
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/macos.yml'
+      - 'CMakeLists.txt'
+      - 'SecUtility/**'
+      - 'tests/**'
+      - 'cmake/**'
+      - 'patches/**'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/macos.yml'
+      - 'CMakeLists.txt'
+      - 'SecUtility/**'
+      - 'tests/**'
+      - 'cmake/**'
+      - 'patches/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  xcode-clang:
+    name: Xcode Clang / ${{ matrix.build_type }} / C++${{ matrix.cxx_standard }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+        cxx_standard: ['17', '20']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode (AppleClang 20+)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.3'
+
+      - name: Install ccache
+        run: brew install ccache
+
+      - name: Configure ccache
+        run: |
+          ccache --set-config=cache_dir="${{ runner.temp }}/ccache"
+          ccache --set-config=max_size=500M
+          ccache --set-config=compression=true
+          ccache -p
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: macos-ccache-${{ matrix.build_type }}-cxx${{ matrix.cxx_standard }}-${{ github.sha }}
+          restore-keys: |
+            macos-ccache-${{ matrix.build_type }}-cxx${{ matrix.cxx_standard }}-
+            macos-ccache-
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: ccache statistics
+        run: ccache -s
+
+      - name: Run tests
+        working-directory: build/tests
+        run: ctest --output-on-failure

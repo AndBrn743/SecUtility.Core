@@ -147,18 +147,7 @@ namespace SecUtility::Math
 
 	template <typename Matrix>
 	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar> OrthogonalizedAndLinearDependenceRemovedWithQR(
-	        const Eigen::MatrixBase<Matrix>& matrix)
-	{
-		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
-
-		const Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(matrix);
-		return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(matrix.rows(), qr.nonzeroPivots());
-	}
-
-
-	template <typename Matrix>
-	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar> OrthogonalizedAndLinearDependenceRemovedWithQR(
-	        const Eigen::MatrixBase<Matrix>& matrix, const Eigen::Index numberOfLeftColumnsToExclude)
+	        const Eigen::MatrixBase<Matrix>& matrix, const Eigen::Index numberOfLeftColumnsToExclude = 0)
 	{
 		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
 
@@ -166,7 +155,8 @@ namespace SecUtility::Math
 
 		if (numberOfLeftColumnsToExclude == 0)
 		{
-			return OrthogonalizedAndLinearDependenceRemovedWithQR(matrix);
+			const Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(matrix);
+			return qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(matrix.rows(), qr.rank());
 		}
 
 		const auto fixedOrthonormal = matrix.leftCols(numberOfLeftColumnsToExclude);
@@ -174,12 +164,77 @@ namespace SecUtility::Math
 
 		// Step 1: project out the orthogonal complement
 		Eigen::MatrixX<Scalar> projectedX =
-		        toBeOrthonormalized - fixedOrthonormal * (fixedOrthonormal.transpose() * toBeOrthonormalized);
+		        toBeOrthonormalized - fixedOrthonormal * (fixedOrthonormal.adjoint() * toBeOrthonormalized);
 
 		// Step 2: QR on projected part
 		const Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(projectedX);
 		Eigen::MatrixX<Scalar> orthonormalized =
-		        qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(projectedX.rows(), qr.nonzeroPivots());
+		        qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(projectedX.rows(), qr.rank());
+
+		// Step 3: concatenate
+		Eigen::MatrixX<Scalar> result(fixedOrthonormal.rows(), fixedOrthonormal.cols() + orthonormalized.cols());
+		result << fixedOrthonormal, orthonormalized;
+		return result;
+	}
+
+
+	template <typename Matrix>
+	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar>
+	OrthogonalizedAndLinearDependenceRemovedWithJacobiSvd(const Eigen::MatrixBase<Matrix>& matrix,
+	                                                      const Eigen::Index numberOfLeftColumnsToExclude = 0)
+	{
+		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
+
+		assert(numberOfLeftColumnsToExclude >= 0);
+
+		if (numberOfLeftColumnsToExclude == 0)
+		{
+			const Eigen::JacobiSVD<Eigen::MatrixX<Scalar>, Eigen::ComputeThinU> svd(matrix);
+			return svd.matrixU().leftCols(svd.rank());
+		}
+
+		const auto fixedOrthonormal = matrix.leftCols(numberOfLeftColumnsToExclude);
+		const auto toBeOrthonormalized = matrix.rightCols(matrix.cols() - numberOfLeftColumnsToExclude);
+
+		// Step 1: project out the orthogonal complement
+		Eigen::MatrixX<Scalar> projectedX =
+		        toBeOrthonormalized - fixedOrthonormal * (fixedOrthonormal.adjoint() * toBeOrthonormalized);
+
+		// Step 2: JacobiSVD on projected part
+		const Eigen::JacobiSVD<Eigen::MatrixX<Scalar>, Eigen::ComputeThinU> svd(projectedX);
+		Eigen::MatrixX<Scalar> orthonormalized = svd.matrixU().leftCols(svd.rank());
+
+		// Step 3: concatenate
+		Eigen::MatrixX<Scalar> result(fixedOrthonormal.rows(), fixedOrthonormal.cols() + orthonormalized.cols());
+		result << fixedOrthonormal, orthonormalized;
+		return result;
+	}
+
+
+	template <typename Matrix>
+	Eigen::MatrixX<typename Eigen::internal::traits<Matrix>::Scalar> OrthogonalizedAndLinearDependenceRemovedWithBdcSvd(
+	        const Eigen::MatrixBase<Matrix>& matrix, const Eigen::Index numberOfLeftColumnsToExclude = 0)
+	{
+		using Scalar = typename Eigen::internal::traits<Matrix>::Scalar;
+
+		assert(numberOfLeftColumnsToExclude >= 0);
+
+		if (numberOfLeftColumnsToExclude == 0)
+		{
+			const Eigen::BDCSVD<Eigen::MatrixX<Scalar>, Eigen::ComputeThinU> svd(matrix);
+			return svd.matrixU().leftCols(svd.rank());
+		}
+
+		const auto fixedOrthonormal = matrix.leftCols(numberOfLeftColumnsToExclude);
+		const auto toBeOrthonormalized = matrix.rightCols(matrix.cols() - numberOfLeftColumnsToExclude);
+
+		// Step 1: project out the orthogonal complement
+		Eigen::MatrixX<Scalar> projectedX =
+		        toBeOrthonormalized - fixedOrthonormal * (fixedOrthonormal.adjoint() * toBeOrthonormalized);
+
+		// Step 2: BdcSvd on projected part
+		const Eigen::BDCSVD<Eigen::MatrixX<Scalar>, Eigen::ComputeThinU> svd(projectedX);
+		Eigen::MatrixX<Scalar> orthonormalized = svd.matrixU().leftCols(svd.rank());
 
 		// Step 3: concatenate
 		Eigen::MatrixX<Scalar> result(fixedOrthonormal.rows(), fixedOrthonormal.cols() + orthonormalized.cols());

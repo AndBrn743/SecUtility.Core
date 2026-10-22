@@ -3,9 +3,12 @@
 //
 
 #include <SecUtility/Misc/CachedFunction.hpp>
+#include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
+#include <chrono>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace SecUtility;
@@ -50,7 +53,7 @@ TEST_CASE("CachedFunction - Basic caching with single argument")
 		cached(5);
 		CHECK(globalCallCount == 1);
 
-		cached(5);  // Should use cache
+		cached(5);                    // Should use cache
 		CHECK(globalCallCount == 1);  // No additional call
 
 		cached(5);  // Should use cache
@@ -65,7 +68,7 @@ TEST_CASE("CachedFunction - Basic caching with single argument")
 		cached(10);  // Different argument
 		CHECK(globalCallCount == 2);
 
-		cached(5);   // Should use cache
+		cached(5);  // Should use cache
 		CHECK(globalCallCount == 2);
 
 		cached(10);  // Should use cache
@@ -227,7 +230,7 @@ TEST_CASE("CachedFunction - Const operator() for cache lookups")
 	{
 		// Cache is empty, const call should throw
 		const auto& constCached = cached;
-		CHECK_THROWS_AS(constCached(5), std::out_of_range);
+		CHECK_THROWS_AS(constCached(5), NoSuchElementException);
 	}
 
 	SECTION("Const operator works on cache hit")
@@ -263,7 +266,8 @@ TEST_CASE("CachedFunction - Lambda functions")
 	SECTION("Lambda with capture")
 	{
 		int multiplier = 3;
-		auto lambda = [&multiplier](int x) {
+		auto lambda = [&multiplier](int x)
+		{
 			++globalCallCount;
 			return x * multiplier;
 		};
@@ -281,7 +285,8 @@ TEST_CASE("CachedFunction - Lambda functions")
 
 	SECTION("Stateless lambda")
 	{
-		auto lambda = [](int x) {
+		auto lambda = [](int x)
+		{
 			++globalCallCount;
 			return x * 2;
 		};
@@ -327,9 +332,10 @@ TEST_CASE("CachedFunction - Complex types")
 
 	SECTION("Vector return type")
 	{
-		auto makeVector = [](int n) {
+		auto makeVector = [](int n)
+		{
 			++globalCallCount;
-			return std::vector<int>(n, 42);
+			return std::vector(n, 42);
 		};
 
 		CachedFunction<std::vector<int>(int)> cached(makeVector);
@@ -349,7 +355,8 @@ TEST_CASE("CachedFunction - No arguments function")
 {
 	globalCallCount = 0;
 
-	auto noArgFunc = []() {
+	auto noArgFunc = []
+	{
 		++globalCallCount;
 		return 42;
 	};
@@ -366,11 +373,69 @@ TEST_CASE("CachedFunction - No arguments function")
 }
 
 
+TEST_CASE("CachedFunction - No arguments function - const operator and clear")
+{
+	globalCallCount = 0;
+	CachedFunction cached(
+	        []
+	        {
+		        ++globalCallCount;
+		        return 42;
+	        });
+
+	STATIC_CHECK(!std::is_same_v<decltype(cached), CachedFunction<int()>>);
+
+	SECTION("Size returns 0 before any call")
+	{
+		CHECK(cached.Size() == 0);
+	}
+
+	SECTION("Const operator throws on cache miss")
+	{
+		const auto& constCached = cached;
+		CHECK_THROWS_AS(constCached(), NoSuchElementException);
+	}
+
+	SECTION("Const operator works on cache hit")
+	{
+		cached();
+		CHECK(globalCallCount == 1);
+
+		const auto& constCached = cached;
+		CHECK(constCached() == 42);
+		CHECK(globalCallCount == 1);
+	}
+
+	SECTION("Clear empties the cache for nullary function")
+	{
+		cached();
+		CHECK(cached.Size() == 1);
+		CHECK(globalCallCount == 1);
+
+		cached.Clear();
+		CHECK(cached.Size() == 0);
+
+		// After clearing, should call function again
+		cached();
+		CHECK(cached.Size() == 1);
+		CHECK(globalCallCount == 2);
+	}
+
+	SECTION("Clear on empty nullary cache is safe")
+	{
+		CHECK(cached.Size() == 0);
+		cached.Clear();
+		CHECK(cached.Size() == 0);
+	}
+}
+
+
 TEST_CASE("CachedFunction - Exception safety")
 {
 	globalCallCount = 0;
 
-	auto throwingFunc = [](int x) -> int {
+	auto throwingFunc = [](int x) -> int
+	{
 		++globalCallCount;
 		if (x < 0)
 		{
@@ -410,7 +475,8 @@ TEST_CASE("CachedFunction - Move semantics")
 {
 	globalCallCount = 0;
 
-	auto func = [](int x) {
+	auto func = [](int x)
+	{
 		++globalCallCount;
 		return std::string(x, 'A');
 	};
@@ -422,4 +488,288 @@ TEST_CASE("CachedFunction - Move semantics")
 	CHECK(globalCallCount == 1);
 
 	CHECK(cached.Size() == 1);
+}
+
+
+// === Concurrent tests ===
+//
+// These tests exercise ConcurrentCachedFunction under multi-threaded load.
+// They are most effective when run under ThreadSanitizer (-fsanitize=thread),
+// which can surface data races that don't manifest as visible failures here.
+
+TEST_CASE("ConcurrentCachedFunction - Concurrent reads on populated cache", "[cached][concurrent]")
+{
+	constexpr int keyCount = 32;
+	constexpr int threadCount = 8;
+	constexpr int readsPerThread = 2000;
+
+	std::atomic callCount{0};
+	ConcurrentCachedFunction<int(int)> cached(
+	        [&callCount](const int x)
+	        {
+		        ++callCount;
+		        return x * x;
+	        });
+
+	for (int i = 0; i < keyCount; ++i)
+	{
+		cached(i);
+	}
+	REQUIRE(callCount.load() == keyCount);
+
+	std::atomic errors{0};
+	std::vector<std::thread> threads;
+	threads.reserve(threadCount);
+
+	for (int t = 0; t < threadCount; ++t)
+	{
+		threads.emplace_back(
+		        [&cached, &errors, t]
+		        {
+			        for (int r = 0; r < readsPerThread; ++r)
+			        {
+				        const int key = (t + r) % keyCount;
+				        const int result = cached(key);
+				        if (result != key * key)
+				        {
+					        ++errors;
+				        }
+			        }
+		        });
+	}
+
+	for (auto& th : threads)
+	{
+		th.join();
+	}
+
+	// Reads of populated keys should not invoke the function again.
+	CHECK(callCount.load() == keyCount);
+	CHECK(errors.load() == 0);
+}
+
+
+TEST_CASE("ConcurrentCachedFunction - Concurrent writes on disjoint keys", "[cached][concurrent]")
+{
+	constexpr int threadCount = 8;
+	constexpr int keysPerThread = 100;
+
+	std::atomic callCount{0};
+	ConcurrentCachedFunction<int(int)> cached(
+	        [&callCount](const int x)
+	        {
+		        ++callCount;
+		        return x * 2;
+	        });
+
+	std::atomic errors{0};
+	std::vector<std::thread> threads;
+	threads.reserve(threadCount);
+
+	for (int t = 0; t < threadCount; ++t)
+	{
+		threads.emplace_back(
+		        [&cached, &errors, t]
+		        {
+			        const int offset = t * keysPerThread;
+			        for (int k = 0; k < keysPerThread; ++k)
+			        {
+				        const int key = offset + k;
+				        const int result = cached(key);
+				        if (result != key * 2)
+				        {
+					        ++errors;
+				        }
+			        }
+		        });
+	}
+
+	for (auto& th : threads)
+	{
+		th.join();
+	}
+
+	CHECK(errors.load() == 0);
+	CHECK(callCount.load() == threadCount * keysPerThread);
+	CHECK(cached.Size() == threadCount * keysPerThread);
+}
+
+
+TEST_CASE("ConcurrentCachedFunction - Same key computes once under contention", "[cached][concurrent]")
+{
+	constexpr int threadCount = 16;
+	constexpr int callsPerThread = 50;
+	constexpr int key = 42;
+
+	std::atomic callCount{0};
+	ConcurrentCachedFunction cached(
+	        [&callCount](const int x)
+	        {
+		        ++callCount;
+		        // Slow computation to widen the race window between the shared-lock
+		        // miss and the exclusive-lock re-check.
+		        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		        return x * x;
+	        });
+
+	std::atomic errors{0};
+	std::atomic ready{0};
+	std::vector<std::thread> threads;
+	threads.reserve(threadCount);
+
+	for (int t = 0; t < threadCount; ++t)
+	{
+		threads.emplace_back(
+		        [&cached, &errors, &ready, total = threadCount, key]
+		        {
+			        // Spin barrier so all threads hit the cache miss simultaneously.
+			        ready.fetch_add(1, std::memory_order_seq_cst);
+			        while (ready.load(std::memory_order_seq_cst) < total)
+			        {
+				        std::this_thread::yield();
+			        }
+
+			        for (int c = 0; c < callsPerThread; ++c)
+			        {
+				        const int result = cached(key);
+				        if (result != key * key)
+				        {
+					        ++errors;
+				        }
+			        }
+		        });
+	}
+
+	for (auto& th : threads)
+	{
+		th.join();
+	}
+
+	CHECK(errors.load() == 0);
+	// The shared→exclusive re-check must ensure the function runs exactly once.
+	CHECK(callCount.load() == 1);
+	CHECK(cached.Size() == 1);
+}
+
+
+TEST_CASE("ConcurrentCachedFunction - Const reads concurrent with non-const writes", "[cached][concurrent]")
+{
+	constexpr int numReaderThreads = 8;
+	constexpr int numWriterThreads = 4;
+	constexpr int opsPerThread = 500;
+	constexpr int keySpace = 80;
+	constexpr int prePopulatedKeys = 40;
+
+	std::atomic callCount{0};
+	ConcurrentCachedFunction cached(
+	        [&callCount](const int x)
+	        {
+		        ++callCount;
+		        return x + 100;
+	        });
+
+	for (int i = 0; i < prePopulatedKeys; ++i)
+	{
+		cached(i);
+	}
+	constexpr int initialCalls = prePopulatedKeys;
+
+	std::atomic errors{0};
+	std::vector<std::thread> threads;
+	threads.reserve(numReaderThreads + numWriterThreads);
+
+	// Readers use const operator() on already-populated keys.
+	for (int t = 0; t < numReaderThreads; ++t)
+	{
+		threads.emplace_back(
+		        [&cached, &errors]
+		        {
+			        const auto& constCached = cached;
+			        for (int o = 0; o < opsPerThread; ++o)
+			        {
+				        const int key = o % prePopulatedKeys;
+				        const int result = constCached(key);
+				        if (result != key + 100)
+				        {
+					        ++errors;
+				        }
+			        }
+		        });
+	}
+
+	// Writers insert into the upper half of the key space.
+	for (int t = 0; t < numWriterThreads; ++t)
+	{
+		threads.emplace_back(
+		        [&cached, &errors, t]
+		        {
+			        for (int o = 0; o < opsPerThread; ++o)
+			        {
+				        const int key = prePopulatedKeys + (t + o) % (keySpace - prePopulatedKeys);
+				        if (const int result = cached(key); result != key + 100)
+				        {
+					        ++errors;
+				        }
+			        }
+		        });
+	}
+
+	for (auto& th : threads)
+	{
+		th.join();
+	}
+
+	CHECK(errors.load() == 0);
+	CHECK(callCount.load() >= initialCalls);
+	CHECK(callCount.load() <= keySpace);
+	CHECK(cached.Size() <= keySpace);
+}
+
+
+TEST_CASE("ConcurrentCachedFunction - Stress test", "[cached][concurrent][stress]")
+{
+	constexpr int threadCount = 16;
+	constexpr int opsPerThread = 1000;
+	constexpr int keySpace = 200;
+
+	std::atomic callCount{0};
+	ConcurrentCachedFunction cached(
+	        [&callCount](const int x)
+	        {
+		        ++callCount;
+		        return x * 5;
+	        });
+
+	std::atomic errors{0};
+	std::vector<std::thread> threads;
+	threads.reserve(threadCount);
+
+	for (int t = 0; t < threadCount; ++t)
+	{
+		threads.emplace_back(
+		        [&cached, &errors, t]
+		        {
+			        for (int o = 0; o < opsPerThread; ++o)
+			        {
+				        // Pseudo-random key spread across the key space; both hit and miss paths
+				        // get exercised as threads race to insert overlapping keys.
+				        const int key = ((t * 31 + o * 17) % keySpace + keySpace) % keySpace;
+				        const int result = cached(key);
+				        if (result != key * 5)
+				        {
+					        ++errors;
+				        }
+			        }
+		        });
+	}
+
+	for (auto& th : threads)
+	{
+		th.join();
+	}
+
+	CHECK(errors.load() == 0);
+	CHECK(cached.Size() <= keySpace);
+	// The shared→exclusive re-check must ensure the function runs exactly once per key.
+	CHECK(callCount.load() == static_cast<int>(cached.Size()));
 }

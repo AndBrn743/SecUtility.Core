@@ -10,9 +10,10 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <stdexcept>
 #include <thread>
 #include <vector>
+
+#include <SecUtility/Diagnostic/Exception.hpp>
 
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
@@ -31,7 +32,7 @@ namespace SecUtility::Threading
 	class ThreadPool
 	{
 	public:
-		explicit ThreadPool(const std::size_t numThreads = std::thread::hardware_concurrency()) : m_Stop(false)
+		explicit ThreadPool(const std::size_t numThreads = std::thread::hardware_concurrency()) : m_HasStopped(false)
 		{
 			const auto threadCount = std::max(numThreads, std::size_t{1});
 			m_Workers.reserve(threadCount);
@@ -67,9 +68,9 @@ namespace SecUtility::Threading
 
 			{
 				std::lock_guard lock(m_Mutex);
-				if (m_Stop)
+				if (m_HasStopped)
 				{
-					throw std::runtime_error("Cannot submit task to stopped ThreadPool");
+					throw InvalidOperationException("Cannot submit task to stopped ThreadPool");
 				}
 				m_Tasks.emplace([task = std::move(packagedTask)] { (*task)(); });
 			}
@@ -78,11 +79,40 @@ namespace SecUtility::Threading
 			return result;
 		}
 
+		/**
+		 * Submits work whose result and exceptions will not be observed through a future.
+		 * An exception escaping the submitted callable terminates the process.
+		 */
+		template <typename Func, typename... Args>
+		void SubmitDetached(Func&& func, Args&&... args)
+		{
+#if defined(__cpp_init_captures) && __cpp_init_captures >= 201803L
+			auto callable = [func = std::forward<Func>(func), ... args = std::forward<Args>(args)]() mutable
+			{ std::invoke(std::move(func), std::move(args)...); };
+#else
+			auto callable =
+			        [func = std::forward<Func>(func), tup = std::make_tuple(std::forward<Args>(args)...)]() mutable
+			{ std::apply(std::move(func), std::move(tup)); };
+#endif
+
+			{
+				auto task = std::make_shared<decltype(callable)>(std::move(callable));
+				std::lock_guard lock(m_Mutex);
+				if (m_HasStopped)
+				{
+					throw InvalidOperationException("Cannot submit task to stopped ThreadPool");
+				}
+				m_Tasks.emplace([task = std::move(task)] { (*task)(); });
+			}
+
+			m_Condition.notify_one();
+		}
+
 		~ThreadPool() noexcept
 		{
 			{
 				std::lock_guard lock(m_Mutex);
-				m_Stop = true;
+				m_HasStopped = true;
 			}
 			m_Condition.notify_all();
 
@@ -109,9 +139,9 @@ namespace SecUtility::Threading
 
 				{
 					std::unique_lock lock(m_Mutex);
-					m_Condition.wait(lock, [this] { return m_Stop || !m_Tasks.empty(); });
+					m_Condition.wait(lock, [this] { return m_HasStopped || !m_Tasks.empty(); });
 
-					if (m_Stop && m_Tasks.empty())
+					if (m_HasStopped && m_Tasks.empty())
 					{
 						return;
 					}
@@ -132,7 +162,7 @@ namespace SecUtility::Threading
 		std::queue<std::function<void()>> m_Tasks;
 		mutable std::mutex m_Mutex;  // mutable for const methods
 		std::condition_variable m_Condition;
-		bool m_Stop;  // Protected by m_Mutex, no need for atomic
+		bool m_HasStopped;  // Protected by m_Mutex, no need for atomic
 	};
 
 

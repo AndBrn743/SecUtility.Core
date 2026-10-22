@@ -4,6 +4,7 @@
 
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_version_macros.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 
 #include <SecUtility/Threading/ThreadPool.hpp>
@@ -11,12 +12,16 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <future>
 #include <numeric>
 #include <thread>
 #include <vector>
 
 using namespace SecUtility::Threading;
 using namespace std::chrono_literals;
+
+static std::mutex LocalMutex;
 
 TEST_CASE("ThreadPool basic construction", "[threadpool][construction]")
 {
@@ -48,11 +53,13 @@ TEST_CASE("ThreadPool basic construction", "[threadpool][construction]")
 TEST_CASE("ThreadPool task submission and execution", "[threadpool][submit]")
 {
 	ThreadPool pool(4);
+	std::mutex mutex;
 
 	SECTION("Submit simple void task")
 	{
 		std::atomic<bool> executed{false};
 
+		std::lock_guard lock(mutex);
 		auto future = pool.Submit([&executed] { executed = true; });
 
 		future.wait();
@@ -61,6 +68,7 @@ TEST_CASE("ThreadPool task submission and execution", "[threadpool][submit]")
 
 	SECTION("Submit task returning value")
 	{
+		std::lock_guard lock(mutex);
 		auto future = pool.Submit([] { return 42; });
 
 		REQUIRE(future.get() == 42);
@@ -70,6 +78,7 @@ TEST_CASE("ThreadPool task submission and execution", "[threadpool][submit]")
 	{
 		auto add = [](const int a, const int b) { return a + b; };
 
+		std::lock_guard lock(mutex);
 		auto future = pool.Submit(add, 10, 32);
 
 		REQUIRE(future.get() == 42);
@@ -77,6 +86,7 @@ TEST_CASE("ThreadPool task submission and execution", "[threadpool][submit]")
 
 	SECTION("Submit task with move-only arguments")
 	{
+		std::lock_guard lock(mutex);
 		auto future = pool.Submit([](const std::unique_ptr<int>& ptr) { return *ptr; }, std::make_unique<int>(42));
 
 		REQUIRE(future.get() == 42);
@@ -85,6 +95,7 @@ TEST_CASE("ThreadPool task submission and execution", "[threadpool][submit]")
 	SECTION("Submit multiple tasks")
 	{
 		std::vector<std::future<int>> futures;
+		std::lock_guard lock(mutex);
 
 		for (int i = 0; i < 100; ++i)
 		{
@@ -101,6 +112,7 @@ TEST_CASE("ThreadPool task submission and execution", "[threadpool][submit]")
 	{
 		int value = 0;
 
+		std::lock_guard lock(mutex);
 		auto future = pool.Submit([](int& ref) { ref = 42; }, std::ref(value));
 
 		future.wait();
@@ -174,10 +186,9 @@ TEST_CASE("ThreadPool task execution order and concurrency", "[threadpool][concu
 
 TEST_CASE("ThreadPool exception handling", "[threadpool][exceptions]")
 {
-	ThreadPool pool(2);
-
 	SECTION("Task throwing exception")
 	{
+		ThreadPool pool(2);
 		auto future = pool.Submit([] { throw std::runtime_error("Task error"); });
 
 		try
@@ -197,6 +208,7 @@ TEST_CASE("ThreadPool exception handling", "[threadpool][exceptions]")
 
 	SECTION("Exception in one task doesn't affect others")
 	{
+		ThreadPool pool(2);
 		auto future1 = pool.Submit([] { throw std::runtime_error("Error"); });
 
 		auto future2 = pool.Submit([] { return 42; });
@@ -207,6 +219,7 @@ TEST_CASE("ThreadPool exception handling", "[threadpool][exceptions]")
 
 	SECTION("Multiple exceptions")
 	{
+		ThreadPool pool(2);
 		std::vector<std::future<int>> futures;
 
 		for (int i = 0; i < 10; ++i)
@@ -333,7 +346,7 @@ TEST_CASE("ThreadPool destruction behavior", "[threadpool][destruction]")
 
 			for (int i = 0; i < 10; ++i)
 			{
-				pool.Submit(
+				pool.SubmitDetached(
 				        [&completed]
 				        {
 					        std::this_thread::sleep_for(10ms);
@@ -370,7 +383,7 @@ TEST_CASE("ThreadPool destruction behavior", "[threadpool][destruction]")
 
 			for (int i = 0; i < 5; ++i)
 			{
-				pool.Submit(
+				pool.SubmitDetached(
 				        [i, &results, &resultsMutex]
 				        {
 					        std::this_thread::sleep_for(10ms);
@@ -387,10 +400,9 @@ TEST_CASE("ThreadPool destruction behavior", "[threadpool][destruction]")
 
 TEST_CASE("ThreadPool different return types", "[threadpool][types]")
 {
-	ThreadPool pool(2);
-
 	SECTION("Return string")
 	{
+		ThreadPool pool(2);
 		auto future = pool.Submit([] { return std::string("Hello, ThreadPool!"); });
 
 		REQUIRE(future.get() == "Hello, ThreadPool!");
@@ -398,6 +410,7 @@ TEST_CASE("ThreadPool different return types", "[threadpool][types]")
 
 	SECTION("Return vector")
 	{
+		ThreadPool pool(2);
 		auto future = pool.Submit([] { return std::vector<int>{1, 2, 3, 4, 5}; });
 
 		auto result = future.get();
@@ -406,6 +419,7 @@ TEST_CASE("ThreadPool different return types", "[threadpool][types]")
 
 	SECTION("Return unique_ptr")
 	{
+		ThreadPool pool(2);
 		auto future = pool.Submit([] { return std::make_unique<int>(42); });
 
 		auto ptr = future.get();
@@ -414,6 +428,7 @@ TEST_CASE("ThreadPool different return types", "[threadpool][types]")
 
 	SECTION("Return custom struct")
 	{
+		ThreadPool pool(2);
 		struct Result
 		{
 			int value;
@@ -497,25 +512,30 @@ TEST_CASE("ThreadPool recursive patterns", "[threadpool][recursive]")
 	SECTION("Fire-and-forget recursive tasks")
 	{
 		ThreadPool pool(4);
-		std::atomic<int> counter{0};
+		std::mutex completionMutex;
+		std::condition_variable completionCondition;
+		int counter = 0;
 
 		std::function<void(int)> task;
 		task = [&](const int depth)
 		{
-			counter++;
 			if (depth > 0)
 			{
-				// Submit children without waiting
-				pool.Submit(task, depth - 1);
-				pool.Submit(task, depth - 1);
+				pool.SubmitDetached(task, depth - 1);
+				pool.SubmitDetached(task, depth - 1);
 			}
+
+			std::lock_guard lock(completionMutex);
+			++counter;
+			completionCondition.notify_one();
 		};
 
-		pool.Submit(task, 3);
-		std::this_thread::sleep_for(100ms);
+		pool.SubmitDetached(task, 3);
 
-		// 2^4 - 1 = 15 nodes in complete binary tree of depth 3
-		REQUIRE(counter >= 7);  // At least the first few levels
+		std::unique_lock lock(completionMutex);
+		completionCondition.wait(lock, [&counter] { return counter == 15; });
+
+		REQUIRE(counter == 15);
 	}
 
 	SECTION("Demonstrates thread pool saturation")
@@ -596,9 +616,17 @@ TEST_CASE("ThreadPool thread safety", "[threadpool][threadsafety]")
 			submitters.emplace_back(
 			        [&pool, &counter]
 			        {
+				        std::vector<std::future<void>> futures;
+				        futures.reserve(100);
+
 				        for (int j = 0; j < 100; ++j)
 				        {
-					        pool.Submit([&counter] { counter++; });
+					        futures.emplace_back(pool.Submit([&counter] { counter++; }));
+				        }
+
+				        for (auto& future : futures)
+				        {
+					        future.get();
 				        }
 			        });
 		}
@@ -607,9 +635,6 @@ TEST_CASE("ThreadPool thread safety", "[threadpool][threadsafety]")
 		{
 			t.join();
 		}
-
-		// Give tasks time to complete
-		std::this_thread::sleep_for(100ms);
 
 		REQUIRE(counter == 400);
 	}
@@ -651,6 +676,8 @@ TEST_CASE("ThreadPool MasterThreadPool singleton", "[threadpool][singleton]")
 {
 	SECTION("MasterThreadPool returns same instance")
 	{
+		std::lock_guard lock{LocalMutex};
+
 		auto& pool1 = MasterThreadPool();
 		auto& pool2 = MasterThreadPool();
 
@@ -659,6 +686,8 @@ TEST_CASE("ThreadPool MasterThreadPool singleton", "[threadpool][singleton]")
 
 	SECTION("MasterThreadPool is functional")
 	{
+		std::lock_guard lock{LocalMutex};
+
 		auto future = MasterThreadPool().Submit([] { return 42; });
 
 		REQUIRE(future.get() == 42);
@@ -666,6 +695,8 @@ TEST_CASE("ThreadPool MasterThreadPool singleton", "[threadpool][singleton]")
 
 	SECTION("MasterThreadPool handles multiple concurrent tasks")
 	{
+		std::lock_guard lock{LocalMutex};
+
 		std::vector<std::future<int>> futures;
 
 		for (int i = 0; i < 50; ++i)

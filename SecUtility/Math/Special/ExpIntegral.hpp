@@ -19,11 +19,6 @@
 
 namespace SecUtility::Math
 {
-	namespace Detail::ExpIntegral
-	{
-
-	}
-
 	template <std::size_t N, typename T>
 	SEC_MATH_CONDITIONAL_CONSTEXPR T ExpIntegral(const T x) noexcept
 	{
@@ -38,7 +33,17 @@ namespace SecUtility::Math
 
 		if (x == 0)
 		{
-			return T{1} / (N - 1);
+#if defined(_MSC_VER)
+			// I can't seem to disable C2124 of MSVC
+			if constexpr (N == 1)
+			{
+				return std::numeric_limits<T>::infinity();
+			}
+			else
+#endif
+			{
+				return T{1} / (N - 1);
+			}
 		}
 
 		if (x > 0.8)

@@ -3,13 +3,15 @@
 
 #pragma once
 
-#include <exception>
-#include <stdexcept>
-#include <string>
+#include <cstddef>
 #include <cstring>
+#include <exception>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+
+#include <SecUtility/Misc/RefCountedString.hpp>
 
 
 /*
@@ -20,6 +22,9 @@ Exception
 │   │   ├── ArgumentNullException
 │   │   └── ArgumentOutOfRangeException
 │   ├── InvalidOperationException
+│   │   ├── InvalidKeyException
+│   │   ├── KeyAlreadyExistsException
+│   │   └── KeyNotFoundException
 │   ├── NotImplementedException
 │   ├── NotSupportedException
 │   ├── UnreachableException  // calls terminate
@@ -30,7 +35,12 @@ Exception
 │   ├── IOException
 │   ├── TimeoutException
 │   ├── OperationCanceledException
-│   └── ResourceException
+│   ├── ResourceException
+│   ├── FormatException
+│   ├── ConfigurationException
+│   ├── NoSuchElementException
+│   ├── OperationFailedException
+│   └── InvalidCastException
 └── ~~AggregateException~~
 
  */
@@ -41,9 +51,10 @@ namespace SecUtility
 	class Exception : public std::exception
 	{
 	public:
-		Exception() noexcept = default;
+		Exception() noexcept(noexcept(std::exception{}) && noexcept(RefCountedString{})) = default;
 
-		template <typename... Messages>
+		template <typename... Messages,
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
 		explicit Exception(Messages&&... messages) noexcept
 		{
 			BuildMessage(std::forward<Messages>(messages)...);
@@ -54,7 +65,7 @@ namespace SecUtility
 			return m_CMessage;
 		}
 
-		Exception(Exception&& other) noexcept : m_Message(std::move(other.m_Message)), m_CMessage(m_Message.what())
+		Exception(Exception&& other) noexcept : m_Message(std::move(other.m_Message)), m_CMessage(m_Message.CString())
 		{
 			/* NO CODE */
 		}
@@ -62,11 +73,11 @@ namespace SecUtility
 		Exception& operator=(Exception&& other) noexcept
 		{
 			m_Message = std::move(other.m_Message);
-			m_CMessage = m_Message.what();
+			m_CMessage = m_Message.CString();
 			return *this;
 		}
 
-		Exception(const Exception& other) noexcept : m_Message(other.m_Message), m_CMessage(m_Message.what())
+		Exception(const Exception& other) noexcept : m_Message(other.m_Message), m_CMessage(m_Message.CString())
 		{
 			/* NO CODE */
 		}
@@ -76,7 +87,7 @@ namespace SecUtility
 			if (this != &other)
 			{
 				m_Message = other.m_Message;
-				m_CMessage = m_Message.what();
+				m_CMessage = m_Message.CString();
 			}
 
 			return *this;
@@ -98,7 +109,8 @@ namespace SecUtility
 			/* NO CODE */
 		}
 
-		template <typename... Messages>
+		template <typename... Messages,
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
 		explicit Exception(MessageHeaderSuppressor, Messages&&... messages) noexcept
 		    : Exception(std::forward<Messages>(messages)...)
 		{
@@ -107,7 +119,8 @@ namespace SecUtility
 
 
 	private:
-		template <typename... Messages>
+		template <typename... Messages,
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
 		void BuildMessage(Messages&&... messages) noexcept
 		{
 			if (std::uncaught_exceptions() > 0)
@@ -126,8 +139,8 @@ namespace SecUtility
 
 				AppendAll(message, std::forward<Messages>(messages)...);
 
-				m_Message = std::runtime_error{std::move(message)};
-				m_CMessage = m_Message.what();
+				m_Message = std::move(message);
+				m_CMessage = m_Message.CString();
 			}
 			catch (...)
 			{
@@ -179,8 +192,7 @@ namespace SecUtility
 		}
 
 	private:
-		// use std::runtime_error as const ref-counted string. see https://www.youtube.com/watch?v=zGWj7Qo_POY
-		std::runtime_error m_Message{""};
+		RefCountedString m_Message;
 		const char* m_CMessage = "Generic exception";
 	};
 
@@ -196,7 +208,8 @@ namespace SecUtility
 			/* NO CODE */                                                                                              \
 		}                                                                                                              \
                                                                                                                        \
-		template <typename... Messages>                                                                                \
+		template <typename... Messages,                                                                                \
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>         \
 		explicit DERIVED_EXCEPTION(Messages&&... messages) noexcept                                                    \
 		    : Base(Exception::MessageHeaderSuppressor{}, __func__, std::forward<Messages>(messages)...)                \
 		{                                                                                                              \
@@ -204,7 +217,8 @@ namespace SecUtility
 		}                                                                                                              \
                                                                                                                        \
 	protected:                                                                                                         \
-		template <typename... Messages>                                                                                \
+		template <typename... Messages,                                                                                \
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>         \
 		explicit DERIVED_EXCEPTION(Exception::MessageHeaderSuppressor, Messages&&... messages) noexcept                \
 		    : Base(Exception::MessageHeaderSuppressor{}, std::forward<Messages>(messages)...)                          \
 		{                                                                                                              \
@@ -218,6 +232,9 @@ namespace SecUtility
 			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ArgumentNullException, InvalidArgumentException)
 			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ArgumentOutOfRangeException, InvalidArgumentException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(InvalidOperationException, LogicException)
+			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(InvalidKeyException, InvalidOperationException)
+			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(KeyAlreadyExistsException, InvalidOperationException)
+			SEC_DEFINE_DERIVED_EXCEPTION_TYPE(KeyNotFoundException, InvalidOperationException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(NotImplementedException, LogicException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(NotSupportedException, LogicException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(PreconditionViolationException, LogicException)
@@ -228,6 +245,11 @@ namespace SecUtility
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(TimeoutException, RuntimeException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(OperationCanceledException, RuntimeException)
 		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ResourceException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(FormatException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(ConfigurationException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(NoSuchElementException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(OperationFailedException, RuntimeException)
+		SEC_DEFINE_DERIVED_EXCEPTION_TYPE(InvalidCastException, RuntimeException)
 	// clang-format on
 
 #undef SEC_DEFINE_DERIVED_EXCEPTION_TYPE
@@ -248,7 +270,8 @@ namespace SecUtility
 #endif
 		}
 
-		template <typename... Messages>
+		template <typename... Messages,
+		          typename = std::enable_if_t<!(std::is_base_of_v<Exception, std::decay_t<Messages>> && ...)>>
 		explicit UnreachableException(Messages&&... messages) noexcept
 		    : Base(MessageHeaderSuppressor{}, __func__, std::forward<Messages>(messages)...)
 		{

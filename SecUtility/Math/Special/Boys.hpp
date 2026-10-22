@@ -4,6 +4,8 @@
 #pragma once
 
 #include <SecUtility/Collection/IndexAccessor.hpp>
+#include <SecUtility/Macro/Likelihood.hpp>
+#include <SecUtility/Math/EstrinPolynomial.hpp>
 #include <SecUtility/Math/HornerPolynomial.hpp>
 #include <SecUtility/Math/Special/Gamma.hpp>
 #include <array>
@@ -106,31 +108,28 @@ namespace SecUtility::Math
 		SEC_MATH_CONDITIONAL_CONSTEXPR void PopulateContainerWithBoysFunctionValuesFromHighest(
 		        const BidirectionalIterator begin, const BidirectionalIterator end, const Scalar x, BoysFn boys)
 		{
-			Scalar lastBoys = std::numeric_limits<Scalar>::signaling_NaN();
-
 			auto iterator = end;
 
 			int n = static_cast<int>(std::distance(begin, end)) - 1;
 
+			if (n < 0)
 			{
-				iterator--;
+				return;
+			}
 
-				// always use `HighPrecisionBoys` to populate the table
+			{
+				--iterator;
 				*iterator = boys(n, x);
-
-				n--;
-				lastBoys = *iterator;
 			}
 
 			const Scalar expMinusX = Exp(-x);
 
-			while (n != -1)
+			while (n != 0)
 			{
-				iterator--;
+				const Scalar lastBoys = *iterator;
+				--n;
+				--iterator;
 				*iterator = (2 * x * lastBoys + expMinusX) / (2 * n + 1);
-
-				n--;
-				lastBoys = *iterator;
 			}
 		}
 
@@ -138,7 +137,15 @@ namespace SecUtility::Math
 		SEC_MATH_CONDITIONAL_CONSTEXPR auto CreateBoysTable() noexcept
 		{
 			using Scalar = std::conditional_t<std::is_floating_point_v<decltype(MaxArg)>, decltype(MaxArg), double>;
-			constexpr auto Count = Ceil<std::size_t>(MaxArg * GridDensity);
+			constexpr auto Count =
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+			        Ceil<std::size_t>(MaxArg * GridDensity);
+#else
+			        static_cast<decltype(MaxArg * GridDensity)>(static_cast<std::size_t>(MaxArg * GridDensity))
+			                        >= MaxArg * GridDensity
+			                ? static_cast<std::size_t>(MaxArg * GridDensity)
+			                : static_cast<std::size_t>(MaxArg * GridDensity) + 1;
+#endif
 			std::array<std::array<Scalar, MaxOrder + 1>, Count> fs{};
 
 			if constexpr (Count == 0)
@@ -192,6 +199,38 @@ namespace SecUtility::Math
 					*iterator = boys(n, x);
 				}
 
+				lastBoys = *iterator;
+			}
+		}
+
+		/// <summary>
+		/// Use the upward recursion to calculate Boys functions
+		/// </summary>
+		template <typename ForwardIterator, typename Scalar, typename BoysFn>
+		SEC_MATH_CONDITIONAL_CONSTEXPR void PopulateContainerWithBoysFunctionValuesFromLowestForVeryLargeArg(
+		        const ForwardIterator begin, const ForwardIterator end, const Scalar x, BoysFn boys)
+		{
+			Scalar lastBoys = std::numeric_limits<Scalar>::signaling_NaN();
+
+			auto iterator = begin;
+
+			{
+				*iterator = boys(0, x);
+
+				lastBoys = *iterator;
+				iterator++;
+			}
+
+			if (iterator == end)
+			{
+				return;
+			}
+
+			const Scalar oneOverTwoX = Scalar{0.5} / x;
+
+			for (int n = 1; iterator != end; n++, iterator++)  // NOTE: `n` starts from 1
+			{
+				*iterator = oneOverTwoX * ((2 * n - 1) * lastBoys);
 				lastBoys = *iterator;
 			}
 		}
@@ -255,6 +294,7 @@ namespace SecUtility::Math
 	/// <remarks>
 	/// This is made a functor to support compile-time dependency injection downstream.
 	/// </remarks>
+	// ReSharper disable once CppUseFamiliarTemplateSyntaxForGenericLambdas
 	constexpr auto Boys = [](const int n, const auto a) SEC_MATH_CONDITIONAL_CONSTEXPR noexcept
 	{
 		using Scalar = std::decay_t<decltype(a)>;
@@ -264,18 +304,21 @@ namespace SecUtility::Math
 			return Scalar{1} / (2 * n + 1) - a / (2 * n + 3);
 		}
 
+		// 8-term Horner can be faster than a call to erf
+		/*
 		if (n == 0)
 		{
-			constexpr Scalar HalfOfSqrtOfPi = Constant::SqrtOfPi<Scalar> / 2;
-			const Scalar sqrtOfA = Sqrt(a);
-			return HalfOfSqrtOfPi * Erf(sqrtOfA) / sqrtOfA;
+		    constexpr Scalar HalfOfSqrtOfPi = Constant::SqrtOfPi<Scalar> / 2;
+		    const Scalar sqrtOfA = Sqrt(a);
+		    return HalfOfSqrtOfPi * Erf(sqrtOfA) / sqrtOfA;
 		}
+		*/
 
 		if (a < Detail::Boys::MaxTabulatedBoyArg)
 		{
 			constexpr auto HornerTermCount = 8;
 
-			if (n + HornerTermCount - 1 >= Detail::Boys::MaxTabulatedBoyOrder)
+			if (SEC_UNLIKELY(n + HornerTermCount - 1 >= Detail::Boys::MaxTabulatedBoyOrder))
 			{
 				return Detail::Boys::HighPrecisionBoys(n, a, 1e-10);
 			}
@@ -283,7 +326,8 @@ namespace SecUtility::Math
 			const auto gridIndex = static_cast<std::size_t>(a * Detail::Boys::BoyTableDensity);
 			const auto delta = (gridIndex + 0.5) / Detail::Boys::BoyTableDensity - a;
 
-			return UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
+			// return UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
+			return UnrolledEstrinTaylorPolynomial<Scalar, HornerTermCount>(
 			        MakeIndexAccessor(Detail::Boys::BoysTable[gridIndex].cbegin() + n), delta);
 		}
 
@@ -303,6 +347,13 @@ namespace SecUtility::Math
 	SEC_MATH_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE void PopulateContainerWithBoysFunctionValues(
 	        const ForwardIterator begin, const ForwardIterator end, const Scalar x)
 	{
+		constexpr auto HornerTermCount = 8;
+
+		if (SEC_UNLIKELY(begin == end))
+		{
+			return;
+		}
+
 		if (Abs(x) < 1e-8)
 		{
 			auto iterator = begin;
@@ -310,8 +361,47 @@ namespace SecUtility::Math
 			{
 				*iterator = Scalar{1} / (2 * n + 1);
 			}
+			return;
 		}
-		else if (x > 10)
+
+		if (x > 40)
+		{
+			Detail::Boys::PopulateContainerWithBoysFunctionValuesFromLowestForVeryLargeArg(
+			        begin,
+			        end,
+			        x,
+			        [](const int n [[maybe_unused]], const Scalar a)
+			        {
+				        assert(n == 0);
+				        return Scalar{0.5} * Constant::SqrtOfPi<Scalar> / Sqrt(a);
+			        });
+			return;
+		}
+
+		if (SEC_LIKELY(x < Detail::Boys::MaxTabulatedBoyArg
+		               && static_cast<std::size_t>(std::distance(begin, end)) + HornerTermCount - 1
+		                          <= Detail::Boys::MaxTabulatedBoyOrder))
+		{
+			// Parallel Taylor: one gridIndex/delta, N independent Horner chains
+			// reading tabulated[n..n+HornerTermCount-1].  Avoids the recursion's
+			// exp(-x) call and serial dependency, and lets the compiler overlap
+			// the chains via ILP.
+			const auto gridIndex = static_cast<std::size_t>(x * Detail::Boys::BoyTableDensity);
+			const Scalar delta =
+			        (static_cast<Scalar>(gridIndex) + Scalar{0.5}) / static_cast<Scalar>(Detail::Boys::BoyTableDensity)
+			        - x;
+
+			std::size_t n = 0;
+			for (auto it = begin; it != end; ++it, ++n)
+			{
+				// *it = UnrolledHornerTaylorPolynomial<Scalar, HornerTermCount>(
+				*it = UnrolledEstrinTaylorPolynomial<Scalar, HornerTermCount>(
+				        MakeIndexAccessor(Detail::Boys::BoysTable[gridIndex].cbegin() + n), delta);
+			}
+			return;
+		}
+
+		if (x > 10)
 		{
 			Detail::Boys::PopulateContainerWithBoysFunctionValuesFromLowest(begin, end, x, Boys);
 		}

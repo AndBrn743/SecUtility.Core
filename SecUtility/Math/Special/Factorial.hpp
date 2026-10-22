@@ -3,39 +3,94 @@
 
 #pragma once
 
+#include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Raw/Int.hpp>
 #include <array>
 #include <cassert>
+#include <type_traits>
 
 
 namespace SecUtility::Math
 {
+	// Two overloads: explicit return type via CalculateFactorial<T>(n), or T deduced from n.
+	// The empty pack between Scalar and Int permits explicit Scalar specification while still deducing Int from n.
 	/// <summary>
-	/// Calculate and returns the factorial of given non-negative number with recursive function calls
+	/// Computes n! for non-negative integers.
 	/// </summary>
-	template <typename T>
-	constexpr T CalculateFactorial(const T n)  // NOLINT(*-no-recursion)
+	/// <remarks>
+	/// Return type is the explicit template argument Scalar when supplied, otherwise deduced from n.
+	/// Requires n &gt;= 0 (asserted) and Int to be an integral type (static_asserted).
+	/// </remarks>
+	template <typename Scalar, typename..., typename Int>
+	constexpr std::enable_if_t<!std::is_same_v<Scalar, void>, Scalar> CalculateFactorial(const Int n) noexcept
 	{
-		return n <= 1 ? 1 : n * CalculateFactorial(n - 1);
+		static_assert(std::is_integral_v<Int>);
+		assert(n >= 0);
+		Scalar result = 1;
+		for (Int i = 2; i <= n; i++)
+		{
+			result *= static_cast<Scalar>(i);
+		}
+		return result;
+	}
+
+	template <typename X = void, typename..., typename Int>
+	constexpr std::enable_if_t<std::is_same_v<X, void>, Int> CalculateFactorial(const Int n) noexcept
+	{
+		return CalculateFactorial<Int>(n);
 	}
 
 	/// <summary>
-	/// Calculate and returns the factorial of given number with recursive function calls.
-	/// The number can either be positive or negative odd number
+	/// Computes 1/n! for non-negative integers.
 	/// </summary>
-	template <typename T>
-	constexpr T CalculateDoubleFactorial(const T n)  // NOLINT(*-no-recursion)
+	/// <remarks>
+	/// Scalar defaults to double. Requires n &gt;= 0 (asserted via CalculateFactorial) and Int to be an integral type
+	/// (static_asserted). For integer Scalar, integer division truncates the result to 0 for all n &gt;= 2; use a
+	/// floating-point Scalar.
+	/// </remarks>
+	template <typename Scalar = double, typename..., typename Int>
+	constexpr std::enable_if_t<!std::is_same_v<Scalar, void>, Scalar> CalculateReciprocalFactorial(const Int n) noexcept
 	{
+		static_assert(std::is_integral_v<Int>);
+		return Scalar{1} / CalculateFactorial<Scalar>(n);
+	}
+
+	/// <summary>
+	/// Computes n!! (double factorial). Accepts non-negative integers and negative odd integers.
+	/// </summary>
+	/// <remarks>
+	/// Return type is the explicit template argument Scalar when supplied, otherwise deduced from n.
+	/// Requires Int to be an integral type (static_asserted) and n to be odd when negative (asserted).
+	/// For negative odd n &lt;= -5 the true value is fractional and integer division truncates it to 0.
+	/// </remarks>
+	template <typename Scalar, typename..., typename Int>
+	constexpr std::enable_if_t<!std::is_same_v<Scalar, void>, Scalar> CalculateDoubleFactorial(const Int n) noexcept
+	{
+		static_assert(std::is_integral_v<Int>);
 		if (n < 0)
 		{
-			return CalculateDoubleFactorial(n + 2) / (n + 2);
+			assert(n % 2 != 0);
+			const auto sign = (n - 1) % 4 == 0 ? 1 : -1;
+			return static_cast<Scalar>(sign * n) / CalculateDoubleFactorial<Scalar>(-n);
 		}
 
-		return n <= 1 ? 1 : n * CalculateDoubleFactorial(n - 2);
+		Scalar result = 1;
+		for (Int i = n; i > 1; i -= 2)
+		{
+			result *= static_cast<Scalar>(i);
+		}
+		return result;
+	}
+
+	template <typename X = void, typename..., typename Int>
+	constexpr std::enable_if_t<std::is_same_v<X, void>, Int> CalculateDoubleFactorial(const Int n) noexcept
+	{
+		return CalculateDoubleFactorial<Int>(n);
 	}
 
 	namespace Detail::Factorial
 	{
+		// 20! = 2,432,902,008,176,640,000 is the largest factorial that fits in Int64; 21! would overflow.
 		inline constexpr auto Factorials = []() constexpr
 		{
 			std::array<Int64, 21> data = {};
@@ -48,6 +103,32 @@ namespace SecUtility::Math
 			return data;
 		}();
 
+		// Sized to match Factorial's [0, 20] range so the two stay in lockstep.
+		// TODO: reconsider whether ReciprocalFactorials should extend past [0, 20], cheap to do, but breaks symmetry
+		// with Factorials.
+		template <typename Scalar, std::size_t N = 20>
+		inline constexpr auto ReciprocalFactorials = []() constexpr
+		{
+			std::array<Scalar, N + 1> data{};
+
+			for (std::size_t i = 0; i < N + 1 && i < 2; i++)
+			{
+				data[i] = 1;
+			}
+
+			if constexpr (!std::is_integral_v<Scalar>)
+			{
+				for (std::size_t i = 2; i < N + 1; ++i)
+				{
+					data[i] = static_cast<Scalar>(1) / CalculateFactorial<Scalar>(i);
+				}
+			}
+
+			return data;
+		}();
+
+		// 33!! = 6,332,659,870,762,850,625 is the largest double factorial that fits in Int64; 34!! would overflow.
+		// OneOffsettedDoubleFactorials is sized 34+1 to additionally hold (-1)!! at index 0.
 		inline constexpr auto DoubleFactorials = []() constexpr
 		{
 			std::array<Int64, 34> data = {};
@@ -75,9 +156,11 @@ namespace SecUtility::Math
 	}
 
 	/// <summary>
-	/// Returns factorial of number that's within the range of [0, 20].
-	/// This method uses compile-time generated table and does not perform actual calculation.
+	/// Returns n! for n in [0, 20] from a compile-time table.
 	/// </summary>
+	/// <remarks>
+	/// 20! is the largest factorial that fits in Int64, so the table does not extend past n = 20.
+	/// </remarks>
 	constexpr SEC_FORCE_INLINE Int64 Factorial(const Int64 i) noexcept
 	{
 		assert(i >= 0 && i <= 20);
@@ -85,11 +168,29 @@ namespace SecUtility::Math
 	}
 
 	/// <summary>
-	/// Returns double factorial of number that's within the range of [-1, 33].
-	/// For the double factorials of negative odd number, use <c>CalculateDoubleFactorial</c> method instead.
-	/// This method uses compile-time generated table and does not perform actual calculation.
+	/// Returns 1/n! for n in [0, 20] from a compile-time table.
 	/// </summary>
-	constexpr Int64 DoubleFactorial(const Int64 i) noexcept
+	/// <remarks>
+	/// Scalar defaults to double. 20! is the largest factorial that fits in Int64, so the table does not extend past n
+	/// = 20. For integer Scalar, integer division truncates the result to 0 for all n &gt;= 2; use a floating-point
+	/// Scalar.
+	/// </remarks>
+	template <typename Scalar = double>
+	constexpr SEC_FORCE_INLINE Scalar ReciprocalFactorial(const Int64 i) noexcept
+	{
+		constexpr Int64 N = 64;
+		assert(i >= 0 && i <= N);
+		return static_cast<Scalar>(Detail::Factorial::ReciprocalFactorials<double, N>[i]);
+	}
+
+	/// <summary>
+	/// Returns n!! for n in [-1, 33] from a compile-time table.
+	/// </summary>
+	/// <remarks>
+	/// Only (-1)!! is tabulated on the negative side; for other negative odd integers use CalculateDoubleFactorial.
+	/// 33!! is the largest double factorial that fits in Int64.
+	/// </remarks>
+	constexpr SEC_FORCE_INLINE Int64 DoubleFactorial(const Int64 i) noexcept
 	{
 		assert(i >= -1 && i <= 33);
 		return Detail::Factorial::OneOffsettedDoubleFactorials[i + 1];

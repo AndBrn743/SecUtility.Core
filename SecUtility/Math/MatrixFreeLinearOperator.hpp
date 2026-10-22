@@ -177,7 +177,7 @@ private:
 
 
 private:
-	Functor m_Functor{};
+	Functor m_Functor;
 	Eigen::Index m_Rows{};
 	Eigen::Index m_Cols{};
 };

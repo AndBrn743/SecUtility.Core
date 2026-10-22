@@ -5,6 +5,10 @@
 
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Meta/IntegerSequence.hpp>
+#include <SecUtility/Math/Special/Factorial.hpp>
+
+#include <array>
+#include <cstddef>
 
 
 namespace SecUtility::Math
@@ -41,7 +45,10 @@ namespace SecUtility::Math
 			static_assert(sizeof...(ReversedIndices) == N);
 			static_assert(((ReversedIndices < N) && ...));
 			Scalar result = 0;
-			((result = (result + coefficientAccessor(ReversedIndices)) * (ReversedIndices == 0 ? 1 : delta)), ...);
+			// FMA-friendly: each step is c[k] + delta*result, which contracts to
+			// fma(delta, result, c[k]) under -ffp-contract=on.  No per-step ternary
+			// needed: the recurrence r_k = c[k] + delta*r_{k+1} is valid for all k.
+			((result = coefficientAccessor(ReversedIndices) + delta * result), ...);
 			return result;
 		}
 
@@ -49,13 +56,14 @@ namespace SecUtility::Math
 		constexpr Scalar HornerTaylorPolynomial_Loop(const CoefficientAccessor& coefficientAccessor,
 		                                             const Scalar delta) noexcept
 		{
+			static_assert(!std::is_integral_v<Scalar>);
 			static_assert(N > 0);
 			Scalar result = 0;
 
 			for (std::size_t reversedIndices = N; reversedIndices-- > 1;)
 			{
 				result += coefficientAccessor(reversedIndices);
-				result *= delta / reversedIndices;
+				result *= delta * (Scalar{1} / reversedIndices);
 			}
 
 			result += coefficientAccessor(0);
@@ -68,12 +76,19 @@ namespace SecUtility::Math
 		                                                              const Scalar delta,
 		                                                              std::index_sequence<ReversedIndices...>) noexcept
 		{
+			static_assert(!std::is_integral_v<Scalar>);
 			static_assert(N > 0);
 			static_assert(sizeof...(ReversedIndices) == N);
 			static_assert(((ReversedIndices < N) && ...));
+
 			Scalar result = 0;
-			((result = (result + coefficientAccessor(ReversedIndices))
-			           * (ReversedIndices == 0 ? 1 : delta / ReversedIndices)),
+			// FMA-friendly: r_k = c[k] * (1/k!) + delta * r_{k+1}, which contracts to
+			// fma(delta, result, c[k] * (1/k!)) under -ffp-contract=on.  The
+			// c[k]*(1/k!) multiply is independent of the dep chain and overlaps the
+			// FMA, mirroring the raw-loop pattern `tabulated[n+k]*invfact[k] + delta*value`.
+			// Also drops the former MSVC C2124 ternary workaround: there is no
+			// ternary left to confuse its parser.
+			((result = coefficientAccessor(ReversedIndices) * ReciprocalFactorial(ReversedIndices) + delta * result),
 			 ...);
 			return result;
 		}

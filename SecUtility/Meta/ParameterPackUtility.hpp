@@ -85,7 +85,8 @@ namespace SecUtility::ParameterPackUtility
 			static constexpr std::size_t InstanceCount = instance_count_in<TTarget, Ts...>::value;
 			using ResultType = std::array<std::size_t, InstanceCount>;
 
-			static constexpr ResultType Calculate()
+		public:
+			static constexpr ResultType value = []
 			{
 				ResultType result{};
 
@@ -95,11 +96,7 @@ namespace SecUtility::ParameterPackUtility
 				((std::is_same_v<TTarget, Ts> ? (*iterator = index, ++iterator, ++index) : ++index), ...);
 
 				return result;
-			}
-
-
-		public:
-			static constexpr ResultType value = Calculate();
+			}();
 		};
 
 		template <typename...>

@@ -6,6 +6,7 @@
 #include <SecUtility/Macro/ConstevalIf.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Math/Constant.hpp>
+#include <cassert>
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 #include <gcem.hpp>
@@ -21,6 +22,7 @@
 #endif
 
 #include <SecUtility/Math/Complex.hpp>
+#include <SecUtility/Meta/TypeTrait.hpp>
 #include <cmath>
 #include <utility>
 
@@ -156,12 +158,31 @@ namespace SecUtility::Math
 
 	template <typename Arg>
 	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE auto SignBit(Arg&& arg) noexcept(noexcept(
-	        std::signbit(std::forward<Arg>(arg)))) -> std::enable_if_t<!std::is_integral_v<std::decay_t<Arg>>, int>
+	        std::signbit(std::forward<Arg>(arg)))) -> std::enable_if_t<!std::is_integral_v<std::decay_t<Arg>>, bool>
 	{
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL)
 		SEC_IF_CONSTEVAL
 		{
-			return gcem::signbit(std::forward<Arg>(arg));
+// #if defined(_MSC_VER)
+// #define SEC_SIGNBIT(x) _signbit(x)
+// #endif
+#if defined(__clang__)
+#if defined(__has_constexpr_builtin)
+#if __has_constexpr_builtin(__builtin_signbit)
+#define SEC_SIGNBIT(x) __builtin_signbit(x)
+#endif
+#endif
+#elif defined(__GNUC__)
+#define SEC_SIGNBIT(x) __builtin_signbit(x)
+#endif
+
+#if defined(SEC_SIGNBIT)
+			return SEC_SIGNBIT(arg);
+#undef SEC_SIGNBIT
+#else
+			using Scalar = std::decay_t<Arg>;
+			return arg < static_cast<Scalar>(0) || (arg == static_cast<Scalar>(0) && static_cast<Scalar>(1) / arg < 0);
+#endif
 		}
 #endif
 
@@ -186,10 +207,10 @@ namespace SecUtility::Math
 	        noexcept(std::copysign(to, from)))
 	        -> std::enable_if_t<!std::is_integral_v<std::decay_t<To>>, decltype(std::copysign(to, from))>
 	{
-#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+#if defined(SEC_IF_CONSTEVAL)
 		SEC_IF_CONSTEVAL
 		{
-			return gcem::copysign(to, from);
+			return SignBit(to) != SignBit(from) ? -to : to;
 		}
 #endif
 		return std::copysign(to, from);
@@ -263,6 +284,18 @@ namespace SecUtility::Math
 	SEC_MATH_CORE_CONDITIONAL_CONSTEXPR SEC_FORCE_INLINE Real SquaredNorm(const std::complex<Real>& complex) noexcept
 	{
 		return SquaredNorm(Re(complex)) + SquaredNorm(Im(complex));
+	}
+
+	template <typename Scalar>
+	constexpr SEC_FORCE_INLINE Scalar Square(const Scalar x) noexcept
+	{
+		return x * x;
+	}
+
+	template <typename Scalar>
+	constexpr SEC_FORCE_INLINE Scalar Cube(const Scalar x) noexcept
+	{
+		return x * x * x;
 	}
 
 	template <typename Scalar>
@@ -413,17 +446,15 @@ namespace SecUtility::Math
 		}
 	}
 
-	template <typename... Args>
-	constexpr SEC_FORCE_INLINE decltype(auto) Max(Args&&... args) noexcept
+	constexpr auto Max = [](auto&&... args) noexcept -> decltype(auto)
 	{
-		return Extrema<std::greater_equal<>>(std::forward<Args>(args)...);
-	}
+		return Extrema<std::greater_equal<>>(std::forward<decltype(args)>(args)...);
+	};
 
-	template <typename... Args>
-	constexpr SEC_FORCE_INLINE decltype(auto) Min(Args&&... args) noexcept
+	constexpr auto Min = [](auto&&... args) noexcept -> decltype(auto)
 	{
-		return Extrema<std::less_equal<>>(std::forward<Args>(args)...);
-	}
+		return Extrema<std::less_equal<>>(std::forward<decltype(args)>(args)...);
+	};
 
 	template <typename Scalar>
 	constexpr SEC_FORCE_INLINE auto Cbrt(Scalar&& arg) noexcept(noexcept(std::cbrt(std::forward<Scalar>(arg))))
@@ -560,14 +591,66 @@ namespace SecUtility::Math
 	}
 
 	template <typename... Scalars>
-	constexpr auto HarmonicMean(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
+	constexpr auto InverseSumOfReciprocals(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
 	{
 		static_assert(sizeof...(Scalars) > 0);
 		using Scalar = std::decay_t<decltype((scalars + ...))>;
 		using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
-		assert(((scalars > 0) && ...) && "not validation for negatives and zeros");
 
-		return static_cast<Output>(sizeof...(Scalars)) / ((1 / static_cast<Output>(scalars)) + ...);
+		if constexpr (sizeof...(Scalars) == 1)
+		{
+			return static_cast<Output>((scalars, ...));
+		}
+		if constexpr (sizeof...(Scalars) == 2)
+		{
+			return [](auto x, auto y) -> Output { return x * y / (x + y); }(scalars...);
+		}
+		else
+		{
+			constexpr std::size_t N = sizeof...(Scalars);
+			const Scalar values[]{(std::forward<Scalars>(scalars))...};
+
+			Scalar prefix[N + 1];
+			Scalar suffix[N + 1];
+
+			prefix[0] = Scalar{1};
+			for (std::size_t i = 0; i < N; ++i)
+			{
+				prefix[i + 1] = prefix[i] * values[i];
+			}
+
+			suffix[N] = Scalar{1};
+			for (std::size_t i = N; i-- > 0;)
+			{
+				suffix[i] = suffix[i + 1] * values[i];
+			}
+
+			Output denominator{};
+
+			for (std::size_t i = 0; i < N; ++i)
+			{
+				denominator += prefix[i] * suffix[i + 1];
+			}
+
+			return prefix[N] / denominator;
+		}
+	}
+
+	template <typename... Scalars>
+	constexpr auto HarmonicMean(Scalars&&... scalars) noexcept(noexcept(1 / ((1 / scalars) + ...)))
+	{
+		if constexpr (sizeof...(Scalars) == 1)
+		{
+			using Scalar = std::decay_t<decltype((scalars + ...))>;
+			using Output = std::conditional_t<(std::is_integral_v<std::decay_t<Scalars>> && ...), double, Scalar>;
+
+			return static_cast<Output>((scalars, ...));
+		}
+		else
+		{
+			return static_cast<decltype(InverseSumOfReciprocals(std::forward<Scalars>(scalars)...))>(sizeof...(Scalars))
+			       * InverseSumOfReciprocals(std::forward<Scalars>(scalars)...);
+		}
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
