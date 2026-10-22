@@ -36,6 +36,11 @@ namespace SecUtility
 			return m_Data[index];
 		}
 
+		constexpr const std::uint64_t* Data() const noexcept
+		{
+			return m_Data;
+		}
+
 	public:
 		// ----------------------------------------------------------
 		//  Special functions
@@ -128,6 +133,10 @@ namespace SecUtility
 			return m_Data[index];
 		}
 
+		const std::uint64_t* Data() const noexcept
+		{
+			return m_Data.data();
+		}
 
 	public:
 		// ----------------------------------------------------------

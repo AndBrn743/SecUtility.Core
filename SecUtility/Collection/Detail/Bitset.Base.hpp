@@ -9,6 +9,7 @@
 
 #include <SecUtility/Collection/SubscriptBasedIterator.hpp>
 #include <SecUtility/IO/BitOrder.hpp>
+#include <SecUtility/Macro/ConstevalIf.hpp>
 #include <SecUtility/Macro/ForceInline.hpp>
 #include <SecUtility/Math/Core.hpp>
 #include <SecUtility/Meta/TypeTrait.hpp>
@@ -72,6 +73,12 @@ namespace SecUtility
 		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::uint64_t Block(const std::size_t index) const noexcept
 		{
 			return AsDerived().Block(index);
+		}
+
+		// Only owning storage exposes contiguous block data.
+		constexpr const std::uint64_t* OwningData() const noexcept
+		{
+			return AsDerived().Data();
 		}
 
 		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::size_t HeadPaddingBitCount() const
@@ -1007,6 +1014,38 @@ namespace SecUtility
 			if (Size() != other.Size())
 			{
 				return false;
+			}
+
+			if constexpr (Traits<Derived>::IsOwning && Traits<OtherDerived>::IsOwning)
+			{
+				const std::size_t count = BlockCount();
+				if (count == 0)
+				{
+					return true;
+				}
+
+#if defined(SEC_IF_NOT_CONSTEVAL)
+				SEC_IF_NOT_CONSTEVAL
+				{
+					// Avoid a library call for small bitsets and first-word mismatches.
+					if (count > 4)
+					{
+						// Owning blocks have no head padding and cleared tail padding.
+						// Compare the block arrays, not the enclosing objects.
+						const std::size_t bytes = (count - 1) * sizeof(std::uint64_t);
+						return Block(0) == other.Block(0)
+						       && std::memcmp(OwningData() + 1, other.OwningData() + 1, bytes) == 0;
+					}
+				}
+#endif
+				for (std::size_t i = 0; i < count; ++i)
+				{
+					if (Block(i) != other.Block(i))
+					{
+						return false;
+					}
+				}
+				return true;
 			}
 
 			return ExecuteBinaryOpByAlignment(

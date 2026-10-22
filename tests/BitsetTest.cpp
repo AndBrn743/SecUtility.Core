@@ -1228,6 +1228,76 @@ TEST_CASE("OneCount and ZeroCount")
 	              std::count_if(bitString.begin(), bitString.end(), [](const char c) { return c == '0'; })));
 }
 
+TEMPLATE_TEST_CASE("Owning bitset equality at word boundaries",
+                   "[bitset][equality]",
+                   (Bitset<0>),
+                   (Bitset<1>),
+                   (Bitset<42>),
+                   (Bitset<63>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<127>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<255>),
+                   (Bitset<256>),
+                   (Bitset<257>),
+                   (Bitset<5409>))
+{
+	TestType a;
+	const std::size_t size = a.Size();
+	for (std::size_t i = 0; i < size; ++i)
+	{
+		a.Set(i, i % 3 == 0);
+	}
+	TestType b = a;
+	DynamicBitset dynamicA = a;
+	DynamicBitset dynamicB = a;
+	const auto check = [](const auto& lhs, const auto& rhs, const bool equal)
+	{
+		CHECK((lhs == rhs) == equal);
+		CHECK((rhs == lhs) == equal);
+		CHECK((lhs != rhs) == !equal);
+		CHECK((rhs != lhs) == !equal);
+	};
+	check(a, a, true);
+	check(a, b, true);
+	check(a, dynamicB, true);
+	check(dynamicA, dynamicB, true);
+	check(a, DynamicBitset(size + 1), false);
+	check(dynamicA, DynamicBitset(size + 1), false);
+
+	const std::size_t positions[] = {0, 63, 64, 127, 128, size == 0 ? 0 : size - 1};
+	for (const std::size_t bit : positions)
+	{
+		if (bit >= size)
+		{
+			continue;
+		}
+		CAPTURE(size, bit);
+		b.Flip(bit);
+		dynamicB.Flip(bit);
+		check(a, b, false);
+		check(a, dynamicB, false);
+		check(dynamicA, dynamicB, false);
+		b.Flip(bit);
+		dynamicB.Flip(bit);
+	}
+
+	// Views and expressions must ignore bits outside their logical range.
+	for (const std::size_t head : {0u, 11u, 63u})
+	{
+		DynamicBitset backing(head + size + 1, true);
+		auto view = backing.Segment(head, size);
+		view = a;
+		check(a, view, true);
+		check(dynamicA, view, true);
+		check(a, ~~view, true);
+		check(dynamicA, a | b, true);
+		check(a, ~view, size == 0);
+	}
+}
+
 TEST_CASE("operator==")
 {
 	{
