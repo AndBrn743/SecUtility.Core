@@ -521,15 +521,30 @@ namespace SecUtility
 				return false;
 			}
 
-			for (std::size_t i = 0; i < BlockCount(); ++i)
+			if constexpr (Traits<Derived>::IsOwning)
 			{
-				if (const auto mask = MaskOfBlock(i); (mask & Block(i)) != mask)
+				// Owning storage has no head padding; only the last block can be partial.
+				const std::size_t last = BlockCount() - 1;
+				for (std::size_t i = 0; i < last; ++i)
 				{
-					return false;
+					if (Block(i) != ~std::uint64_t{0})
+					{
+						return false;
+					}
 				}
+				return Block(last) == Detail::Bitset::TailMask(Size());
 			}
-
-			return true;
+			else
+			{
+				for (std::size_t i = 0; i < BlockCount(); ++i)
+				{
+					if (const auto mask = MaskOfBlock(i); (mask & Block(i)) != mask)
+					{
+						return false;
+					}
+				}
+				return true;
+			}
 		}
 
 		constexpr bool IsAllZeros() const noexcept
@@ -541,7 +556,9 @@ namespace SecUtility
 
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				if ((MaskOfBlock(i) & Block(i)) != 0)
+				// Owning storage keeps padding clear, so raw zero checks are sufficient.
+				const auto block = Traits<Derived>::IsOwning ? Block(i) : MaskOfBlock(i) & Block(i);
+				if (block != 0)
 				{
 					return false;
 				}

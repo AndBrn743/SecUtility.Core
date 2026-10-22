@@ -1057,6 +1057,80 @@ TEST_CASE("IsAllOnes, IsAllZeros, HasOnes, and HasZeros")
 	}
 }
 
+TEMPLATE_TEST_CASE("Bitset predicates at word boundaries",
+                   "[bitset][predicate]",
+                   (Bitset<0>),
+                   (Bitset<1>),
+                   (Bitset<42>),
+                   (Bitset<63>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<127>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<5409>))
+{
+	const auto check = [](const auto& bs, const std::size_t ones)
+	{
+		CAPTURE(bs.Size(), ones);
+		const bool nonempty = bs.Size() != 0;
+		CHECK(bs.IsAllOnes() == (nonempty && ones == bs.Size()));
+		CHECK(bs.IsAllZeros() == (nonempty && ones == 0));
+		CHECK(bs.HasOnes() == (ones != 0));
+		CHECK(bs.HasZeros() == (nonempty && ones != bs.Size()));
+	};
+	const auto exercise = [&check](auto bs)
+	{
+		const auto verify = [&check, &bs](const std::size_t ones)
+		{
+			check(bs, ones);
+			// Complement expressions must still mask padding, including the tail
+			// bits that become set when complementing an owning bitset.
+			check(~bs, bs.Size() - ones);
+		};
+		bs.ResetAll();
+		verify(0);
+		bs.SetAll();
+		verify(bs.Size());
+		std::vector<std::size_t> positions{0, 63, 64, 127, 128};
+		if (bs.Size() != 0)
+		{
+			positions.push_back(bs.Size() - 1);
+		}
+		std::sort(positions.begin(), positions.end());
+		positions.erase(std::unique(positions.begin(), positions.end()), positions.end());
+		for (const auto pos : positions)
+		{
+			if (pos >= bs.Size())
+			{
+				continue;
+			}
+			CAPTURE(pos);
+			bs.ResetAll();
+			bs.Set(pos);
+			verify(1);
+			bs.SetAll();
+			bs.Reset(pos);
+			verify(bs.Size() - 1);
+		}
+	};
+	SECTION("Fixed size")
+	{
+		exercise(TestType{});
+	}
+	SECTION("Dynamic size")
+	{
+		exercise(DynamicBitset(TestType{}.Size()));
+	}
+	SECTION("Segment with ones outside the payload")
+	{
+		const std::size_t head = GENERATE(0, 11, 63);
+		const auto size = TestType{}.Size();
+		DynamicBitset backing(size + 64, true);
+		exercise(backing.Segment(head, size));
+	}
+}
+
 TEST_CASE("OneCount and ZeroCount")
 {
 	const std::size_t size = GENERATE(0, 1, 4, 42, 69, 73, 420);
