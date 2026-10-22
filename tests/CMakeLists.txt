@@ -140,6 +140,18 @@ add_secutility_test(BitsetTest BitsetTest.cpp)
 option(SECUTILITY_BUILD_BENCHMARKS "Build Google Benchmark executables" OFF)
 if (SECUTILITY_BUILD_BENCHMARKS)
     find_package(benchmark CONFIG REQUIRED)
-    add_executable(BitsetBench BitsetBench.cpp)
+    add_executable(BitsetBench
+            benchmarks/Bitset/BitsetBench.cpp
+            benchmarks/Bitset/BitsetBench.Copy.cpp
+            benchmarks/Bitset/BitsetBench.Shift.cpp
+            benchmarks/Bitset/BitsetBench.Bitwise.cpp
+            benchmarks/Bitset/BitsetBench.Expression.cpp
+            benchmarks/Bitset/BitsetBench.Query.cpp
+            benchmarks/Bitset/BitsetBench.Equality.cpp
+            benchmarks/Bitset/BitsetBench.Segment.cpp)
+    # Preserve family boundaries for compiler inlining and optimization decisions.
+    set_target_properties(BitsetBench PROPERTIES
+            UNITY_BUILD OFF
+            INTERPROCEDURAL_OPTIMIZATION OFF)
     target_link_libraries(BitsetBench PRIVATE SecUtility::Core benchmark::benchmark)
 endif ()

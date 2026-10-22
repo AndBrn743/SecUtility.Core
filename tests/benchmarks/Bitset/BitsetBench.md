@@ -12,6 +12,20 @@ For instruction-set comparisons, use the same compiler flags for every build.
 The target uses the project's normal Release flags; it does not enable
 `-march=native` automatically.
 
+Benchmark families compile separately: `BitsetBench.Copy.cpp`,
+`BitsetBench.Shift.cpp`, `BitsetBench.Bitwise.cpp`, `BitsetBench.Expression.cpp`,
+`BitsetBench.Query.cpp`, `BitsetBench.Equality.cpp`, and `BitsetBench.Segment.cpp`.
+`BitsetBench.cpp` explicitly registers each family and runs Google Benchmark.
+`BitsetBench.Common.hpp` shares fixtures, operation adapters, and size matrices;
+its helpers have internal linkage so families can optimize independently.
+
+The target disables CMake unity builds and interprocedural optimization to
+preserve these boundaries. Avoid adding LTO flags manually when comparing
+families. Case names, arguments, input seeds, timing barriers, and batch sizes
+are unchanged; registration is now grouped by family. Compiler optimization
+decisions can change after this split, so establish new timing baselines before
+comparing subsequent library changes.
+
 The expanded suite uses names containing the operation, measurement mode,
 storage type (`Static`, `Dynamic`, or `Std`), and bit count. These replace the
 earlier `BM_*` names. Use filters to select a manageable comparison:
