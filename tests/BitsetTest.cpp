@@ -1057,6 +1057,83 @@ TEST_CASE("IsAllOnes, IsAllZeros, HasOnes, and HasZeros")
 	}
 }
 
+TEMPLATE_TEST_CASE("Bitset expression evaluation at word boundaries",
+                   "[bitset][expression]",
+                   (Bitset<0>),
+                   (Bitset<1>),
+                   (Bitset<42>),
+                   (Bitset<63>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<127>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<5409>))
+{
+	TestType a, b, c;
+	const std::size_t size = a.Size();
+	std::mt19937_64 random(42);
+	for (std::size_t i = 0; i < size; ++i)
+	{
+		a.Set(i, (random() & 1u) != 0);
+		b.Set(i, (random() & 1u) != 0);
+		c.Set(i, (random() & 1u) != 0);
+	}
+
+	const auto check = [size](const auto& expression, const auto& expectedBit)
+	{
+		std::string expected(size, '0');
+		for (std::size_t i = 0; i != size; ++i)
+		{
+			expected[i] = expectedBit(i) ? '1' : '0';
+		}
+		const TestType constructed = expression;
+		TestType assigned(true);
+		assigned = expression;
+		const DynamicBitset dynamic = expression;
+		DynamicBitset dynamicAssigned(size, true);
+		dynamicAssigned = expression;
+		CHECK(constructed.ToString(false) == expected);
+		CHECK(assigned.ToString(false) == expected);
+		CHECK(dynamic.ToString(false) == expected);
+		CHECK(dynamicAssigned.ToString(false) == expected);
+		CHECK(expression.Eval().ToString(false) == expected);
+		// Count reads raw owning words, exposing any uncleared tail padding.
+		const auto ones = static_cast<std::size_t>(std::count(expected.begin(), expected.end(), '1'));
+		CHECK(constructed.OneCount() == ones);
+		CHECK(dynamic.OneCount() == ones);
+	};
+
+	check((a & b) | c, [&](const std::size_t i) { return (a[i] && b[i]) || c[i]; });
+	check(~((a | ~b) ^ c), [&](const std::size_t i) { return !((a[i] || !b[i]) != c[i]); });
+	const DynamicBitset dynamicB = b;
+	check((~a ^ dynamicB) & ~c, [&](const std::size_t i) { return (!a[i] != b[i]) && !c[i]; });
+
+	// Exact-sized backing storage exercises the final checked read of a
+	// misaligned leaf, including when an expression is itself segmented.
+	for (const std::size_t head : {0u, 1u, 11u, 63u})
+	{
+		CAPTURE(size, head);
+		DynamicBitset backing(head + size, true);
+		auto view = backing.Segment(head, size);
+		view = b;
+		check((a & ~view) | c, [&](const std::size_t i) { return (a[i] && !b[i]) || c[i]; });
+		check(~(view ^ (a & c)), [&](const std::size_t i) { return !(b[i] != (a[i] && c[i])); });
+		DynamicBitset otherBacking(63 - head + size, true);
+		auto otherView = otherBacking.Segment(63 - head, size);
+		otherView = c;
+		check(~(view | otherView) ^ a, [&](const std::size_t i) { return !(b[i] || c[i]) != a[i]; });
+		check((~backing).Segment(head, size), [&](const std::size_t i) { return !b[i]; });
+		const DynamicBitset mask(head + size, false);
+		const auto expression = ~backing ^ mask;
+		check(expression.Segment(head, size), [&](const std::size_t i) { return !b[i]; });
+	}
+
+	const auto expected = ((a & b) | ~c).Eval();
+	a = (a & b) | ~c;
+	CHECK(a == expected);
+}
+
 TEMPLATE_TEST_CASE("Bitset predicates at word boundaries",
                    "[bitset][predicate]",
                    (Bitset<0>),

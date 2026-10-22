@@ -390,6 +390,11 @@ namespace SecUtility
 			return ~static_cast<BaseOfNested&>(m_Nested).Block(index);
 		}
 
+		/* CRTP OVERRIDE */ constexpr std::uint64_t UnpaddedBlock_Impl(const std::size_t index) const SEC_NOEXCEPT
+		{
+			return ~static_cast<const BaseOfNested&>(m_Nested).UnpaddedBlock(index);
+		}
+
 		/* CRTP VIRTUAL */ constexpr std::size_t HeadPaddingBitCount() const noexcept  // corresponds to trailing
 		{
 			return static_cast<BaseOfNested&>(m_Nested).HeadPaddingBitCount();
@@ -464,6 +469,14 @@ namespace SecUtility
 			const auto& r = static_cast<const BaseOfRhs&>(m_Rhs);
 			return Op{}(l.ShiftedBlock(m_HeadPadding - l.HeadPaddingBitCount(), index),
 			            r.ShiftedBlock(m_HeadPadding - r.HeadPaddingBitCount(), index));
+		}
+
+		/* CRTP OVERRIDE */ constexpr std::uint64_t UnpaddedBlock_Impl(const std::size_t index) const SEC_NOEXCEPT
+		{
+			// Evaluate logical words recursively, without the runtime alignment of
+			// this expression or any intermediate binary expression.
+			return Op{}(static_cast<const BaseOfLhs&>(m_Lhs).UnpaddedBlock(index),
+			            static_cast<const BaseOfRhs&>(m_Rhs).UnpaddedBlock(index));
 		}
 
 		/* CRTP OVERRIDE */ constexpr std::size_t HeadPaddingBitCount() const noexcept  // corresponds to trailing

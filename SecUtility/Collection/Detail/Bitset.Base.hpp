@@ -211,6 +211,25 @@ namespace SecUtility
 			std::fill_n(data + limit + 1, blockShift, std::uint64_t{0});
 		}
 
+		// Word i of the logical bit sequence, with no head padding. The caller
+		// supplies a valid word index and masks unused bits in the final word.
+		constexpr std::uint64_t UnpaddedBlock(const std::size_t i) const SEC_NOEXCEPT
+		{
+			if constexpr (Traits<Derived>::IsOwning)
+			{
+				return Block(i);
+			}
+			else
+			{
+				return AsDerived().UnpaddedBlock_Impl(i);
+			}
+		}
+
+		/* CRTP VIRTUAL */ constexpr std::uint64_t UnpaddedBlock_Impl(const std::size_t i) const SEC_NOEXCEPT
+		{
+			return ShiftedBlock(-static_cast<int>(HeadPaddingBitCount()), i);
+		}
+
 		constexpr std::uint64_t ShiftedBlock(const int shift, const std::size_t i) const SEC_NOEXCEPT
 		{
 			if (const std::size_t count = BlockCount(); i >= count)
@@ -320,7 +339,18 @@ namespace SecUtility
 		constexpr Derived& operator=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
 		{
 			SEC_ASSERT(Size() == other.Size());
-			BitwiseCombinationOp(other, [](std::uint64_t, const std::uint64_t rhs) { return rhs; });
+			if constexpr (Traits<Derived>::IsOwning)
+			{
+				for (std::size_t i = 0; i < BlockCount(); ++i)
+				{
+					Block(i) = other.UnpaddedBlock(i);
+				}
+				RestPaddingBitsOfLastBlock();
+			}
+			else
+			{
+				BitwiseCombinationOp(other, [](std::uint64_t, const std::uint64_t rhs) { return rhs; });
+			}
 			return AsDerived();
 		}
 
