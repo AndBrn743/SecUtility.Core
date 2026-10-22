@@ -15,6 +15,7 @@
 #include <SecUtility/Collection/Detail/Bitset.Forward.hpp>
 #include <SecUtility/Collection/Detail/Bitset.Utility.hpp>
 #include <SecUtility/Collection/Detail/Bitset.Base.hpp>
+#include <SecUtility/Collection/Detail/Bitset.OwningBase.hpp>
 #include <SecUtility/Collection/Detail/Bitset.Impl.hpp>
 // clang-format on
 #undef SEC_BITSET_DETAIL

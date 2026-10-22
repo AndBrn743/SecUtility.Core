@@ -16,6 +16,9 @@ namespace SecUtility
 	template <typename Derived>
 	class BitsetBase;
 
+	template <typename Derived>
+	class OwningBitsetBase;
+
 	template <std::size_t N>
 	class Bitset;
 

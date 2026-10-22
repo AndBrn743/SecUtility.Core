@@ -45,6 +45,9 @@ namespace SecUtility
 		friend class BitsetBase;
 
 		template <typename>
+		friend class OwningBitsetBase;
+
+		template <typename>
 		friend class Detail::Bitset::BitsetSegmentExpr;
 
 		template <typename>
@@ -75,11 +78,6 @@ namespace SecUtility
 			return AsDerived().Block(index);
 		}
 
-		// Only owning storage exposes contiguous block data.
-		constexpr const std::uint64_t* OwningData() const noexcept
-		{
-			return AsDerived().Data();
-		}
 
 		/* CRTP VIRTUAL */ SEC_FORCE_INLINE constexpr std::size_t HeadPaddingBitCount() const
 		        SEC_NOEXCEPT  // corresponds to trailing
@@ -174,73 +172,12 @@ namespace SecUtility
 			}
 		}
 
-		// Called only for owning storage and 0 < n < Size(), so Block(0) exists.
-		constexpr void ShiftLeftOwning(const std::size_t blockShift, const std::size_t bitShift) noexcept
-		{
-			auto* const data = &Block(0);
-			const std::size_t count = BlockCount();
-			if (bitShift == 0)
-			{
-				std::copy_backward(data, data + count - blockShift, data + count);
-			}
-			else
-			{
-				for (std::size_t i = count - 1; i > blockShift; --i)
-				{
-					data[i] = (data[i - blockShift] << bitShift)
-					          | (data[i - blockShift - 1] >> (Detail::Bitset::BitsPerBlock - bitShift));
-				}
-				data[blockShift] = data[0] << bitShift;
-			}
-			std::fill_n(data, blockShift, std::uint64_t{0});
-			RestPaddingBitsOfLastBlock();
-		}
-
-		constexpr void ShiftRightOwning(const std::size_t blockShift, const std::size_t bitShift) noexcept
-		{
-			auto* const data = &Block(0);
-			const std::size_t count = BlockCount();
-			const std::size_t limit = count - blockShift - 1;
-			if (bitShift == 0)
-			{
-				if (Detail::Bitset::is_fixed_size_bitset<Derived>::value && count <= 4)
-				{
-					// A fixed trip count exposes both the retained words and zero fill,
-					// allowing small copies and shifts to combine in registers.
-					for (std::size_t i = 0; i < count; ++i)
-					{
-						const std::size_t source = i + blockShift;
-						data[i] = source < count ? data[source] : std::uint64_t{0};
-					}
-					return;
-				}
-				std::copy(data + blockShift, data + count, data);
-			}
-			else
-			{
-				const std::uint64_t last = data[count - 1] >> bitShift;
-				for (std::size_t i = 0; i < limit; ++i)
-				{
-					data[i] = (data[i + blockShift] >> bitShift)
-					          | (data[i + blockShift + 1] << (Detail::Bitset::BitsPerBlock - bitShift));
-				}
-				data[limit] = last;
-			}
-			std::fill_n(data + limit + 1, blockShift, std::uint64_t{0});
-		}
 
 		// Word i of the logical bit sequence, with no head padding. The caller
 		// supplies a valid word index and masks unused bits in the final word.
 		constexpr std::uint64_t UnpaddedBlock(const std::size_t i) const SEC_NOEXCEPT
 		{
-			if constexpr (Traits<Derived>::IsOwning)
-			{
-				return Block(i);
-			}
-			else
-			{
-				return AsDerived().UnpaddedBlock_Impl(i);
-			}
+			return AsDerived().UnpaddedBlock_Impl(i);
 		}
 
 		/* CRTP VIRTUAL */ constexpr std::uint64_t UnpaddedBlock_Impl(const std::size_t i) const SEC_NOEXCEPT
@@ -358,18 +295,7 @@ namespace SecUtility
 		constexpr Derived& operator=(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
 		{
 			SEC_ASSERT(Size() == other.Size());
-			if constexpr (Traits<Derived>::IsOwning)
-			{
-				for (std::size_t i = 0; i < BlockCount(); ++i)
-				{
-					Block(i) = other.UnpaddedBlock(i);
-				}
-				RestPaddingBitsOfLastBlock();
-			}
-			else
-			{
-				BitwiseCombinationOp(other, [](std::uint64_t, const std::uint64_t rhs) { return rhs; });
-			}
+			AsDerived().Assign_Impl(other);
 			return AsDerived();
 		}
 
@@ -532,34 +458,7 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		constexpr void SetAll(const bool value = true) SEC_NOEXCEPT
 		{
-			if constexpr (Traits<Derived>::IsOwning)
-			{
-				const std::size_t size = Size();
-				if (const std::size_t count = Detail::Bitset::BlocksFor(size); count != 0)
-				{
-					auto* const data = &Block(0);
-					const std::uint64_t fill = value ? ~std::uint64_t{0} : std::uint64_t{0};
-					for (std::size_t i = 0; i < count - 1; ++i)
-					{
-						data[i] = fill;
-					}
-					data[count - 1] = fill & Detail::Bitset::TailMask(size);
-				}
-				return;
-			}
-
-			const auto masks = MakeBlockMaskCaches();
-			for (std::size_t i = 0; i < BlockCount(); ++i)
-			{
-				if (value)
-				{
-					Block(i) |= masks(i);
-				}
-				else
-				{
-					Block(i) &= ~masks(i);
-				}
-			}
+			AsDerived().SetAll_Impl(value);
 		}
 
 		constexpr void ResetAll() noexcept
@@ -569,29 +468,7 @@ namespace SecUtility
 
 		constexpr void FlipAll() noexcept
 		{
-			if constexpr (Traits<Derived>::IsOwning)
-			{
-				const std::size_t size = Size();
-				if (const std::size_t count = Detail::Bitset::BlocksFor(size); count != 0)
-				{
-					auto* const data = &Block(0);
-					for (std::size_t i = 0; i < count - 1; ++i)
-					{
-						data[i] = ~data[i];
-					}
-					data[count - 1] = ~data[count - 1] & Detail::Bitset::TailMask(size);
-				}
-				return;
-			}
-
-			const auto masks = MakeBlockMaskCaches();
-			for (std::size_t i = 0; i < BlockCount(); ++i)
-			{
-				const auto mask = masks(i);
-				const auto block = Block(i);
-				const auto flipped = ~block & mask;
-				Block(i) = (block & ~mask) | flipped;
-			}
+			AsDerived().FlipAll_Impl();
 		}
 
 		constexpr bool IsAllOnes() const noexcept
@@ -600,31 +477,7 @@ namespace SecUtility
 			{
 				return false;
 			}
-
-			if constexpr (Traits<Derived>::IsOwning)
-			{
-				// Owning storage has no head padding; only the last block can be partial.
-				const std::size_t last = BlockCount() - 1;
-				for (std::size_t i = 0; i < last; ++i)
-				{
-					if (Block(i) != ~std::uint64_t{0})
-					{
-						return false;
-					}
-				}
-				return Block(last) == Detail::Bitset::TailMask(Size());
-			}
-			else
-			{
-				for (std::size_t i = 0; i < BlockCount(); ++i)
-				{
-					if (const auto mask = MaskOfBlock(i); (mask & Block(i)) != mask)
-					{
-						return false;
-					}
-				}
-				return true;
-			}
+			return AsDerived().IsAllOnes_Impl();
 		}
 
 		constexpr bool IsAllZeros() const noexcept
@@ -633,18 +486,7 @@ namespace SecUtility
 			{
 				return false;
 			}
-
-			for (std::size_t i = 0; i < BlockCount(); ++i)
-			{
-				// Owning storage keeps padding clear, so raw zero checks are sufficient.
-				const auto block = Traits<Derived>::IsOwning ? Block(i) : MaskOfBlock(i) & Block(i);
-				if (block != 0)
-				{
-					return false;
-				}
-			}
-
-			return true;
+			return AsDerived().IsAllZeros_Impl();
 		}
 
 		constexpr bool HasOnes() const noexcept
@@ -898,13 +740,148 @@ namespace SecUtility
 				return AsDerived();
 			}
 
-			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
-			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
-			if constexpr (Traits<Derived>::IsOwning)
+			AsDerived().ShiftLeft_Impl(n);
+			return AsDerived();
+		}
+
+		constexpr Derived& operator>>=(const std::size_t n) SEC_NOEXCEPT
+		{
+			if (n == 0)
 			{
-				ShiftLeftOwning(blockShift, bitShift);
 				return AsDerived();
 			}
+
+			if (n >= Size())
+			{
+				ResetAll();
+				return AsDerived();
+			}
+
+			AsDerived().ShiftRight_Impl(n);
+			return AsDerived();
+		}
+
+		// ----------------------------------------------------------
+		//  Comparison
+		// ----------------------------------------------------------
+		template <typename OtherDerived>
+		constexpr bool operator==(const BitsetBase<OtherDerived>& other) const SEC_NOEXCEPT
+		{
+			if (Size() != other.Size())
+			{
+				return false;
+			}
+
+			return AsDerived().Equal_Impl(other);
+		}
+
+		template <typename OtherDerived>
+		constexpr bool operator!=(const BitsetBase<OtherDerived>& other) const SEC_NOEXCEPT
+		{
+			return !(*this == other.AsDerived());
+		}
+
+		// ----------------------------------------------------------
+		//  Conversion
+		// ----------------------------------------------------------
+		// the conventional ordering have leftmost character at highest index bit
+		std::string ToString(const bool isUsingConventionalBitOrdering = true) const
+		{
+			const std::size_t size = Size();
+			std::string s(size, '-');
+
+			if (isUsingConventionalBitOrdering)
+			{
+				std::transform(cbegin(), cend(), s.rbegin(), [](const bool b) { return b ? '1' : '0'; });
+			}
+			else
+			{
+				std::transform(cbegin(), cend(), s.begin(), [](const bool b) { return b ? '1' : '0'; });
+			}
+
+			return s;
+		}
+
+		// use the conventional bit ordering by default. one could switch the behavior with LsbFirst and MsbFirst.
+		// e.g., `os << LsbFirst << bs;`
+		friend std::ostream& operator<<(std::ostream& os, BitsetBase& bs)
+		{
+			return os << bs.ToString(os.iword(BitOrderFlag()) == 0);
+		}
+
+		auto Eval() const
+		{
+			return EvalHelper();
+		}
+
+
+	private:
+		// Default kernels for views and expressions. Owning storage supplies specialized hooks.
+		template <typename OtherDerived>
+		constexpr void Assign_Impl(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
+		{
+			BitwiseCombinationOp(other, [](std::uint64_t, const std::uint64_t rhs) { return rhs; });
+		}
+
+		constexpr void SetAll_Impl(const bool value) SEC_NOEXCEPT
+		{
+			const auto masks = MakeBlockMaskCaches();
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				if (value)
+				{
+					Block(i) |= masks(i);
+				}
+				else
+				{
+					Block(i) &= ~masks(i);
+				}
+			}
+		}
+
+		constexpr void FlipAll_Impl() noexcept
+		{
+			const auto masks = MakeBlockMaskCaches();
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				const auto mask = masks(i);
+				const auto block = Block(i);
+				const auto flipped = ~block & mask;
+				Block(i) = (block & ~mask) | flipped;
+			}
+		}
+
+		constexpr bool IsAllOnes_Impl() const noexcept
+		{
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				if (const auto mask = MaskOfBlock(i); (mask & Block(i)) != mask)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		constexpr bool IsAllZeros_Impl() const noexcept
+		{
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				const auto block = MaskOfBlock(i) & Block(i);
+				if (block != 0)
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		constexpr void ShiftLeft_Impl(const std::size_t n) SEC_NOEXCEPT
+		{
+			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
+			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
+
 			const auto masks = MakeBlockMaskCaches();
 			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
@@ -964,30 +941,13 @@ namespace SecUtility
 			}
 
 			Trailing(n).ResetAll();
-
-			return AsDerived();
 		}
 
-		constexpr Derived& operator>>=(const std::size_t n) SEC_NOEXCEPT
+		constexpr void ShiftRight_Impl(const std::size_t n) SEC_NOEXCEPT
 		{
-			if (n == 0)
-			{
-				return AsDerived();
-			}
-
-			if (n >= Size())
-			{
-				ResetAll();
-				return AsDerived();
-			}
-
 			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
-			if constexpr (Traits<Derived>::IsOwning)
-			{
-				ShiftRightOwning(blockShift, bitShift);
-				return AsDerived();
-			}
+
 			const auto masks = MakeBlockMaskCaches();
 			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
@@ -1044,53 +1004,11 @@ namespace SecUtility
 			}
 
 			Leading(n).ResetAll();
-
-			return AsDerived();
 		}
 
-		// ----------------------------------------------------------
-		//  Comparison
-		// ----------------------------------------------------------
 		template <typename OtherDerived>
-		constexpr bool operator==(const BitsetBase<OtherDerived>& other) const SEC_NOEXCEPT
+		constexpr bool Equal_Impl(const BitsetBase<OtherDerived>& other) const SEC_NOEXCEPT
 		{
-			if (Size() != other.Size())
-			{
-				return false;
-			}
-
-			if constexpr (Traits<Derived>::IsOwning && Traits<OtherDerived>::IsOwning)
-			{
-				const std::size_t count = BlockCount();
-				if (count == 0)
-				{
-					return true;
-				}
-
-#if defined(SEC_IF_NOT_CONSTEVAL)
-				SEC_IF_NOT_CONSTEVAL
-				{
-					// Avoid a library call for small bitsets and first-word mismatches.
-					if (count > 4)
-					{
-						// Owning blocks have no head padding and cleared tail padding.
-						// Compare the block arrays, not the enclosing objects.
-						const std::size_t bytes = (count - 1) * sizeof(std::uint64_t);
-						return Block(0) == other.Block(0)
-						       && std::memcmp(OwningData() + 1, other.OwningData() + 1, bytes) == 0;
-					}
-				}
-#endif
-				for (std::size_t i = 0; i < count; ++i)
-				{
-					if (Block(i) != other.Block(i))
-					{
-						return false;
-					}
-				}
-				return true;
-			}
-
 			return ExecuteBinaryOpByAlignment(
 			        *this,
 			        other,
@@ -1098,47 +1016,16 @@ namespace SecUtility
 			        &BitsetBase::OperatorEqualEqual_AssumeSameSizeAndMisaligned<OtherDerived>);
 		}
 
-		template <typename OtherDerived>
-		constexpr bool operator!=(const BitsetBase<OtherDerived>& other) const SEC_NOEXCEPT
+		template <typename OtherDerived, typename Op>
+		Derived& BitwiseCombinationOp_Impl(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
 		{
-			return !(*this == other.AsDerived());
+			return ExecuteBinaryOpByAlignment(*this,
+			                                  other,
+			                                  &BitsetBase::BitwiseCombinationOp_AssumeAligned<OtherDerived, Op>,
+			                                  &BitsetBase::BitwiseCombinationOp_AssumeMisaligned<OtherDerived, Op>,
+			                                  op);
 		}
 
-		// ----------------------------------------------------------
-		//  Conversion
-		// ----------------------------------------------------------
-		// the conventional ordering have leftmost character at highest index bit
-		std::string ToString(const bool isUsingConventionalBitOrdering = true) const
-		{
-			const std::size_t size = Size();
-			std::string s(size, '-');
-
-			if (isUsingConventionalBitOrdering)
-			{
-				std::transform(cbegin(), cend(), s.rbegin(), [](const bool b) { return b ? '1' : '0'; });
-			}
-			else
-			{
-				std::transform(cbegin(), cend(), s.begin(), [](const bool b) { return b ? '1' : '0'; });
-			}
-
-			return s;
-		}
-
-		// use the conventional bit ordering by default. one could switch the behavior with LsbFirst and MsbFirst.
-		// e.g., `os << LsbFirst << bs;`
-		friend std::ostream& operator<<(std::ostream& os, BitsetBase& bs)
-		{
-			return os << bs.ToString(os.iword(BitOrderFlag()) == 0);
-		}
-
-		auto Eval() const
-		{
-			return EvalHelper();
-		}
-
-
-	private:
 		template <typename Self, typename OtherDerived, typename AlignedOp, typename MisalignedOp, typename... Args>
 		static decltype(auto) ExecuteBinaryOpByAlignment(Self&& self,
 		                                                 const BitsetBase<OtherDerived>& other,
@@ -1192,27 +1079,7 @@ namespace SecUtility
 		template <typename OtherDerived, typename Op>
 		Derived& BitwiseCombinationOp(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
 		{
-			if constexpr (Traits<Derived>::IsOwning && Traits<OtherDerived>::IsOwning)
-			{
-				SEC_ASSERT(Size() == other.Size());
-				if (const std::size_t count = BlockCount(); count != 0)
-				{
-					auto* const data = &Block(0);
-					const auto* const source = other.OwningData();
-					// AND/OR/XOR preserve cleared padding when both operands own their storage.
-					for (std::size_t i = 0; i < count; ++i)
-					{
-						data[i] = op(data[i], source[i]);
-					}
-				}
-				return AsDerived();
-			}
-
-			return ExecuteBinaryOpByAlignment(*this,
-			                                  other,
-			                                  &BitsetBase::BitwiseCombinationOp_AssumeAligned<OtherDerived, Op>,
-			                                  &BitsetBase::BitwiseCombinationOp_AssumeMisaligned<OtherDerived, Op>,
-			                                  op);
+			return AsDerived().BitwiseCombinationOp_Impl(other, op);
 		}
 
 		template <typename OtherDerived, typename Op>

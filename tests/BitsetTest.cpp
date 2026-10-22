@@ -845,6 +845,94 @@ TEST_CASE(".ToString() and operator<<")
 	CHECK(string == bitString);
 }
 
+TEMPLATE_TEST_CASE("Owning bitset API through base references",
+                   "[bitset][owning-base]",
+                   (Bitset<0>),
+                   (Bitset<65>),
+                   (Bitset<257>),
+                   DynamicBitset)
+{
+	static_assert(std::is_base_of_v<BitsetBase<TestType>, OwningBitsetBase<TestType>>);
+	static_assert(std::is_base_of_v<OwningBitsetBase<TestType>, TestType>);
+	static_assert(std::is_empty_v<OwningBitsetBase<TestType>>);
+	static_assert(std::is_copy_constructible_v<TestType>);
+	static_assert(std::is_move_constructible_v<TestType>);
+	static_assert(std::is_copy_assignable_v<TestType>);
+	static_assert(std::is_move_assignable_v<TestType>);
+
+	TestType bs = []
+	{
+		if constexpr (std::is_same_v<TestType, DynamicBitset>)
+		{
+			return TestType(257);
+		}
+		else
+		{
+			return TestType{};
+		}
+	}();
+	const std::size_t size = bs.Size();
+	BitsetBase<TestType>& base = bs;
+	OwningBitsetBase<TestType>& owningBase = bs;
+	const BitsetBase<TestType>& constBase = bs;
+	const bool nonempty = size != 0;
+	const auto check = [&](const bool value)
+	{
+		CHECK(bs.ToString(false) == std::string(size, value ? '1' : '0'));
+		CHECK(constBase.OneCount() == (value ? size : 0));
+		CHECK(constBase.IsAllOnes() == (nonempty && value));
+		CHECK(constBase.IsAllZeros() == (nonempty && !value));
+		CHECK(constBase.HasOnes() == (nonempty && value));
+		CHECK(constBase.HasZeros() == (nonempty && !value));
+	};
+
+	base.SetAll();
+	check(true);
+	base.ResetAll();
+	check(false);
+	base.FlipAll();
+	check(true);
+	CHECK(&(base <<= size) == &bs);
+	check(false);
+	base.SetAll();
+	CHECK(&(base >>= size) == &bs);
+	check(false);
+	if (nonempty)
+	{
+		base[0] = true;
+		CHECK(&(base <<= 64) == &bs);
+		CHECK(constBase[64]);
+		CHECK(&(base >>= 64) == &bs);
+		CHECK(constBase[0]);
+		CHECK(constBase.OneCount() == 1);
+	}
+
+	DynamicBitset source(size, true);
+	// Select the converting assignment explicitly: same-type base copy assignment is private.
+	CHECK(&(base.template operator=<DynamicBitset>(source)) == &bs);
+	check(true);
+	CHECK(&(owningBase = ~source) == &bs);
+	check(false);
+	CHECK(&(base |= source) == &bs);
+	check(true);
+	CHECK(&(base ^= source) == &bs);
+	check(false);
+	CHECK(&(base &= source) == &bs);
+	check(false);
+	CHECK(&(base = ~source) == &bs);
+	check(false);
+	CHECK(constBase == ~source);
+	CHECK_FALSE(constBase != ~source);
+	CHECK(constBase == DynamicBitset(size));
+	CHECK_FALSE(constBase != DynamicBitset(size));
+	CHECK(constBase != DynamicBitset(size + 1));
+
+	const TestType copy(constBase);
+	CHECK(copy == constBase);
+	TestType moved(std::move(base));
+	CHECK(moved == copy);
+}
+
 TEMPLATE_TEST_CASE("Owning bitset bulk operations at word boundaries",
                    "[bitset][bulk]",
                    (Bitset<0>),

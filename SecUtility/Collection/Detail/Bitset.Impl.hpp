@@ -11,9 +11,10 @@
 namespace SecUtility
 {
 	template <std::size_t N>
-	class Bitset : public BitsetBase<Bitset<N>>
+	class Bitset : public OwningBitsetBase<Bitset<N>>
 	{
-		using Base = BitsetBase<Bitset>;
+		using Base = OwningBitsetBase<Bitset>;
+		friend BitsetBase<Bitset>;
 		friend Base;
 
 		static constexpr std::size_t kN = N;
@@ -111,9 +112,10 @@ namespace SecUtility
 	};
 
 
-	class DynamicBitset : public BitsetBase<DynamicBitset>
+	class DynamicBitset : public OwningBitsetBase<DynamicBitset>
 	{
-		using Base = BitsetBase;
+		using Base = OwningBitsetBase<DynamicBitset>;
+		friend BitsetBase<DynamicBitset>;
 		friend Base;
 
 		// ReSharper disable once CppMemberFunctionMayBeStatic
