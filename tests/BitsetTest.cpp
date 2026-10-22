@@ -1070,7 +1070,7 @@ TEMPLATE_TEST_CASE("Bitset expression evaluation at word boundaries",
                    (Bitset<5409>))
 {
 	TestType a, b, c;
-	const std::size_t size = a.Size();
+	constexpr std::size_t size = a.Size();
 	std::mt19937_64 random(42);
 	for (std::size_t i = 0; i < size; ++i)
 	{
@@ -1079,7 +1079,9 @@ TEMPLATE_TEST_CASE("Bitset expression evaluation at word boundaries",
 		c.Set(i, (random() & 1u) != 0);
 	}
 
-	const auto check = [size](const auto& expression, const auto& expectedBit)
+	// do not capture size, or clang may report redundant capture warning, which will be upgraded to error by our CI.
+	// msvc, on the other hand, may still require a explicit capture though... we'll see...
+	const auto check = [](const auto& expression, const auto& expectedBit)
 	{
 		std::string expected(size, '0');
 		for (std::size_t i = 0; i != size; ++i)
