@@ -845,6 +845,153 @@ TEST_CASE(".ToString() and operator<<")
 	CHECK(string == bitString);
 }
 
+TEMPLATE_TEST_CASE("Owning bitset bulk operations at word boundaries",
+                   "[bitset][bulk]",
+                   (Bitset<0>),
+                   (Bitset<1>),
+                   (Bitset<42>),
+                   (Bitset<63>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<127>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<255>),
+                   (Bitset<256>),
+                   (Bitset<257>),
+                   (Bitset<5409>),
+                   (Bitset<65536>))
+{
+	const std::size_t size = TestType{}.Size();
+	const auto leftPattern = RandomBitString(size, 42);
+	const auto rightPattern = RandomBitString(size, 69);
+	const auto initialize = [](auto& bs, const std::string& pattern)
+	{ std::transform(pattern.begin(), pattern.end(), bs.begin(), [](const char c) { return c == '1'; }); };
+	const auto check = [](const auto& bs, const std::string& expected)
+	{
+		CHECK(bs.ToString(false) == expected);
+		const auto ones = static_cast<std::size_t>(std::count(expected.begin(), expected.end(), '1'));
+		// Owning counts include raw padding, so these also check tail sanitization.
+		CHECK(bs.OneCount() == ones);
+		CHECK(bs.ZeroCount() == expected.size() - ones);
+	};
+
+	SECTION("Whole-set operations")
+	{
+		const bool value = GENERATE(false, true);
+		const auto exercise = [&](auto bs)
+		{
+			initialize(bs, leftPattern);
+			bs.SetAll(value);
+			check(bs, std::string(size, value ? '1' : '0'));
+			bs.FlipAll();
+			check(bs, std::string(size, value ? '0' : '1'));
+			bs.FlipAll();
+			check(bs, std::string(size, value ? '1' : '0'));
+			bs.ResetAll();
+			check(bs, std::string(size, '0'));
+			bs.FlipAll();
+			check(bs, std::string(size, '1'));
+			bs.SetAll(false);
+			check(bs, std::string(size, '0'));
+		};
+		exercise(TestType{});
+		exercise(DynamicBitset(size));
+		for (const std::size_t head : {0u, 11u, 63u})
+		{
+			CAPTURE(size, head);
+			DynamicBitset backing(head + size + 1, true);
+			exercise(backing.Segment(head, size));
+			CHECK(backing.ToString(false) == std::string(head, '1') + std::string(size, '0') + '1');
+		}
+	}
+
+	SECTION("Compound operations")
+	{
+		const int operation = GENERATE(0, 1, 2);
+		CAPTURE(size, operation);
+		const auto apply = [operation](auto& lhs, const auto& rhs) -> decltype(auto)
+		{
+			if (operation == 0)
+			{
+				return lhs &= rhs;
+			}
+			if (operation == 1)
+			{
+				return lhs |= rhs;
+			}
+			return lhs ^= rhs;
+		};
+		const auto expectedFor = [&](const std::string& rhs)
+		{
+			std::string expected(size, '0');
+			for (std::size_t i = 0; i != size; ++i)
+			{
+				const bool a = leftPattern[i] == '1';
+				const bool b = rhs[i] == '1';
+				const bool result = operation == 0 ? a && b : operation == 1 ? a || b : a != b;
+				expected[i] = result ? '1' : '0';
+			}
+			return expected;
+		};
+		const auto exercise = [&](auto lhs, const auto& rhs, const std::string& rhsPattern)
+		{
+			initialize(lhs, leftPattern);
+			auto& result = apply(lhs, rhs);
+			CHECK(&result == &lhs);
+			check(lhs, expectedFor(rhsPattern));
+		};
+		TestType rhs;
+		initialize(rhs, rightPattern);
+		const DynamicBitset dynamicRhs = rhs;
+		exercise(TestType{}, rhs, rightPattern);
+		exercise(DynamicBitset(size), dynamicRhs, rightPattern);
+		exercise(TestType{}, dynamicRhs, rightPattern);
+		exercise(DynamicBitset(size), rhs, rightPattern);
+
+		auto complemented = rightPattern;
+		std::transform(complemented.begin(),
+		               complemented.end(),
+		               complemented.begin(),
+		               [](const char c) { return c == '1' ? '0' : '1'; });
+		exercise(TestType{}, ~rhs, complemented);
+		exercise(DynamicBitset(size), ~dynamicRhs, complemented);
+		exercise(TestType{}, rhs | ~rhs, std::string(size, '1'));
+		exercise(DynamicBitset(size), rhs | ~dynamicRhs, std::string(size, '1'));
+
+		const auto self = [&](auto bs)
+		{
+			initialize(bs, leftPattern);
+			auto& result = apply(bs, bs);
+			CHECK(&result == &bs);
+			check(bs, expectedFor(leftPattern));
+		};
+		self(TestType{});
+		self(DynamicBitset(size));
+
+		for (const std::size_t head : {0u, 11u, 63u})
+		{
+			CAPTURE(head);
+			DynamicBitset source(head + size + 1, true);
+			auto view = source.Segment(head, size);
+			initialize(view, rightPattern);
+			exercise(TestType{}, view, rightPattern);
+			exercise(DynamicBitset(size), view, rightPattern);
+			CHECK(source.ToString(false) == std::string(head, '1') + rightPattern + '1');
+
+			DynamicBitset destination(head + size + 1, true);
+			exercise(destination.Segment(head, size), rhs, rightPattern);
+			CHECK(destination.ToString(false) == std::string(head, '1') + expectedFor(rightPattern) + '1');
+		}
+
+		TestType lhs;
+		const DynamicBitset wrongSize(size + 1);
+		CHECK_THROWS_AS(apply(lhs, wrongSize), std::logic_error);
+		DynamicBitset dynamicLhs(size);
+		CHECK_THROWS_AS(apply(dynamicLhs, wrongSize), std::logic_error);
+	}
+}
+
 TEST_CASE("SetAll, ResetAll, and FlipAll")
 {
 	const std::size_t size = GENERATE(42, 69, 73, 420);

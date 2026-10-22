@@ -10,6 +10,7 @@ int main(int argc, char** argv)
 	BitsetBenchmark::RegisterCopies();
 	BitsetBenchmark::RegisterShifts();
 	BitsetBenchmark::RegisterBitwise();
+	BitsetBenchmark::RegisterWholeSet();
 	BitsetBenchmark::RegisterExpressions();
 	BitsetBenchmark::RegisterQueries();
 	BitsetBenchmark::RegisterEquality();

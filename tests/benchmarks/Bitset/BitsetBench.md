@@ -14,7 +14,8 @@ The target uses the project's normal Release flags; it does not enable
 
 Benchmark families compile separately: `BitsetBench.Copy.cpp`,
 `BitsetBench.Shift.cpp`, `BitsetBench.Bitwise.cpp`, `BitsetBench.Expression.cpp`,
-`BitsetBench.Query.cpp`, `BitsetBench.Equality.cpp`, and `BitsetBench.Segment.cpp`.
+`BitsetBench.WholeSet.cpp`, `BitsetBench.Query.cpp`, `BitsetBench.Equality.cpp`,
+and `BitsetBench.Segment.cpp`.
 `BitsetBench.cpp` explicitly registers each family and runs Google Benchmark.
 `BitsetBench.Common.hpp` shares fixtures, operation adapters, and size matrices;
 its helpers have internal linkage so families can optimize independently.
@@ -41,6 +42,9 @@ earlier `BM_*` names. Use filters to select a manageable comparison:
 # Counts, predicates, and equality, including early and late exits.
 ./build-bench/tests/BitsetBench --benchmark_filter='^(Query|Equal)/'
 
+# Whole-set and compound operations on preallocated storage.
+./build-bench/tests/BitsetBench --benchmark_filter='^(WholeSet|Bitwise)/'
+
 # Alignment and source/destination block-count differences.
 ./build-bench/tests/BitsetBench --benchmark_filter='^Segment/'
 
@@ -58,6 +62,7 @@ earlier `BM_*` names. Use filters to select a manageable comparison:
 | `ShiftLeft/Constant7`, `ShiftLeft/Constant64` and right-shift counterparts | Copy plus a compile-time constant shift. |
 | `ShiftLeft/Batch32`, `ShiftRight/Batch32` | Shift 32 preallocated bitsets, each starting with the same random pattern. |
 | `Bitwise/*/Batch32` | Apply `&=`, `|=`, or `^=` to 32 preallocated bitsets. |
+| `WholeSet/*/Batch32` | Set, reset, or flip all bits in 32 preallocated bitsets. |
 | `Expression/Chained` | Assign `(a & b) | c` into an existing destination. |
 | `Expression/Materialized` | Materialize `a & b`, then assign its OR with `c`; intermediate allocation and destruction are included. |
 | `Query` | One count or predicate on the named input pattern. |
@@ -84,8 +89,8 @@ the compiler must store it, including for `std::bitset`.
 
 ## Coverage
 
-- Copying and runtime shifts: 0, 1, 42, 63, 64, 65, 127, 128, 129, 549, 5,409,
-  and 65,536 bits, for static, dynamic, and standard bitsets.
+- Copying, whole-set operations, and runtime shifts: 0, 1, 42, 63, 64, 65, 127,
+  128, 129, 549, 5,409, and 65,536 bits, for static, dynamic, and standard bitsets.
 - Runtime shift amounts: deduplicated values from 0, 1, 7, 63, 64, 65, 127, 256,
   N-1, N, and N+1. N-1 is omitted when N is zero.
 - Constant shifts: 7 and 64, at sizes 64, 65, 129, and 5,409.

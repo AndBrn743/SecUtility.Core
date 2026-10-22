@@ -532,6 +532,22 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		constexpr void SetAll(const bool value = true) SEC_NOEXCEPT
 		{
+			if constexpr (Traits<Derived>::IsOwning)
+			{
+				const std::size_t size = Size();
+				if (const std::size_t count = Detail::Bitset::BlocksFor(size); count != 0)
+				{
+					auto* const data = &Block(0);
+					const std::uint64_t fill = value ? ~std::uint64_t{0} : std::uint64_t{0};
+					for (std::size_t i = 0; i < count - 1; ++i)
+					{
+						data[i] = fill;
+					}
+					data[count - 1] = fill & Detail::Bitset::TailMask(size);
+				}
+				return;
+			}
+
 			const auto masks = MakeBlockMaskCaches();
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
@@ -553,6 +569,21 @@ namespace SecUtility
 
 		constexpr void FlipAll() noexcept
 		{
+			if constexpr (Traits<Derived>::IsOwning)
+			{
+				const std::size_t size = Size();
+				if (const std::size_t count = Detail::Bitset::BlocksFor(size); count != 0)
+				{
+					auto* const data = &Block(0);
+					for (std::size_t i = 0; i < count - 1; ++i)
+					{
+						data[i] = ~data[i];
+					}
+					data[count - 1] = ~data[count - 1] & Detail::Bitset::TailMask(size);
+				}
+				return;
+			}
+
 			const auto masks = MakeBlockMaskCaches();
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
@@ -1161,6 +1192,22 @@ namespace SecUtility
 		template <typename OtherDerived, typename Op>
 		Derived& BitwiseCombinationOp(const BitsetBase<OtherDerived>& other, const Op op) SEC_NOEXCEPT
 		{
+			if constexpr (Traits<Derived>::IsOwning && Traits<OtherDerived>::IsOwning)
+			{
+				SEC_ASSERT(Size() == other.Size());
+				if (const std::size_t count = BlockCount(); count != 0)
+				{
+					auto* const data = &Block(0);
+					const auto* const source = other.OwningData();
+					// AND/OR/XOR preserve cleared padding when both operands own their storage.
+					for (std::size_t i = 0; i < count; ++i)
+					{
+						data[i] = op(data[i], source[i]);
+					}
+				}
+				return AsDerived();
+			}
+
 			return ExecuteBinaryOpByAlignment(*this,
 			                                  other,
 			                                  &BitsetBase::BitwiseCombinationOp_AssumeAligned<OtherDerived, Op>,

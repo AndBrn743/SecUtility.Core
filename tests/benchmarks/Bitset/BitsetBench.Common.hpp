@@ -152,6 +152,7 @@ namespace BitsetBenchmark
 	void RegisterCopies();
 	void RegisterShifts();
 	void RegisterBitwise();
+	void RegisterWholeSet();
 	void RegisterExpressions();
 	void RegisterQueries();
 	void RegisterEquality();
