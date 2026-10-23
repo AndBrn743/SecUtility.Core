@@ -65,6 +65,7 @@ earlier `BM_*` names. Use filters to select a manageable comparison:
 | `WholeSet/*/Batch32` | Set, reset, or flip all bits in 32 preallocated bitsets. |
 | `Expression/Chained` | Assign `(a & b) | c` into an existing destination. |
 | `Expression/Materialized` | Materialize `a & b`, then assign its OR with `c`; intermediate allocation and destruction are included. |
+| `Expression/AndAll` | Query `(a & b).IsAllOnes()` or `(a & b).all()`, with random inputs, all ones, or a zero at the final bit. |
 | `Query` | One count or predicate on the named input pattern. |
 | `Equal` | One equality comparison, with identical inputs or a mismatch at bit 0 or bit N-1. |
 | `Segment/*/Batch32` | Apply a shift or binary operation to 32 segments in existing backing storage. |
@@ -86,6 +87,11 @@ queries are omitted because the two APIs give different answers for those cases.
 Chained expressions use each library's normal evaluation rules. The materialized
 variant additionally places an optimization barrier on the intermediate so that
 the compiler must store it, including for `std::bitset`.
+
+`Expression/AndAll` also uses normal evaluation rules, with no intermediate
+barrier. Random inputs exercise early failure; all-ones and last-zero inputs
+require a full scan of the lazy expression. Empty queries are omitted because
+the APIs differ. Repeated inputs give predictable branch outcomes.
 
 ## Coverage
 

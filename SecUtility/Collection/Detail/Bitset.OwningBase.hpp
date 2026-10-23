@@ -12,10 +12,11 @@ namespace SecUtility
 	// Owns contiguous words, with zero head padding and cleared tail padding.
 	// Concrete owners provide storage and size; the common API stays in BitsetBase.
 	template <typename Derived>
-	class OwningBitsetBase : public BitsetBase<Derived>
+	class OwningBitsetBase : public WordAlignedBitsetBase<Derived>
 	{
-		using Base = BitsetBase<Derived>;
+		using Base = WordAlignedBitsetBase<Derived>;
 		friend Derived;
+		friend BitsetBase<Derived>;
 		friend Base;
 		template <typename>
 		friend class OwningBitsetBase;
@@ -45,6 +46,17 @@ namespace SecUtility
 		constexpr std::uint64_t UnpaddedBlock_Impl(const std::size_t i) const SEC_NOEXCEPT
 		{
 			return Block(i);
+		}
+
+		constexpr std::size_t OneCount_Impl() const noexcept
+		{
+			// Cleared padding permits a single reduction over the storage words.
+			std::size_t count = 0;
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				count += Detail::Bitset::PopCount(Block(i));
+			}
+			return count;
 		}
 
 		template <typename OtherDerived>
@@ -86,6 +98,7 @@ namespace SecUtility
 			}
 		}
 
+		// Cleared tail padding permits raw comparisons, without a final mask.
 		constexpr bool IsAllOnes_Impl() const noexcept
 		{
 			// Owning storage has no head padding; only the last block can be partial.

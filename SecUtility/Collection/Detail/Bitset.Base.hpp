@@ -45,6 +45,9 @@ namespace SecUtility
 		friend class BitsetBase;
 
 		template <typename>
+		friend class WordAlignedBitsetBase;
+
+		template <typename>
 		friend class OwningBitsetBase;
 
 		template <typename>
@@ -503,13 +506,7 @@ namespace SecUtility
 		// ----------------------------------------------------------
 		constexpr std::size_t OneCount() const noexcept
 		{
-			std::size_t count = 0;
-			for (std::size_t i = 0; i < BlockCount(); ++i)
-			{
-				count += Traits<Derived>::IsMaskedForRead ? Detail::Bitset::PopCount(Block(i))
-				                                          : Detail::Bitset::PopCount(MaskOfBlock(i) & Block(i));
-			}
-			return count;
+			return AsDerived().OneCount_Impl();
 		}
 
 		constexpr std::size_t ZeroCount() const noexcept
@@ -857,6 +854,17 @@ namespace SecUtility
 			{
 				Block(i) = MergeMaskedBlock(Block(i), ~Block(i), masks(i));
 			}
+		}
+
+		constexpr std::size_t OneCount_Impl() const noexcept
+		{
+			std::size_t count = 0;
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				count += Traits<Derived>::IsMaskedForRead ? Detail::Bitset::PopCount(Block(i))
+				                                          : Detail::Bitset::PopCount(MaskOfBlock(i) & Block(i));
+			}
+			return count;
 		}
 
 		constexpr bool IsAllOnes_Impl() const noexcept

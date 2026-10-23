@@ -1014,6 +1014,7 @@ TEMPLATE_TEST_CASE("Owning bitset API through base references",
 	}();
 	const std::size_t size = bs.Size();
 	BitsetBase<TestType>& base = bs;
+	WordAlignedBitsetBase<TestType>& alignedBase = bs;
 	OwningBitsetBase<TestType>& owningBase = bs;
 	const BitsetBase<TestType>& constBase = bs;
 	const bool nonempty = size != 0;
@@ -1053,6 +1054,8 @@ TEMPLATE_TEST_CASE("Owning bitset API through base references",
 	CHECK(&(base.template operator=<DynamicBitset>(source)) == &bs);
 	check(true);
 	CHECK(&(owningBase = ~source) == &bs);
+	check(false);
+	CHECK(&(alignedBase = ~source) == &bs);
 	check(false);
 	CHECK(&(base |= source) == &bs);
 	check(true);
@@ -1582,6 +1585,193 @@ TEMPLATE_TEST_CASE("Bitset predicates at word boundaries",
 		const auto size = TestType{}.Size();
 		DynamicBitset backing(size + 64, true);
 		exercise(backing.Segment(head, size));
+	}
+}
+
+TEMPLATE_TEST_CASE("Word-aligned expressions share logical read kernels",
+                   "[bitset][word-aligned]",
+                   (Bitset<0>),
+                   (Bitset<1>),
+                   (Bitset<63>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<127>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<257>))
+{
+	using AndExpr = decltype(std::declval<const TestType&>() & std::declval<const DynamicBitset&>());
+	using NestedExpr = decltype(std::declval<AndExpr>() | ~std::declval<const TestType&>());
+	using View = decltype(std::declval<TestType&>().Segment(0, 0));
+	using ViewExpr = decltype(std::declval<View>() & std::declval<const TestType&>());
+	using NotView = decltype(~std::declval<View>());
+	STATIC_REQUIRE(std::is_base_of_v<WordAlignedBitsetBase<TestType>, OwningBitsetBase<TestType>>);
+	STATIC_REQUIRE(std::is_empty_v<WordAlignedBitsetBase<TestType>>);
+	STATIC_REQUIRE(std::is_base_of_v<WordAlignedBitsetBase<AndExpr>, AndExpr>);
+	STATIC_REQUIRE(std::is_base_of_v<WordAlignedBitsetBase<NestedExpr>, NestedExpr>);
+	STATIC_REQUIRE_FALSE(std::is_base_of_v<OwningBitsetBase<AndExpr>, AndExpr>);
+	STATIC_REQUIRE_FALSE(std::is_base_of_v<WordAlignedBitsetBase<View>, View>);
+	STATIC_REQUIRE_FALSE(std::is_base_of_v<WordAlignedBitsetBase<ViewExpr>, ViewExpr>);
+	STATIC_REQUIRE_FALSE(std::is_base_of_v<WordAlignedBitsetBase<NotView>, NotView>);
+	STATIC_REQUIRE(std::is_same_v<Detail::Bitset::BitsetExpressionBase<AndExpr, const TestType&, const DynamicBitset&>,
+	                              WordAlignedBitsetBase<AndExpr>>);
+
+	TestType a;
+	const std::size_t size = a.Size();
+	DynamicBitset b(size);
+	const auto verify = [size](const auto& expr, const std::string& expected)
+	{
+		using Expr = std::decay_t<decltype(expr)>;
+		const std::size_t ones = static_cast<std::size_t>(std::count(expected.begin(), expected.end(), '1'));
+		const BitsetBase<Expr>& base = expr;
+		CHECK(base.OneCount() == ones);
+		CHECK(base.ZeroCount() == size - ones);
+		CHECK(base.IsAllOnes() == (size != 0 && ones == size));
+		CHECK(base.IsAllZeros() == (size != 0 && ones == 0));
+		CHECK(base.HasOnes() == (ones != 0));
+		CHECK(base.HasZeros() == (ones != size));
+		if constexpr (std::is_base_of_v<WordAlignedBitsetBase<Expr>, Expr>)
+		{
+			const WordAlignedBitsetBase<Expr>& alignedBase = expr;
+			CHECK(alignedBase.OneCount() == ones);
+			CHECK(alignedBase.IsAllOnes() == base.IsAllOnes());
+			CHECK(alignedBase.IsAllZeros() == base.IsAllZeros());
+		}
+
+		DynamicBitset oracle(size);
+		for (std::size_t i = 0; i != size; ++i)
+		{
+			oracle[i] = expected[i] == '1';
+		}
+		CHECK(expr == oracle);
+		CHECK(oracle == expr);
+		CHECK(expr == ~~expr);
+		CHECK_FALSE(expr == DynamicBitset(size + 1));
+		if (size != 0)
+		{
+			oracle.Flip(0);
+			CHECK_FALSE(expr == oracle);
+			CHECK_FALSE(oracle == expr);
+			oracle.Flip(0);
+			oracle.Flip(size - 1);
+			CHECK_FALSE(expr == oracle);
+			CHECK_FALSE(oracle == expr);
+		}
+		for (const std::size_t head : {0u, 1u, 31u, 63u})
+		{
+			CAPTURE(head);
+			DynamicBitset backing(size + 128, true);
+			auto view = backing.Segment(64 + head, size);
+			view = expr;
+			CHECK(view.ToString(false) == expected);
+			CHECK(view == expr);
+			CHECK(expr == view);
+			CHECK(backing.OneCount() == 128 + ones);
+		}
+	};
+
+	for (int pattern = 0; pattern < 5; ++pattern)
+	{
+		CAPTURE(size, pattern);
+		auto left = RandomBitString(size, 42);
+		auto right = RandomBitString(size, 43);
+		for (std::size_t i = 0; i != size; ++i)
+		{
+			if (pattern != 2)
+			{
+				left[i] = pattern == 0 || (pattern == 3 && i == 0) || (pattern == 4 && i + 1 == size) ? '0' : '1';
+				right[i] = pattern == 0 ? '0' : '1';
+			}
+			a[i] = left[i] == '1';
+			b[i] = right[i] == '1';
+		}
+		std::string both(size, '0'), either(size, '0'), different(size, '0'), complement(size, '0');
+		for (std::size_t i = 0; i != size; ++i)
+		{
+			both[i] = left[i] == '1' && right[i] == '1' ? '1' : '0';
+			either[i] = left[i] == '1' || right[i] == '1' ? '1' : '0';
+			different[i] = left[i] != right[i] ? '1' : '0';
+			complement[i] = both[i] == '0' ? '1' : '0';
+		}
+		const TestType& ca = a;
+		const DynamicBitset& cb = b;
+		verify(ca & cb, both);
+		verify(ca | cb, either);
+		verify(ca ^ cb, different);
+		verify(~(ca & cb), complement);
+		verify((ca & cb) | (ca ^ cb), either);
+		verify((ca & cb) & ca, both);
+		verify((~ca & cb) | (ca & ~cb), different);
+		verify(~(~ca | ~cb), both);
+		verify(ca.Segment(0, size) & cb, both);
+	}
+}
+
+// Its physical representation is deliberately unavailable. The shared read
+// kernels must use logical words even when a type reports a nonzero head.
+struct LogicalWordBitset : WordAlignedBitsetBase<LogicalWordBitset>
+{
+	LogicalWordBitset(const std::size_t size, const std::size_t head, const bool ones)
+	    : size(size), head(head), words(Detail::Bitset::BlocksFor(size), ones ? ~std::uint64_t{0} : 0)
+	{
+		if (!words.empty() && !ones)
+		{
+			words.back() = ~Detail::Bitset::TailMask(size);
+		}
+	}
+	std::size_t Size() const noexcept
+	{
+		return size;
+	}
+	std::size_t HeadPaddingBitCount() const noexcept
+	{
+		return head;
+	}
+	std::uint64_t UnpaddedBlock_Impl(const std::size_t i) const
+	{
+		return words.at(i);
+	}
+	std::uint64_t Block(std::size_t) const = delete;
+	std::size_t size;
+	std::size_t head;
+	std::vector<std::uint64_t> words;
+};
+
+namespace SecUtility
+{
+	template <>
+	struct Traits<LogicalWordBitset>
+	{
+		static constexpr bool IsOwning = false;
+		static constexpr bool IsNestedByRef = true;
+		static constexpr bool IsCheaplyRealignable = false;
+		static constexpr bool IsMaskedForRead = false;
+		using EvaluatedType = DynamicBitset;
+	};
+}
+
+TEST_CASE("Word-aligned kernels depend only on logical words", "[bitset][word-aligned]")
+{
+	for (const std::size_t size : {0u, 1u, 63u, 64u, 65u, 127u, 128u, 129u, 257u})
+	{
+		for (const std::size_t head : {0u, 1u, 31u, 63u})
+		{
+			for (const bool ones : {false, true})
+			{
+				CAPTURE(size, head, ones);
+				const LogicalWordBitset value(size, head, ones);
+				const DynamicBitset expected(size, ones);
+				CHECK(value.IsAllOnes() == (size != 0 && ones));
+				CHECK(value.IsAllZeros() == (size != 0 && !ones));
+				CHECK(value.OneCount() == (ones ? size : 0));
+				CHECK(value.ZeroCount() == (ones ? 0 : size));
+				CHECK((value == expected));
+				CHECK((expected == value));
+				CHECK(((value & expected) == expected));
+				CHECK((~value).OneCount() == (ones ? 0 : size));
+				CHECK((~value).IsAllOnes() == (size != 0 && !ones));
+			}
+		}
 	}
 }
 

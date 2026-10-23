@@ -5,6 +5,49 @@
 
 namespace
 {
+	enum class AllPattern
+	{
+		Random,
+		Ones,
+		LastZero
+	};
+
+	template <typename T, std::size_t N>
+	void BM_ExpressionAll(benchmark::State& state, const AllPattern pattern)
+	{
+		auto a = RandomBitset<T, N>();
+		auto b = RandomBitset<T, N>(43);
+		if (pattern != AllPattern::Random)
+		{
+			for (std::size_t i = 0; i < N; ++i)
+			{
+				a[i] = true;
+				b[i] = true;
+			}
+			if (pattern == AllPattern::LastZero)
+			{
+				b[N - 1] = false;
+			}
+		}
+		for (auto _ : state)
+		{
+			benchmark::DoNotOptimize(a);
+			benchmark::DoNotOptimize(b);
+			bool result = [&]
+			{
+				if constexpr (IsStdBitset<T>::value)
+				{
+					return (a & b).all();
+				}
+				else
+				{
+					return (a & b).IsAllOnes();
+				}
+			}();
+			benchmark::DoNotOptimize(result);
+		}
+	}
+
 	template <typename T>
 	auto Evaluate(const T& expression)
 	{
@@ -52,6 +95,17 @@ namespace
 		const auto suffix = "/" + type + "/" + std::to_string(N);
 		benchmark::RegisterBenchmark("Expression/Chained" + suffix, &BM_Expression<T, N, false>);
 		benchmark::RegisterBenchmark("Expression/Materialized" + suffix, &BM_Expression<T, N, true>);
+		// Empty all queries have different semantics in the two APIs.
+		if constexpr (N != 0)
+		{
+			for (const auto& pattern : {std::pair{AllPattern::Random, "Random"},
+			                            std::pair{AllPattern::Ones, "Ones"},
+			                            std::pair{AllPattern::LastZero, "LastZero"}})
+			{
+				benchmark::RegisterBenchmark(
+				        "Expression/AndAll" + suffix + "/" + pattern.second, &BM_ExpressionAll<T, N>, pattern.first);
+			}
+		}
 	}
 
 	template <std::size_t N>

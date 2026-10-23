@@ -371,9 +371,10 @@ namespace SecUtility
 
 
 	template <typename Nested>
-	class Detail::Bitset::BitsetNotExpr : public BitsetBase<BitsetNotExpr<Nested>>
+	class Detail::Bitset::BitsetNotExpr : public BitsetExpressionBase<BitsetNotExpr<Nested>, Nested>
 	{
-		using Base = BitsetBase<BitsetNotExpr>;
+		using Base = BitsetExpressionBase<BitsetNotExpr, Nested>;
+		friend BitsetBase<BitsetNotExpr>;
 		friend Base;
 
 		friend BitsetBase<BitsetNotExpr<std::remove_const_t<Nested>>>;
@@ -441,9 +442,11 @@ namespace SecUtility
 
 
 	template <typename Op, typename Lhs, typename Rhs>
-	class Detail::Bitset::BitsetBinaryExpr : public BitsetBase<BitsetBinaryExpr<Op, Lhs, Rhs>>
+	class Detail::Bitset::BitsetBinaryExpr
+	    : public BitsetExpressionBase<BitsetBinaryExpr<Op, Lhs, Rhs>, Lhs, Rhs>
 	{
-		using Base = BitsetBase<BitsetBinaryExpr>;
+		using Base = BitsetExpressionBase<BitsetBinaryExpr, Lhs, Rhs>;
+		friend BitsetBase<BitsetBinaryExpr>;
 		friend Base;
 
 		friend BitsetBase<BitsetBinaryExpr<Op, std::remove_const_t<Lhs>, Rhs>>;
