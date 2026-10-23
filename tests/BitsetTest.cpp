@@ -1855,6 +1855,150 @@ TEST_CASE("Logical scans ignore physical alignment and dirty tail bits", "[bitse
 	}
 }
 
+// Models bits [7, 49) set in a 129-bit operand. Deleted word reads make a
+// fallback to scanning the complement a compile-time regression.
+struct ComplementQuerySource : BitsetBase<ComplementQuerySource>
+{
+	constexpr ComplementQuerySource() noexcept
+	{
+	}
+	constexpr std::size_t Size() const noexcept
+	{
+		return 129;
+	}
+	constexpr bool IsAllOnes_Impl() const noexcept
+	{
+		return false;
+	}
+	constexpr bool IsAllZeros_Impl() const noexcept
+	{
+		return false;
+	}
+	constexpr std::size_t OneCount_Impl() const noexcept
+	{
+		return 42;
+	}
+	constexpr std::size_t TrailingZeroCount_Impl() const noexcept
+	{
+		return 7;
+	}
+	constexpr std::size_t LeadingZeroCount_Impl() const noexcept
+	{
+		return 80;
+	}
+	constexpr std::size_t IndexOfNextOne_Impl(const std::size_t pos) const noexcept
+	{
+		return pos >= 48 ? Size() : std::max(std::size_t{7}, pos + 1);
+	}
+	constexpr std::size_t IndexOfPreviousOne_Impl(const std::size_t pos) const noexcept
+	{
+		return pos <= 7 ? Size() : std::min(std::size_t{48}, pos - 1);
+	}
+	std::uint64_t Block(std::size_t) const = delete;
+	std::uint64_t UnpaddedBlock_Impl(std::size_t) const = delete;
+};
+
+namespace SecUtility
+{
+	template <>
+	struct Traits<ComplementQuerySource>
+	{
+		static constexpr bool IsOwning = false;
+		static constexpr bool IsNestedByRef = true;
+		static constexpr bool IsCheaplyRealignable = false;
+		static constexpr bool IsMaskedForRead = false;
+		using EvaluatedType = DynamicBitset;
+	};
+}
+
+TEST_CASE("Complement queries delegate without reading operand words", "[bitset][complement]")
+{
+	const ComplementQuerySource source;
+	const auto complement = ~source;
+	const BitsetBase<std::decay_t<decltype(complement)>>& base = complement;
+	CHECK_FALSE(base.IsAllOnes());
+	CHECK_FALSE(base.IsAllZeros());
+	CHECK(base.HasOnes());
+	CHECK(base.HasZeros());
+	CHECK(base.OneCount() == 87);
+	CHECK(base.ZeroCount() == 42);
+	CHECK(base.TrailingOneCount() == 7);
+	CHECK(base.LeadingOneCount() == 80);
+	CHECK(base.IndexOfFirstZero() == 7);
+	CHECK(base.IndexOfLastZero() == 48);
+	CHECK(base.IndexOfNextZero(17) == 18);
+	CHECK(base.IndexOfNextZero(48) == 129);
+	CHECK(base.IndexOfPreviousZero(17) == 16);
+	CHECK(base.IndexOfPreviousZero(7) == 129);
+	CHECK((~complement).OneCount() == 42);
+}
+
+TEMPLATE_TEST_CASE("Complement delegation preserves owning and view queries",
+                   "[bitset][complement]",
+                   (Bitset<0>),
+                   (Bitset<1>),
+                   (Bitset<63>),
+                   (Bitset<64>),
+                   (Bitset<65>),
+                   (Bitset<127>),
+                   (Bitset<128>),
+                   (Bitset<129>),
+                   (Bitset<257>))
+{
+	TestType owner;
+	const std::size_t size = owner.Size();
+	DynamicBitset dynamic(size), ones(size, true);
+	const auto verify = [size](const auto& input, const std::string& expected)
+	{
+		auto inverse = expected;
+		for (char& bit : inverse)
+		{
+			bit = bit == '0' ? '1' : '0';
+		}
+		const auto complement = ~input;
+		const BitsetBase<std::decay_t<decltype(complement)>>& base = complement;
+		const auto count = static_cast<std::size_t>(std::count(inverse.begin(), inverse.end(), '1'));
+		CHECK(base.OneCount() == count);
+		CHECK(base.ZeroCount() == size - count);
+		CHECK(base.IsAllOnes() == (size != 0 && count == size));
+		CHECK(base.IsAllZeros() == (size != 0 && count == 0));
+		CHECK(base.HasOnes() == (count != 0));
+		CHECK(base.HasZeros() == (count != size));
+		VerifyBitsetScans(base, inverse);
+		CHECK((~complement).OneCount() == size - count);
+		VerifyBitsetScans(~complement, expected);
+	};
+	for (int pattern = 0; pattern < 5; ++pattern)
+	{
+		CAPTURE(size, pattern);
+		auto expected = RandomBitString(size, 42);
+		for (std::size_t i = 0; i != size; ++i)
+		{
+			if (pattern != 2)
+			{
+				expected[i] = pattern == 1 || (pattern == 3 && i == 0) || (pattern == 4 && i + 1 == size) ? '1' : '0';
+			}
+			owner[i] = expected[i] == '1';
+			dynamic[i] = expected[i] == '1';
+		}
+		verify(owner, expected);
+		verify(dynamic, expected);
+		verify((owner & ones) | dynamic, expected);
+		for (const std::size_t head : {0u, 11u, 63u})
+		{
+			CAPTURE(head);
+			DynamicBitset backing(size + 128, true);
+			auto view = backing.Segment(64 + head, size);
+			view = owner;
+			verify(view, expected);
+			verify(view.Segment(0, size), expected);
+			verify((view & ones) | dynamic, expected);
+			CHECK(backing.OneCount()
+			      == 128 + static_cast<std::size_t>(std::count(expected.begin(), expected.end(), '1')));
+		}
+	}
+}
+
 TEST_CASE("OneCount and ZeroCount")
 {
 	const std::size_t size = GENERATE(0, 1, 4, 42, 69, 73, 420);

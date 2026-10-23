@@ -407,6 +407,53 @@ namespace SecUtility
 			return ~static_cast<const BaseOfNested&>(m_Nested).UnpaddedBlock(index);
 		}
 
+		constexpr bool IsAllOnes_Impl() const noexcept
+		{
+			if constexpr (std::is_same_v<Base, WordAlignedBitsetBase<BitsetNotExpr>>)
+			{
+				// Splitting off the tail word preserves vectorization that some
+				// operands' raw all-zero loops lose at partial-word sizes.
+				return Base::IsAllOnes_Impl();
+			}
+			else
+			{
+				return m_Nested.IsAllZeros();
+			}
+		}
+
+		constexpr bool IsAllZeros_Impl() const noexcept
+		{
+			return m_Nested.IsAllOnes();
+		}
+
+		constexpr std::size_t OneCount_Impl() const noexcept
+		{
+			return m_Nested.ZeroCount();
+		}
+
+		// Delegate toward the direct scans. The opposite directions stay in Base:
+		// a general view's one-run/zero-index fallback constructs a complement,
+		// so swapping those directions here too would recurse back into this type.
+		constexpr std::size_t TrailingOneCount_Impl() const noexcept
+		{
+			return m_Nested.TrailingZeroCount();
+		}
+
+		constexpr std::size_t LeadingOneCount_Impl() const noexcept
+		{
+			return m_Nested.LeadingZeroCount();
+		}
+
+		constexpr std::size_t IndexOfNextZero_Impl(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			return m_Nested.IndexOfNextOne(pos);
+		}
+
+		constexpr std::size_t IndexOfPreviousZero_Impl(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			return m_Nested.IndexOfPreviousOne(pos);
+		}
+
 		/* CRTP VIRTUAL */ constexpr std::size_t HeadPaddingBitCount() const noexcept  // corresponds to trailing
 		{
 			return static_cast<BaseOfNested&>(m_Nested).HeadPaddingBitCount();

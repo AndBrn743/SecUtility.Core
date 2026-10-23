@@ -163,6 +163,7 @@ namespace
 		RegisterReadForm<T, N, ReadForm::Not>(type);
 		RegisterReadForm<T, N, ReadForm::And>(type);
 		RegisterReadForm<T, N, ReadForm::Nested>(type);
+		RegisterReadForm<T, N, ReadForm::NotNested>(type);
 		if constexpr (!IsStdBitset<T>::value)
 		{
 			for (const std::size_t head : {0u, 11u, 63u})

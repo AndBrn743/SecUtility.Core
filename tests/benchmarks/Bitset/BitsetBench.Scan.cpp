@@ -218,6 +218,7 @@ namespace
 		RegisterScanForm<T, N, ReadForm::Not>(type);
 		RegisterScanForm<T, N, ReadForm::And>(type);
 		RegisterScanForm<T, N, ReadForm::Nested>(type);
+		RegisterScanForm<T, N, ReadForm::NotNested>(type);
 		for (const std::size_t head : {0u, 11u, 63u})
 		{
 			RegisterScanForm<T, N, ReadForm::View>(type, head);

@@ -13,6 +13,7 @@ namespace
 		Not,
 		And,
 		Nested,
+		NotNested,
 		View,
 		NotView,
 		ViewAnd
@@ -51,6 +52,8 @@ namespace
 				return "And";
 			case ReadForm::Nested:
 				return "Nested";
+			case ReadForm::NotNested:
+				return "NotNested";
 			case ReadForm::View:
 				return "View";
 			case ReadForm::NotView:
@@ -118,7 +121,8 @@ namespace
 			{
 				const bool value = ReadPatternBit(pattern, i, N, rng);
 				expected[i] = value;
-				a[i] = Form == ReadForm::Not ? !value : Form == ReadForm::ViewAnd || value;
+				a[i] = Form == ReadForm::Not || Form == ReadForm::NotNested ? !value
+				                                                            : Form == ReadForm::ViewAnd || value;
 				b[i] = true;
 				c[i] = false;
 				if constexpr (UsesReadView<Form>)
@@ -138,11 +142,11 @@ namespace
 			{
 				benchmark::DoNotOptimize(a);
 			}
-			if constexpr (Form == ReadForm::And || Form == ReadForm::Nested)
+			if constexpr (Form == ReadForm::And || Form == ReadForm::Nested || Form == ReadForm::NotNested)
 			{
 				benchmark::DoNotOptimize(b);
 			}
-			if constexpr (Form == ReadForm::Nested)
+			if constexpr (Form == ReadForm::Nested || Form == ReadForm::NotNested)
 			{
 				benchmark::DoNotOptimize(c);
 			}
@@ -166,6 +170,10 @@ namespace
 			else if constexpr (Form == ReadForm::Nested)
 			{
 				return function((a & b) | c);
+			}
+			else if constexpr (Form == ReadForm::NotNested)
+			{
+				return function(~((a & b) | c));
 			}
 			else if constexpr (Form == ReadForm::View)
 			{

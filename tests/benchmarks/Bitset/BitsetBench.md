@@ -46,14 +46,14 @@ earlier `BM_*` names. Use filters to select a manageable comparison:
 
 # Counts and predicates on owning, complemented, nested, and view expressions.
 ./build-bench/tests/BitsetBench \
-  --benchmark_filter='^ExpressionRead/(Count|All|None)/(Owner|Not|And|Nested)/'
+  --benchmark_filter='^ExpressionRead/(Count|All|None)/(Owner|Not|And|Nested|NotNested)/'
 
 # Expression equality, including both operand orders and early/late mismatches.
 ./build-bench/tests/BitsetBench --benchmark_filter='^ExpressionRead/Equal'
 
 # Compare an owner with expressions over it, without crossing every size.
 ./build-bench/tests/BitsetBench \
-  --benchmark_filter='^Scan/(LeadingZeros|TrailingZeros)/(Owner|Not|And|Nested)/(Static|Dynamic)/(65|5409)/'
+  --benchmark_filter='^Scan/(LeadingZeros|TrailingZeros)/(Owner|Not|And|Nested|NotNested)/(Static|Dynamic)/(65|5409)/'
 
 # Cursor searches include positions at the edges, middle, and word boundaries.
 ./build-bench/tests/BitsetBench \
@@ -123,6 +123,7 @@ identify the operand/backing storage type. The forms are:
 | `Not` | `~a`. |
 | `And` | `a & b`. |
 | `Nested` | `(a & b) | c`. |
+| `NotNested` | `~((a & b) | c)`. |
 | `View` | A const segment with the named head offset. |
 | `NotView` | The complement of that segment. |
 | `ViewAnd` | That segment AND an owning operand. |
@@ -143,16 +144,17 @@ Pattern names describe the **logical result**, not the underlying operands:
 and `SparseZeros`. Sparse ones occur every 257 bits, including bit N/2;
 `SparseZeros` is their complement. Fixtures invert the source for complement
 forms, use an all-one second operand for AND, and add an all-zero third operand
-for nested OR. Input barriers prevent those operands becoming compile-time
-identities. This controls result density and scan distances across forms; it
-does not model independent random operands. Repeated inputs make branch outcomes
-predictable. An untimed indexed reference check rejects incorrect query results
-through Google Benchmark's error reporting.
+for nested OR. `NotNested` inverts the first operand too, so the complemented
+nested result still matches the named pattern. Input barriers prevent those
+operands becoming compile-time identities. This controls result density and scan
+distances across forms; it does not model independent random operands. Repeated
+inputs make branch outcomes predictable. An untimed indexed reference check
+rejects incorrect query results through Google Benchmark's error reporting.
 
 `ExpressionRead` includes `Count`, `All`, `Any`, and `None`. Equality uses the
 random result with `Same`, `FirstMismatch`, and `LastMismatch` targets, comparing
 against an existing owner in both operand orders (`EqualExprFirst` and
-`EqualOwnerFirst`). `Std` is available for the four forms without views. Empty
+`EqualOwnerFirst`). `Std` is available for the five forms without views. Empty
 all/none cases and empty mismatches are omitted; other empty cases use only the
 random pattern.
 
