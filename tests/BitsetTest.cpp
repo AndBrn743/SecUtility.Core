@@ -77,6 +77,46 @@ static void VerifyBitset(const BitsetType& bs, const std::string& expected)
 	}
 }
 
+template <typename BitsetType>
+static void VerifyBitsetScans(const BitsetType& bs, const std::string& expected)
+{
+	const std::size_t size = expected.size();
+	const auto index = [size](const std::size_t pos) { return pos == std::string::npos ? size : pos; };
+	const std::size_t firstOne = index(expected.find('1'));
+	const std::size_t firstZero = index(expected.find('0'));
+	const std::size_t lastOne = index(expected.rfind('1'));
+	const std::size_t lastZero = index(expected.rfind('0'));
+	CHECK(bs.TrailingZeroCount() == firstOne);
+	CHECK(bs.TrailingOneCount() == firstZero);
+	CHECK(bs.LeadingZeroCount() == (lastOne == size ? size : size - 1 - lastOne));
+	CHECK(bs.LeadingOneCount() == (lastZero == size ? size : size - 1 - lastZero));
+	CHECK(bs.IndexOfFirstOne() == firstOne);
+	CHECK(bs.IndexOfFirstZero() == firstZero);
+	CHECK(bs.IndexOfLastOne() == lastOne);
+	CHECK(bs.IndexOfLastZero() == lastZero);
+	using Derived = std::decay_t<decltype(bs.AsDerived())>;
+	if constexpr (std::is_base_of_v<WordAlignedBitsetBase<Derived>, Derived>)
+	{
+		CHECK(bs.IndexOfNextOne(std::numeric_limits<std::size_t>::max()) == size);
+		CHECK(bs.IndexOfNextZero(std::numeric_limits<std::size_t>::max()) == size);
+	}
+	std::vector<std::size_t> positions{0, 1, 62, 63, 64, 65, 126, 127, 128, size / 2, size == 0 ? 0 : size - 1, size};
+	std::sort(positions.begin(), positions.end());
+	positions.erase(std::unique(positions.begin(), positions.end()), positions.end());
+	for (const auto pos : positions)
+	{
+		if (pos > size)
+		{
+			continue;
+		}
+		CAPTURE(size, pos);
+		CHECK(bs.IndexOfNextOne(pos) == index(expected.find('1', pos + 1)));
+		CHECK(bs.IndexOfNextZero(pos) == index(expected.find('0', pos + 1)));
+		CHECK(bs.IndexOfPreviousOne(pos) == (pos == 0 ? size : index(expected.rfind('1', pos - 1))));
+		CHECK(bs.IndexOfPreviousZero(pos) == (pos == 0 ? size : index(expected.rfind('0', pos - 1))));
+	}
+}
+
 
 // =============================================================================
 //  Test Construction
@@ -1020,6 +1060,7 @@ TEMPLATE_TEST_CASE("Owning bitset API through base references",
 	const bool nonempty = size != 0;
 	const auto check = [&](const bool value)
 	{
+		VerifyBitsetScans(constBase, std::string(size, value ? '1' : '0'));
 		CHECK(bs.ToString(false) == std::string(size, value ? '1' : '0'));
 		CHECK(constBase.OneCount() == (value ? size : 0));
 		CHECK(constBase.IsAllOnes() == (nonempty && value));
@@ -1624,6 +1665,7 @@ TEMPLATE_TEST_CASE("Word-aligned expressions share logical read kernels",
 		using Expr = std::decay_t<decltype(expr)>;
 		const std::size_t ones = static_cast<std::size_t>(std::count(expected.begin(), expected.end(), '1'));
 		const BitsetBase<Expr>& base = expr;
+		VerifyBitsetScans(base, expected);
 		CHECK(base.OneCount() == ones);
 		CHECK(base.ZeroCount() == size - ones);
 		CHECK(base.IsAllOnes() == (size != 0 && ones == size));
@@ -1761,6 +1803,7 @@ TEST_CASE("Word-aligned kernels depend only on logical words", "[bitset][word-al
 				CAPTURE(size, head, ones);
 				const LogicalWordBitset value(size, head, ones);
 				const DynamicBitset expected(size, ones);
+				VerifyBitsetScans(value, std::string(size, ones ? '1' : '0'));
 				CHECK(value.IsAllOnes() == (size != 0 && ones));
 				CHECK(value.IsAllZeros() == (size != 0 && !ones));
 				CHECK(value.OneCount() == (ones ? size : 0));
@@ -1770,6 +1813,43 @@ TEST_CASE("Word-aligned kernels depend only on logical words", "[bitset][word-al
 				CHECK(((value & expected) == expected));
 				CHECK((~value).OneCount() == (ones ? 0 : size));
 				CHECK((~value).IsAllOnes() == (size != 0 && !ones));
+			}
+		}
+	}
+}
+
+TEST_CASE("Logical scans ignore physical alignment and dirty tail bits", "[bitset][word-aligned][scan]")
+{
+	for (const std::size_t size : {1u, 63u, 64u, 65u, 127u, 128u, 129u, 257u})
+	{
+		for (const std::size_t head : {0u, 11u, 63u})
+		{
+			for (const bool ones : {false, true})
+			{
+				LogicalWordBitset bits(size, head, ones);
+				std::string expected(size, ones ? '1' : '0');
+				const WordAlignedBitsetBase<LogicalWordBitset>& base = bits;
+				for (std::size_t bit = 0; bit < size; ++bit)
+				{
+					CAPTURE(size, head, ones, bit);
+					bits.words[bit / 64] ^= std::uint64_t{1} << (bit % 64);
+					expected[bit] = ones ? '0' : '1';
+					VerifyBitsetScans(base, expected);
+					bits.words[bit / 64] ^= std::uint64_t{1} << (bit % 64);
+					expected[bit] = ones ? '1' : '0';
+				}
+				CHECK(base.IndexOfNextOne(std::numeric_limits<std::size_t>::max()) == size);
+				CHECK(base.IndexOfNextZero(std::numeric_limits<std::size_t>::max()) == size);
+				for (std::size_t pos = 0; pos <= size; ++pos)
+				{
+					CAPTURE(size, head, ones, pos);
+					const std::size_t next = pos + 1 < size ? pos + 1 : size;
+					const std::size_t previous = pos == 0 ? size : pos - 1;
+					CHECK(base.IndexOfNextOne(pos) == (ones ? next : size));
+					CHECK(base.IndexOfNextZero(pos) == (ones ? size : next));
+					CHECK(base.IndexOfPreviousOne(pos) == (ones ? previous : size));
+					CHECK(base.IndexOfPreviousZero(pos) == (ones ? size : previous));
+				}
 			}
 		}
 	}

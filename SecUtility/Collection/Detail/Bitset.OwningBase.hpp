@@ -59,6 +59,27 @@ namespace SecUtility
 			return count;
 		}
 
+		// Cleared tail padding permits the existing raw zero-run scans.
+		constexpr std::size_t TrailingZeroCount_Impl() const noexcept
+		{
+			return BitsetBase<Derived>::TrailingZeroCount_Impl();
+		}
+
+		constexpr std::size_t LeadingZeroCount_Impl() const noexcept
+		{
+			return BitsetBase<Derived>::LeadingZeroCount_Impl();
+		}
+
+		constexpr std::size_t IndexOfNextOne_Impl(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			// Preserve the raw owning search loop, guarding a wrapped cursor.
+			if (pos + 1 == 0)
+			{
+				return Size();
+			}
+			return BitsetBase<Derived>::IndexOfNextOne_Impl(pos);
+		}
+
 		template <typename OtherDerived>
 		constexpr void Assign_Impl(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
 		{

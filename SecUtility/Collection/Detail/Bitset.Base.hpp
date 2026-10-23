@@ -516,52 +516,22 @@ namespace SecUtility
 
 		constexpr std::size_t TrailingZeroCount() const noexcept
 		{
-			if (Size() == 0)
-			{
-				return 0;
-			}
-
-			for (std::size_t i = 0; i < BlockCount(); ++i)
-			{
-				if (const std::uint64_t block = Traits<Derived>::IsMaskedForRead ? Block(i) : Block(i) & MaskOfBlock(i);
-				    block != 0)
-				{
-					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(block)
-					       - HeadPaddingBitCount();
-				}
-			}
-
-			return Size();
+			return AsDerived().TrailingZeroCount_Impl();
 		}
 
 		constexpr std::size_t TrailingOneCount() const noexcept
 		{
-			return (~AsDerived()).TrailingZeroCount();
+			return AsDerived().TrailingOneCount_Impl();
 		}
 
 		constexpr std::size_t LeadingZeroCount() const noexcept
 		{
-			if (Size() == 0)
-			{
-				return 0;
-			}
-
-			for (std::size_t i = BlockCount(); i-- > 0;)
-			{
-				if (const std::uint64_t block = Traits<Derived>::IsMaskedForRead ? Block(i) : Block(i) & MaskOfBlock(i);
-				    block != 0)
-				{
-					return (BlockCount() - 1 - i) * Detail::Bitset::BitsPerBlock
-					       + Detail::Bitset::LeadingZeroCount(block) - TailPaddingBitCount();
-				}
-			}
-
-			return Size();
+			return AsDerived().LeadingZeroCount_Impl();
 		}
 
 		constexpr std::size_t LeadingOneCount() const noexcept
 		{
-			return (~AsDerived()).LeadingZeroCount();
+			return AsDerived().LeadingOneCount_Impl();
 		}
 
 
@@ -592,76 +562,22 @@ namespace SecUtility
 
 		constexpr std::size_t IndexOfNextOne(const std::size_t pos) const SEC_NOEXCEPT
 		{
-			if (pos + 1 >= Size())
-			{
-				return Size();
-			}
-
-			const std::size_t startBit = HeadPaddingBitCount() + pos + 1;
-			std::size_t blockIdx = startBit / Detail::Bitset::BitsPerBlock;
-			const std::size_t bitInBlk = startBit % Detail::Bitset::BitsPerBlock;
-
-			if (const std::uint64_t blk = Block(blockIdx) >> bitInBlk; blk != 0)
-			{
-				const std::size_t idx = startBit + Detail::Bitset::TrailingZeroCount(blk) - HeadPaddingBitCount();
-				// guards against over-counting caused by padding-bits leak into payload-bits segment
-				return idx < Size() ? idx : Size();
-			}
-
-			for (++blockIdx; blockIdx < BlockCount(); ++blockIdx)
-			{
-				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
-				{
-					const std::size_t idx = blockIdx * Detail::Bitset::BitsPerBlock
-					                        + Detail::Bitset::TrailingZeroCount(blk) - HeadPaddingBitCount();
-					// guards against over-counting caused by padding-bits leak into payload-bits segment
-					return idx < Size() ? idx : Size();
-				}
-			}
-			return Size();
+			return AsDerived().IndexOfNextOne_Impl(pos);
 		}
 
 		constexpr std::size_t IndexOfNextZero(const std::size_t pos) const SEC_NOEXCEPT
 		{
-			return (~AsDerived()).IndexOfNextOne(pos);
+			return AsDerived().IndexOfNextZero_Impl(pos);
 		}
 
 		constexpr std::size_t IndexOfPreviousOne(const std::size_t pos) const SEC_NOEXCEPT
 		{
-			if (pos == 0)
-			{
-				return Size();
-			}
-
-			const std::size_t endBit = HeadPaddingBitCount() + pos - 1;
-			std::size_t blockIdx = endBit / Detail::Bitset::BitsPerBlock;
-			const std::size_t bitInBlk = endBit % Detail::Bitset::BitsPerBlock;
-
-			if (const std::uint64_t blk = Block(blockIdx) << (Detail::Bitset::BitsPerBlock - bitInBlk - 1); blk != 0)
-			{
-				const auto idx = blockIdx * Detail::Bitset::BitsPerBlock + bitInBlk
-				                 - Detail::Bitset::LeadingZeroCount(blk) - HeadPaddingBitCount();
-				// guards against over-counting caused by padding-bits leak into payload-bits segment
-				return idx < Size() ? idx : Size();
-			}
-
-			while (blockIdx-- > 0)
-			{
-				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
-				{
-					const auto idx = blockIdx * Detail::Bitset::BitsPerBlock
-					                 + (Detail::Bitset::BitsPerBlock - 1 - Detail::Bitset::LeadingZeroCount(blk))
-					                 - HeadPaddingBitCount();
-					// guards against over-counting caused by padding-bits leak into payload-bits segment
-					return idx < Size() ? idx : Size();
-				}
-			}
-			return Size();
+			return AsDerived().IndexOfPreviousOne_Impl(pos);
 		}
 
 		constexpr std::size_t IndexOfPreviousZero(const std::size_t pos) const SEC_NOEXCEPT
 		{
-			return (~AsDerived()).IndexOfPreviousOne(pos);
+			return AsDerived().IndexOfPreviousZero_Impl(pos);
 		}
 
 
@@ -812,7 +728,7 @@ namespace SecUtility
 
 
 	private:
-		// Default kernels for views and expressions. Owning storage supplies specialized hooks.
+		// Default kernels for views and general expressions. Derived layers specialize hooks.
 		template <typename OtherDerived>
 		constexpr void Assign_Impl(const BitsetBase<OtherDerived>& other) SEC_NOEXCEPT
 		{
@@ -865,6 +781,130 @@ namespace SecUtility
 				                                          : Detail::Bitset::PopCount(MaskOfBlock(i) & Block(i));
 			}
 			return count;
+		}
+
+		constexpr std::size_t TrailingZeroCount_Impl() const noexcept
+		{
+			if (Size() == 0)
+			{
+				return 0;
+			}
+
+			for (std::size_t i = 0; i < BlockCount(); ++i)
+			{
+				if (const std::uint64_t block = Traits<Derived>::IsMaskedForRead ? Block(i) : Block(i) & MaskOfBlock(i);
+				    block != 0)
+				{
+					return i * Detail::Bitset::BitsPerBlock + Detail::Bitset::TrailingZeroCount(block)
+					       - HeadPaddingBitCount();
+				}
+			}
+
+			return Size();
+		}
+
+		constexpr std::size_t TrailingOneCount_Impl() const noexcept
+		{
+			return (~AsDerived()).TrailingZeroCount();
+		}
+
+		constexpr std::size_t LeadingZeroCount_Impl() const noexcept
+		{
+			if (Size() == 0)
+			{
+				return 0;
+			}
+
+			for (std::size_t i = BlockCount(); i-- > 0;)
+			{
+				if (const std::uint64_t block = Traits<Derived>::IsMaskedForRead ? Block(i) : Block(i) & MaskOfBlock(i);
+				    block != 0)
+				{
+					return (BlockCount() - 1 - i) * Detail::Bitset::BitsPerBlock
+					       + Detail::Bitset::LeadingZeroCount(block) - TailPaddingBitCount();
+				}
+			}
+
+			return Size();
+		}
+
+		constexpr std::size_t LeadingOneCount_Impl() const noexcept
+		{
+			return (~AsDerived()).LeadingZeroCount();
+		}
+
+		constexpr std::size_t IndexOfNextOne_Impl(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			if (pos + 1 >= Size())
+			{
+				return Size();
+			}
+
+			const std::size_t startBit = HeadPaddingBitCount() + pos + 1;
+			std::size_t blockIdx = startBit / Detail::Bitset::BitsPerBlock;
+			const std::size_t bitInBlk = startBit % Detail::Bitset::BitsPerBlock;
+
+			if (const std::uint64_t blk = Block(blockIdx) >> bitInBlk; blk != 0)
+			{
+				const std::size_t idx = startBit + Detail::Bitset::TrailingZeroCount(blk) - HeadPaddingBitCount();
+				// guards against over-counting caused by padding-bits leak into payload-bits segment
+				return idx < Size() ? idx : Size();
+			}
+
+			for (++blockIdx; blockIdx < BlockCount(); ++blockIdx)
+			{
+				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
+				{
+					const std::size_t idx = blockIdx * Detail::Bitset::BitsPerBlock
+					                        + Detail::Bitset::TrailingZeroCount(blk) - HeadPaddingBitCount();
+					// guards against over-counting caused by padding-bits leak into payload-bits segment
+					return idx < Size() ? idx : Size();
+				}
+			}
+			return Size();
+		}
+
+		constexpr std::size_t IndexOfNextZero_Impl(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			return (~AsDerived()).IndexOfNextOne(pos);
+		}
+
+		constexpr std::size_t IndexOfPreviousOne_Impl(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			if (pos == 0)
+			{
+				return Size();
+			}
+
+			const std::size_t endBit = HeadPaddingBitCount() + pos - 1;
+			std::size_t blockIdx = endBit / Detail::Bitset::BitsPerBlock;
+			const std::size_t bitInBlk = endBit % Detail::Bitset::BitsPerBlock;
+
+			if (const std::uint64_t blk = Block(blockIdx) << (Detail::Bitset::BitsPerBlock - bitInBlk - 1); blk != 0)
+			{
+				const auto idx = blockIdx * Detail::Bitset::BitsPerBlock + bitInBlk
+				                 - Detail::Bitset::LeadingZeroCount(blk) - HeadPaddingBitCount();
+				// guards against over-counting caused by padding-bits leak into payload-bits segment
+				return idx < Size() ? idx : Size();
+			}
+
+			while (blockIdx-- > 0)
+			{
+				if (const std::uint64_t blk = Block(blockIdx); blk != 0)
+				{
+					const auto idx = blockIdx * Detail::Bitset::BitsPerBlock
+					                 + (Detail::Bitset::BitsPerBlock - 1 - Detail::Bitset::LeadingZeroCount(blk))
+					                 - HeadPaddingBitCount();
+					// guards against over-counting caused by padding-bits leak into payload-bits segment
+					return idx < Size() ? idx : Size();
+				}
+			}
+			return Size();
+		}
+
+		constexpr std::size_t IndexOfPreviousZero_Impl(const std::size_t pos) const SEC_NOEXCEPT
+		{
+			return (~AsDerived()).IndexOfPreviousOne(pos);
 		}
 
 		constexpr bool IsAllOnes_Impl() const noexcept
