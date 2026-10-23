@@ -15,6 +15,8 @@ int main(int argc, char** argv)
 	BitsetBenchmark::RegisterQueries();
 	BitsetBenchmark::RegisterEquality();
 	BitsetBenchmark::RegisterSegments();
+	BitsetBenchmark::RegisterExpressionReads();
+	BitsetBenchmark::RegisterScans();
 	benchmark::Initialize(&argc, argv);
 	if (benchmark::ReportUnrecognizedArguments(argc, argv))
 	{

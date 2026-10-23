@@ -147,6 +147,8 @@ if (SECUTILITY_BUILD_BENCHMARKS)
             benchmarks/Bitset/BitsetBench.Bitwise.cpp
             benchmarks/Bitset/BitsetBench.WholeSet.cpp
             benchmarks/Bitset/BitsetBench.Expression.cpp
+            benchmarks/Bitset/BitsetBench.ExpressionRead.cpp
+            benchmarks/Bitset/BitsetBench.Scan.cpp
             benchmarks/Bitset/BitsetBench.Query.cpp
             benchmarks/Bitset/BitsetBench.Equality.cpp
             benchmarks/Bitset/BitsetBench.Segment.cpp)

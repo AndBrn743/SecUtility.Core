@@ -157,4 +157,6 @@ namespace BitsetBenchmark
 	void RegisterQueries();
 	void RegisterEquality();
 	void RegisterSegments();
+	void RegisterExpressionReads();
+	void RegisterScans();
 }
