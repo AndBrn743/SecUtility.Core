@@ -845,6 +845,147 @@ TEST_CASE(".ToString() and operator<<")
 	CHECK(string == bitString);
 }
 
+TEST_CASE("View mutations preserve boundaries at every word offset", "[bitset][view-kernel]")
+{
+	const std::size_t size = GENERATE(0, 1, 2, 63, 64, 65, 127, 128, 129, 257);
+	const std::size_t head = GENERATE(Catch::Generators::range(0u, 64u));
+	CAPTURE(size, head);
+	const std::size_t start = 64 + head;
+	const auto pattern = RandomBitString(size, 42);
+	DynamicBitset original(start + size + 65, true);
+	for (std::size_t i = 0; i < size; ++i)
+	{
+		original[start + i] = pattern[i] == '1';
+	}
+	const auto check = [&](const auto& backing, const auto& view, const std::string& expected)
+	{
+		CHECK(view.ToString(false) == expected);
+		CHECK(view.OneCount() == static_cast<std::size_t>(std::count(expected.begin(), expected.end(), '1')));
+		CHECK(backing.ToString(false) == std::string(start, '1') + expected + std::string(65, '1'));
+	};
+	std::vector<std::size_t> shifts{0, 1, 7, 63, 64, 65, 127, size, size + 1};
+	if (size != 0)
+	{
+		shifts.push_back(size - 1);
+	}
+	std::sort(shifts.begin(), shifts.end());
+	shifts.erase(std::unique(shifts.begin(), shifts.end()), shifts.end());
+	for (const auto shift : shifts)
+	{
+		for (const bool left : {false, true})
+		{
+			CAPTURE(shift, left);
+			auto backing = original;
+			auto outer = backing.Segment(64, head + size + 1);
+			auto view = outer.Segment(head, size);
+			std::string expected(size, '0');
+			if (shift < size)
+			{
+				expected = left ? std::string(shift, '0') + pattern.substr(0, size - shift)
+				                : pattern.substr(shift) + std::string(shift, '0');
+			}
+			auto& result = left ? (view <<= shift) : (view >>= shift);
+			CHECK(&result == &view);
+			check(backing, view, expected);
+		}
+	}
+	for (const int operation : {0, 1, 2})
+	{
+		CAPTURE(operation);
+		auto backing = original;
+		auto view = backing.Segment(start, size);
+		auto expected = pattern;
+		if (operation == 2)
+		{
+			view.FlipAll();
+			std::transform(expected.begin(),
+			               expected.end(),
+			               expected.begin(),
+			               [](const char c) { return c == '1' ? '0' : '1'; });
+		}
+		else
+		{
+			view.SetAll(operation != 0);
+			expected.assign(size, operation != 0 ? '1' : '0');
+		}
+		check(backing, view, expected);
+	}
+}
+
+TEST_CASE("View binary kernels handle boundary words and expression sources", "[bitset][view-kernel]")
+{
+	const std::size_t size = GENERATE(0, 1, 63, 64, 65, 127, 128, 129, 257);
+	const std::size_t destHead = GENERATE(0, 1, 11, 31, 63);
+	const std::size_t sourceHead = GENERATE(0, 1, 11, 31, 63);
+	CAPTURE(size, destHead, sourceHead);
+	const auto left = RandomBitString(size, 42);
+	const auto right = RandomBitString(size, 69);
+	// End the source allocation at the view: a realignment carry must not read another word.
+	DynamicBitset source(sourceHead + size, true);
+	for (std::size_t i = 0; i < size; ++i)
+	{
+		source[sourceHead + i] = right[i] == '1';
+	}
+	const auto sourceView = std::as_const(source).Segment(sourceHead, size);
+	const auto originalSource = source.ToString(false);
+	for (const int operation : {0, 1, 2, 3})
+	{
+		CAPTURE(operation);
+		const auto exercise = [&](const auto& rhs, const std::string& rhsPattern)
+		{
+			DynamicBitset destination(destHead + size + 1, true);
+			auto view = destination.Segment(destHead, size);
+			std::transform(left.begin(), left.end(), view.begin(), [](const char c) { return c == '1'; });
+			auto expected = left;
+			for (std::size_t i = 0; i < size; ++i)
+			{
+				const bool a = left[i] == '1';
+				const bool b = rhsPattern[i] == '1';
+				const bool bit = operation == 0 ? b : operation == 1 ? a && b : operation == 2 ? a || b : a != b;
+				expected[i] = bit ? '1' : '0';
+			}
+			switch (operation)
+			{
+				case 0:
+					view = rhs;
+					break;
+				case 1:
+					view &= rhs;
+					break;
+				case 2:
+					view |= rhs;
+					break;
+				case 3:
+					view ^= rhs;
+					break;
+			}
+			CHECK(view.ToString(false) == expected);
+			CHECK(destination.ToString(false) == std::string(destHead, '1') + expected + '1');
+			DynamicBitset expectedOwner(size);
+			std::transform(
+			        expected.begin(), expected.end(), expectedOwner.begin(), [](const char c) { return c == '1'; });
+			CHECK(view == expectedOwner);
+			CHECK(expectedOwner == view);
+			CHECK_FALSE(view != expectedOwner);
+			if (size != 0)
+			{
+				expectedOwner[0].Flip();
+				CHECK_FALSE(view == expectedOwner);
+				expectedOwner[0].Flip();
+				expectedOwner[size - 1].Flip();
+				CHECK_FALSE(expectedOwner == view);
+			}
+		};
+		exercise(sourceView, right);
+		auto inverted = right;
+		std::transform(
+		        inverted.begin(), inverted.end(), inverted.begin(), [](const char c) { return c == '1' ? '0' : '1'; });
+		exercise(~sourceView, inverted);
+		exercise(sourceView | ~sourceView, std::string(size, '1'));
+		CHECK(source.ToString(false) == originalSource);
+	}
+}
+
 TEMPLATE_TEST_CASE("Owning bitset API through base references",
                    "[bitset][owning-base]",
                    (Bitset<0>),

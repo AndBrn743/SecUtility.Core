@@ -188,7 +188,6 @@ namespace SecUtility
 		constexpr std::uint64_t ShiftedBlock(const int shift, const std::size_t i) const SEC_NOEXCEPT
 		{
 			if (const std::size_t count = BlockCount(); i >= count)
-
 			{
 				// Left realignment can add a block containing only carry bits.
 				// All other reads beyond the source contribute zero.
@@ -823,31 +822,40 @@ namespace SecUtility
 			BitwiseCombinationOp(other, [](std::uint64_t, const std::uint64_t rhs) { return rhs; });
 		}
 
+		// Merge active bits while preserving the storage outside a view.
+		// Owning destinations use this fallback when their source is a view or expression.
+		static constexpr std::uint64_t MergeMaskedBlock(const std::uint64_t original,
+		                                                const std::uint64_t value,
+		                                                const std::uint64_t mask) noexcept
+		{
+			if constexpr (Traits<Derived>::IsMaskedForRead)
+			{
+				return value & mask;
+			}
+			else
+			{
+				return (original & ~mask) | (value & mask);
+			}
+		}
+
 		constexpr void SetAll_Impl(const bool value) SEC_NOEXCEPT
 		{
+			const std::size_t count = BlockCount();
 			const auto masks = MakeBlockMaskCaches();
-			for (std::size_t i = 0; i < BlockCount(); ++i)
+			const std::uint64_t fill = value ? ~std::uint64_t{0} : std::uint64_t{0};
+			for (std::size_t i = 0; i < count; ++i)
 			{
-				if (value)
-				{
-					Block(i) |= masks(i);
-				}
-				else
-				{
-					Block(i) &= ~masks(i);
-				}
+				Block(i) = MergeMaskedBlock(Block(i), fill, masks(i));
 			}
 		}
 
 		constexpr void FlipAll_Impl() noexcept
 		{
+			const std::size_t count = BlockCount();
 			const auto masks = MakeBlockMaskCaches();
-			for (std::size_t i = 0; i < BlockCount(); ++i)
+			for (std::size_t i = 0; i < count; ++i)
 			{
-				const auto mask = masks(i);
-				const auto block = Block(i);
-				const auto flipped = ~block & mask;
-				Block(i) = (block & ~mask) | flipped;
+				Block(i) = MergeMaskedBlock(Block(i), ~Block(i), masks(i));
 			}
 		}
 
@@ -881,65 +889,38 @@ namespace SecUtility
 		{
 			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
-
+			const std::size_t count = BlockCount();
+			const std::size_t last = count - 1;
 			const auto masks = MakeBlockMaskCaches();
-			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
+			// Move high words first so in-place reads precede their overwrites.
 			if (bitShift == 0)
 			{
+				Block(last) = MergeMaskedBlock(Block(last), Block(last - blockShift), masks(last));
+				for (std::size_t i = last; i-- > blockShift;)
 				{
-					const std::size_t i = BlockCount() - 1;
-					const auto mask = masks(i);
-					const auto pad = Traits<Derived>::IsMaskedForRead ? 0 : Block(i) & ~mask;
-
-					const std::size_t src = i - blockShift;
-					const std::uint64_t val = Block(src);
-
-					Block(i) = pad | (val & mask);
-				}
-
-				for (std::size_t i = BlockCount() - 1; BlockCount() >= 2 && i-- > blockShift;)
-				{
-					const std::size_t src = i - blockShift;
-					Block(i) = Block(src);
+					Block(i) = Block(i - blockShift);
 				}
 			}
 			else
 			{
-				if (const std::size_t i = BlockCount() - 1; i > blockShift)
+				if (last > blockShift)
 				{
-					const auto mask = masks(i);
-					const auto pad = Block(i) & ~mask;
-
-					const std::size_t src = i - blockShift;
-					std::uint64_t val = Block(src) << bitShift;
-					const std::size_t carriedSrc = src - 1;
-					val |= Block(carriedSrc) >> (Detail::Bitset::BitsPerBlock - bitShift);
-
-					Block(i) = Traits<Derived>::IsMaskedForRead ? val & mask : pad | (val & mask);
+					const std::size_t source = last - blockShift;
+					const std::uint64_t value = (Block(source) << bitShift)
+					                            | (Block(source - 1) >> (Detail::Bitset::BitsPerBlock - bitShift));
+					Block(last) = MergeMaskedBlock(Block(last), value, masks(last));
 				}
-
-				for (std::size_t i = BlockCount() - 2; BlockCount() >= 2 && i > blockShift; i--)
+				for (std::size_t i = last; i-- > blockShift + 1;)
 				{
-					const std::size_t src = i - blockShift;
-					const std::size_t carriedSrc = src - 1;
-					Block(i) =
-					        (Block(src) << bitShift) | (Block(carriedSrc) >> (Detail::Bitset::BitsPerBlock - bitShift));
+					const std::size_t source = i - blockShift;
+					Block(i) = (Block(source) << bitShift)
+					           | (Block(source - 1) >> (Detail::Bitset::BitsPerBlock - bitShift));
 				}
-
-				{
-					const std::size_t i = blockShift;
-					const auto mask = masks(i);
-					const auto pad = Traits<Derived>::IsMaskedForRead ? 0 : Block(i) & ~mask;
-
-					const std::size_t src = i - blockShift;
-					// no need for mask `Block(src)` since we'll clear the trailing later
-					const std::uint64_t val = Block(src) << bitShift;
-
-					Block(i) = pad | (val & mask);
-				}
+				Block(blockShift) = MergeMaskedBlock(Block(blockShift), Block(0) << bitShift, masks(blockShift));
 			}
 
+			// This also clears bits shifted in from the storage before the view.
 			Trailing(n).ResetAll();
 		}
 
@@ -947,62 +928,37 @@ namespace SecUtility
 		{
 			const std::size_t blockShift = n / Detail::Bitset::BitsPerBlock;
 			const std::size_t bitShift = n % Detail::Bitset::BitsPerBlock;
-
+			const std::size_t count = BlockCount();
+			const std::size_t last = count - blockShift - 1;
 			const auto masks = MakeBlockMaskCaches();
-			// const auto masks = [](const std::size_t) { return ~std::uint64_t{0}; };
 
+			// Move low words first so in-place reads precede their overwrites.
 			if (bitShift == 0)
 			{
+				Block(0) = MergeMaskedBlock(Block(0), Block(blockShift), masks(0));
+				for (std::size_t i = 1; i <= last; ++i)
 				{
-					const auto mask = MaskOfBlock(0);
-					const auto pad = Block(0) & ~mask;
-
-					const std::size_t src = 0 + blockShift;
-					const std::uint64_t val = Traits<Derived>::IsMaskedForRead ? Block(src) : Block(src) & mask;
-
-					Block(0) = Traits<Derived>::IsMaskedForRead ? val : pad | val;
-				}
-				for (std::size_t i = 1; i + blockShift + 1 <= BlockCount(); i++)
-				{
-					const std::size_t src = i + blockShift;
-					Block(i) = Block(src);
+					Block(i) = Block(i + blockShift);
 				}
 			}
 			else
 			{
-				if (constexpr std::size_t i = 0; i + blockShift + 1 < BlockCount())
+				if (last != 0)
 				{
-					const auto mask = masks(i);
-					const auto pad = Block(i) & ~mask;
-
-					const std::size_t src = i + blockShift;
-					std::uint64_t val = Block(src) >> bitShift;
-					const std::size_t carriedSrc = src + 1;
-					val |= Block(carriedSrc) << (Detail::Bitset::BitsPerBlock - bitShift);
-
-					Block(i) = Traits<Derived>::IsMaskedForRead ? val & mask : pad | (val & mask);
+					const std::uint64_t value = (Block(blockShift) >> bitShift)
+					                            | (Block(blockShift + 1) << (Detail::Bitset::BitsPerBlock - bitShift));
+					Block(0) = MergeMaskedBlock(Block(0), value, masks(0));
 				}
-
-				for (std::size_t i = 1; i + blockShift + 1 < BlockCount(); ++i)
+				for (std::size_t i = 1; i < last; ++i)
 				{
-					const std::size_t src = i + blockShift;
-					const std::size_t carriedSrc = src + 1;
-					Block(i) =
-					        (Block(src) >> bitShift) | (Block(carriedSrc) << (Detail::Bitset::BitsPerBlock - bitShift));
+					const std::size_t source = i + blockShift;
+					Block(i) = (Block(source) >> bitShift)
+					           | (Block(source + 1) << (Detail::Bitset::BitsPerBlock - bitShift));
 				}
-
-				{
-					const std::size_t i = BlockCount() - blockShift - 1;
-					const auto mask = MaskOfBlock(i);
-					const auto pad = Block(i) & ~mask;
-
-					const std::size_t src = i + blockShift;
-					const std::uint64_t val = Block(src) >> bitShift;
-
-					Block(i) = Traits<Derived>::IsMaskedForRead ? val : pad | (val & mask);
-				}
+				Block(last) = MergeMaskedBlock(Block(last), Block(count - 1) >> bitShift, masks(last));
 			}
 
+			// This also clears bits shifted in from the storage after the view.
 			Leading(n).ResetAll();
 		}
 
@@ -1091,8 +1047,7 @@ namespace SecUtility
 			{
 				const auto mask = masks(i);
 				const auto b = Block(i);
-				const auto padding = Traits<Derived>::IsMaskedForRead ? 0 : b & ~mask;
-				Block(i) = padding | (op(b, other.Block(i)) & mask);
+				Block(i) = MergeMaskedBlock(b, op(b, other.Block(i)), mask);
 			}
 
 			return AsDerived();
@@ -1116,14 +1071,11 @@ namespace SecUtility
 
 			for (std::size_t i = 0; i < BlockCount(); ++i)
 			{
-				const auto mask = masks(i);                   // valid-bit mask for *this's block i
-				const auto b = Block(i);                      // current block in *this
-				const auto o = other.ShiftedBlock(shift, i);  // other's bits aligned to *this
-				const auto result = op(b, o);                 // AND/OR/XOR the valid bits
-				const auto padding = Traits<Derived>::IsMaskedForRead ? 0 : b & ~mask;
-
-				// Preserve *this's padding bits (outside mask), write AND result inside mask.
-				Block(i) = padding | (result & mask);
+				const auto mask = masks(i);
+				const auto current = Block(i);
+				const auto source = other.ShiftedBlock(shift, i);
+				const auto result = op(current, source);
+				Block(i) = MergeMaskedBlock(current, result, mask);
 			}
 
 			return AsDerived();
@@ -1133,10 +1085,12 @@ namespace SecUtility
 		constexpr bool OperatorEqualEqual_AssumeSameSizeAndAligned(const BitsetBase<OtherDerived>& other) const
 		        SEC_NOEXCEPT
 		{
-			SEC_ASSERT(BlockCount() == other.BlockCount());
-			for (std::size_t i = 0; i < BlockCount(); ++i)
+			const std::size_t count = BlockCount();
+			SEC_ASSERT(count == other.BlockCount());
+			const auto masks = MakeBlockMaskCaches();
+			for (std::size_t i = 0; i < count; ++i)
 			{
-				const auto mask = MaskOfBlock(i);
+				const auto mask = masks(i);
 				if ((Traits<Derived>::IsMaskedForRead ? Block(i) : Block(i) & mask)
 				    != (Traits<OtherDerived>::IsMaskedForRead ? other.Block(i) : other.Block(i) & mask))
 				{
@@ -1150,28 +1104,19 @@ namespace SecUtility
 		constexpr bool OperatorEqualEqual_AssumeSameSizeAndMisaligned(const BitsetBase<OtherDerived>& other) const
 		        SEC_NOEXCEPT
 		{
-			for (std::size_t i = 0; i < Detail::Bitset::BlocksFor(Size()); ++i)
+			const std::size_t size = Size();
+			const std::size_t count = Detail::Bitset::BlocksFor(size);
+			const std::uint64_t tail = Detail::Bitset::TailMask(size);
+			const int leftShift = -static_cast<int>(HeadPaddingBitCount());
+			const int rightShift = -static_cast<int>(other.HeadPaddingBitCount());
+			for (std::size_t i = 0; i < count; ++i)
 			{
-				const auto l = ShiftedBlock(-HeadPaddingBitCount(), i);
-				const auto r = other.ShiftedBlock(-other.HeadPaddingBitCount(), i);
-
-				if (i + 1 == Detail::Bitset::BlocksFor(Size()))
+				const auto mask = i + 1 == count ? tail : ~std::uint64_t{0};
+				if ((ShiftedBlock(leftShift, i) & mask) != (other.ShiftedBlock(rightShift, i) & mask))
 				{
-					const auto mask = Detail::Bitset::TailMask(Size());
-					if ((l & mask) != (r & mask))
-					{
-						return false;
-					}
-				}
-				else
-				{
-					if (l != r)
-					{
-						return false;
-					}
+					return false;
 				}
 			}
-
 			return true;
 		}
 	};
