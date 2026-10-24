@@ -125,12 +125,12 @@ namespace SecUtility
 			return 0;
 		}
 
-		/* CRTP OVERRIDE */ SEC_FORCE_INLINE constexpr std::uint64_t& Block(const std::size_t index) noexcept
+		/* CRTP OVERRIDE */ SEC_FORCE_INLINE std::uint64_t& Block(const std::size_t index) noexcept
 		{
 			return m_Data[index];
 		}
 
-		/* CRTP OVERRIDE */ SEC_FORCE_INLINE constexpr std::uint64_t Block(const std::size_t index) const noexcept
+		/* CRTP OVERRIDE */ SEC_FORCE_INLINE std::uint64_t Block(const std::size_t index) const noexcept
 		{
 			return m_Data[index];
 		}
