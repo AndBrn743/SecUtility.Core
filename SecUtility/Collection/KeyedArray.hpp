@@ -168,6 +168,24 @@ namespace SecUtility
 			}
 		}
 
+		template <typename Fn>
+		constexpr void ForeachValue(Fn&& f) noexcept(noexcept(f(std::declval<Value&>())))
+		{
+			for (Value& value : m_Data)
+			{
+				f(value);
+			}
+		}
+
+		template <typename Fn>
+		constexpr void ForeachValue(Fn&& f) const noexcept(noexcept(f(std::declval<const Value&>())))
+		{
+			for (const Value& value : m_Data)
+			{
+				f(value);
+			}
+		}
+
 		[[nodiscard]] static constexpr std::size_t Size() noexcept
 		{
 			return KSize;
