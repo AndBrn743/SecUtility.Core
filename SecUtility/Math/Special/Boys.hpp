@@ -320,7 +320,7 @@ namespace SecUtility::Math
 
 			if (SEC_UNLIKELY(n + HornerTermCount - 1 >= Detail::Boys::MaxTabulatedBoyOrder))
 			{
-				return Detail::Boys::HighPrecisionBoys(n, a, 1e-10);
+				return Detail::Boys::HighPrecisionBoys(n, a, Scalar{1e-10});
 			}
 
 			const auto gridIndex = static_cast<std::size_t>(a * Detail::Boys::BoyTableDensity);
