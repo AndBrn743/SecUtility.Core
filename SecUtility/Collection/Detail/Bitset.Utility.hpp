@@ -10,6 +10,9 @@
 #include <cinttypes>
 #include <cstddef>
 
+#if defined(_MSC_VER)
+#include <SecUtility/Macro/ConstevalIf.hpp>
+#endif
 
 namespace SecUtility::Detail::Bitset
 {
@@ -38,14 +41,17 @@ namespace SecUtility::Detail::Bitset
 		// `long long` is at least 64 bits
 		// ReSharper disable once CppRedundantCastExpression
 		return static_cast<std::size_t>(__builtin_popcountll(static_cast<unsigned long long>(v)));
-#elif defined(_MSC_VER)
-		return static_cast<std::size_t>(__popcnt64(v));
-#else
+#elif defined(_MSC_VER) && defined(SEC_IF_NOT_CONSTEVAL)
+		SEC_IF_NOT_CONSTEVAL
+		{
+			return static_cast<std::size_t>(__popcnt64(v));
+		}
+#endif
+
 		v = v - ((v >> 1) & 0x5555555555555555ull);
 		v = (v & 0x3333333333333333ull) + ((v >> 2) & 0x3333333333333333ull);
 		v = (v + (v >> 4)) & 0x0F0F0F0F0F0F0F0Full;
 		return static_cast<std::size_t>((v * 0x0101010101010101ull) >> 56);
-#endif
 	}
 
 	template <typename T>
