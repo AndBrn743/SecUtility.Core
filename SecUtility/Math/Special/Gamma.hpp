@@ -8,6 +8,8 @@
 #include <SecUtility/Math/Special/Common.hpp>
 #include <SecUtility/Math/Special/ExpIntegral.hpp>
 #include <SecUtility/Math/Special/Factorial.hpp>
+#include <array>
+#include <limits>
 
 #if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
 #define SEC_MATH_CONDITIONAL_CONSTEXPR constexpr
@@ -122,11 +124,14 @@ namespace SecUtility::Math
 		inline constexpr auto GammaOfPositiveHalfIntegers = []
 		{
 			std::array<Scalar, 64> result{};
-			for (int i = 0; i < static_cast<int>(result.size()); i++)
+			result[0] = Constant::SqrtOfPi<Scalar>;
+			for (int i = 1; i < static_cast<int>(result.size()); i++)
 			{
-				// The equation used here can be found in Wikipedia, under "Particular values of the gamma function"
-				result[i] = Constant::SqrtOfPi<Scalar>
-				            * CalculateDoubleFactorial<Scalar>(2 * i - 1) / (UInt64{1} << i);
+				// Gamma(i + 1/2) = (i - 1/2) * Gamma(i - 1/2).
+				const Scalar factor = static_cast<Scalar>(i) - Scalar{0.5};
+				result[i] = factor > Scalar{1} && result[i - 1] > std::numeric_limits<Scalar>::max() / factor
+				                    ? std::numeric_limits<Scalar>::infinity()
+				                    : result[i - 1] * factor;
 			}
 			return result;
 		}();
@@ -135,11 +140,12 @@ namespace SecUtility::Math
 		inline constexpr auto GammaOfNegativeHalfIntegers = []
 		{
 			std::array<Scalar, 63> result{};
+			Scalar previous = Constant::SqrtOfPi<Scalar>;
 			for (int i = 0; i < static_cast<int>(result.size()); i++)
 			{
-				// The equation used here can be found in Wikipedia, under "Particular values of the gamma function"
-				result[i] = MinusOneToThePowerOf<Scalar>(i + 1) * Constant::SqrtOfPi<Scalar> * (UInt64{1} << (i + 1))
-				            / CalculateDoubleFactorial<Scalar>(2 * (i + 1) - 1);
+				// Gamma(-i - 1/2) = Gamma(1/2 - i) / (-i - 1/2).
+				previous /= -static_cast<Scalar>(i) - Scalar{0.5};
+				result[i] = previous;
 			}
 			return result;
 		}();

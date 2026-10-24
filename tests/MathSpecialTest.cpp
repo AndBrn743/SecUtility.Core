@@ -224,6 +224,72 @@ TEST_CASE("Gamma")
 }
 
 
+TEST_CASE("GammaOfHalfInteger float lookup tables avoid intermediate overflow")
+{
+	// Instantiating these constexpr tables must succeed even though their positive tail overflows float.
+	constexpr const auto& positive = Detail::Gamma::GammaOfPositiveHalfIntegers<float>;
+	constexpr const auto& negative = Detail::Gamma::GammaOfNegativeHalfIntegers<float>;
+	STATIC_CHECK(positive.size() == 64);
+	STATIC_CHECK(negative.size() == 63);
+	STATIC_CHECK(positive[0] > 1.7f);
+	STATIC_CHECK(positive[34] < std::numeric_limits<float>::max());
+	STATIC_CHECK(positive[35] == std::numeric_limits<float>::infinity());
+	STATIC_CHECK(positive[63] == std::numeric_limits<float>::infinity());
+	STATIC_CHECK(negative[28] < 0.0f);
+	STATIC_CHECK(negative[62] == 0.0f);
+
+	SECTION("Every positive table entry agrees with a double precision reference")
+	{
+		for (int i = 0; i < 64; ++i)
+		{
+			CAPTURE(i);
+			const float actual = GammaOfHalfInteger(AsVolatile(static_cast<float>(i) + 0.5f));
+			const double expected = std::tgamma(static_cast<double>(i) + 0.5);
+			if (expected > std::numeric_limits<float>::max())
+			{
+				CHECK(actual == std::numeric_limits<float>::infinity());
+			}
+			else
+			{
+				CHECK(std::abs(static_cast<double>(actual) - expected)
+				      <= 32 * std::numeric_limits<float>::epsilon() * expected);
+			}
+		}
+	}
+
+	SECTION("Negative entries retain finite values, subnormals, and the sign of underflow")
+	{
+		for (int i = 0; i < 63; ++i)
+		{
+			CAPTURE(i);
+			const float actual = GammaOfHalfInteger(AsVolatile(-static_cast<float>(i) - 0.5f));
+			const double expected = std::tgamma(-static_cast<double>(i) - 0.5);
+			const double tolerance = 32 * std::numeric_limits<float>::epsilon() * std::abs(expected)
+			                         + std::numeric_limits<float>::denorm_min();
+			CHECK(std::abs(static_cast<double>(actual) - expected) <= tolerance);
+			CHECK(std::signbit(actual) == std::signbit(expected));
+		}
+		// The old double-factorial denominator overflowed although these gamma values fit in float.
+		CHECK(GammaOfHalfInteger(AsVolatile(-28.5f)) < 0.0f);
+		CHECK(GammaOfHalfInteger(AsVolatile(-34.5f)) < 0.0f);
+		CHECK(GammaOfHalfInteger(AsVolatile(-38.5f)) == -std::numeric_limits<float>::denorm_min());
+		CHECK(GammaOfHalfInteger(AsVolatile(-39.5f)) == 0.0f);
+	}
+
+#if defined(SEC_IF_CONSTEVAL) && __has_include(<gcem.hpp>)
+	SECTION("Public lookup also works during constant evaluation")
+	{
+		constexpr float largeFinite = GammaOfHalfInteger(34.5f);
+		constexpr float overflow = GammaOfHalfInteger(35.5f);
+		constexpr float smallFinite = GammaOfHalfInteger(-28.5f);
+		STATIC_CHECK(largeFinite > 5e37f);
+		STATIC_CHECK(overflow == std::numeric_limits<float>::infinity());
+		STATIC_CHECK(smallFinite < -1.9e-30f);
+	}
+#endif
+}
+
+
 TEST_CASE("GammaOfHalfInteger runtime paths")
 {
 	SECTION("Lookup table boundaries")
