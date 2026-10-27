@@ -171,6 +171,7 @@ namespace
 				RegisterReadForm<T, N, ReadForm::View>(type, head);
 				RegisterReadForm<T, N, ReadForm::NotView>(type, head);
 				RegisterReadForm<T, N, ReadForm::ViewAnd>(type, head);
+				RegisterReadForm<T, N, ReadForm::ViewNested>(type, head);
 			}
 		}
 	}

@@ -127,6 +127,7 @@ identify the operand/backing storage type. The forms are:
 | `View` | A const segment with the named head offset. |
 | `NotView` | The complement of that segment. |
 | `ViewAnd` | That segment AND an owning operand. |
+| `ViewNested` | `(segment & a) | b`, with owning operands. |
 
 View forms use head offsets 0, 11, and 63, with guard bits outside the payload.
 For `Static`, the backing is `Bitset<N + 128>`; for `Dynamic`, it is a dynamic

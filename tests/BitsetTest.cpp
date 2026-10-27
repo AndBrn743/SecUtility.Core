@@ -1652,7 +1652,7 @@ TEMPLATE_TEST_CASE("Word-aligned expressions share logical read kernels",
 	STATIC_REQUIRE(std::is_base_of_v<WordAlignedBitsetBase<NestedExpr>, NestedExpr>);
 	STATIC_REQUIRE_FALSE(std::is_base_of_v<OwningBitsetBase<AndExpr>, AndExpr>);
 	STATIC_REQUIRE_FALSE(std::is_base_of_v<WordAlignedBitsetBase<View>, View>);
-	STATIC_REQUIRE_FALSE(std::is_base_of_v<WordAlignedBitsetBase<ViewExpr>, ViewExpr>);
+	STATIC_REQUIRE(std::is_base_of_v<WordAlignedBitsetBase<ViewExpr>, ViewExpr>);
 	STATIC_REQUIRE_FALSE(std::is_base_of_v<WordAlignedBitsetBase<NotView>, NotView>);
 	STATIC_REQUIRE(std::is_same_v<Detail::Bitset::BitsetExpressionBase<AndExpr, const TestType&, const DynamicBitset&>,
 	                              WordAlignedBitsetBase<AndExpr>>);
@@ -1746,6 +1746,63 @@ TEMPLATE_TEST_CASE("Word-aligned expressions share logical read kernels",
 		verify((~ca & cb) | (ca & ~cb), different);
 		verify(~(~ca | ~cb), both);
 		verify(ca.Segment(0, size) & cb, both);
+	}
+}
+
+TEST_CASE("Mixed expression queries respect view boundaries", "[bitset][view-expression]")
+{
+	for (const std::size_t size :
+	     {0u, 1u, 63u, 64u, 65u, 127u, 128u, 129u, 191u, 192u, 193u, 255u, 256u, 257u, 511u, 512u, 513u})
+	{
+		for (std::size_t head = 0; head != 64; ++head)
+		{
+			const std::size_t otherHead = (head * 7 + 13) % 64;
+			for (int pattern = 0; pattern != 4; ++pattern)
+			{
+				CAPTURE(size, head, otherHead, pattern);
+				// Exact storage endpoints catch an unconditional final carry read.
+				DynamicBitset backing(head + size, true), otherBacking(otherHead + size, true);
+				DynamicBitset a(size), b(size), zeros(head + size);
+				std::string both(size, '0'), nested(size, '0'), inverse(size, '0');
+				std::mt19937_64 rng(42);
+				for (std::size_t i = 0; i != size; ++i)
+				{
+					const bool left = pattern == 0 ? false : pattern == 1 ? true : (rng() & 1u) != 0;
+					const bool right = pattern < 2 ? true : (rng() & 1u) != 0;
+					backing[head + i] = left;
+					otherBacking[otherHead + i] = right;
+					a[i] = right;
+					b[i] = pattern == 3 && i == size / 2;
+					both[i] = left && right ? '1' : '0';
+					nested[i] = (left && right) || b[i] ? '1' : '0';
+					inverse[i] = nested[i] == '1' ? '0' : '1';
+				}
+				const auto verify = [&](const auto& expr, const std::string& expected)
+				{
+					const auto ones = static_cast<std::size_t>(std::count(expected.begin(), expected.end(), '1'));
+					CHECK(expr.OneCount() == ones);
+					CHECK(expr.ZeroCount() == size - ones);
+					CHECK(expr.IsAllOnes() == (size != 0 && ones == size));
+					CHECK(expr.IsAllZeros() == (size != 0 && ones == 0));
+					VerifyBitsetScans(expr, expected);
+					CHECK(expr.IndexOfNextOne(std::numeric_limits<std::size_t>::max()) == size);
+					CHECK(expr.IndexOfNextZero(std::numeric_limits<std::size_t>::max()) == size);
+					const DynamicBitset evaluated = expr;
+					CHECK(evaluated.ToString(false) == expected);
+					CHECK(expr == evaluated);
+					CHECK(evaluated == expr);
+				};
+				const auto view = backing.Segment(head, size);
+				const auto other = otherBacking.Segment(otherHead, size);
+				verify(view & a, both);
+				verify(a & view, both);
+				verify(view & other, both);
+				verify((view & a) | b, nested);
+				verify(~((view & a) | b), inverse);
+				verify(backing.Segment(0, head + size).Segment(head, size) & a, both);
+				verify((backing ^ zeros).Segment(head, size) & a, both);
+			}
+		}
 	}
 }
 

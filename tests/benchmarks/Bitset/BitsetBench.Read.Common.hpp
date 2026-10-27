@@ -16,7 +16,8 @@ namespace
 		NotNested,
 		View,
 		NotView,
-		ViewAnd
+		ViewAnd,
+		ViewNested
 	};
 
 	enum class ReadPattern
@@ -60,12 +61,15 @@ namespace
 				return "NotView";
 			case ReadForm::ViewAnd:
 				return "ViewAnd";
+			case ReadForm::ViewNested:
+				return "ViewNested";
 		}
 		return "";
 	}
 
 	template <ReadForm Form>
-	constexpr bool UsesReadView = Form == ReadForm::View || Form == ReadForm::NotView || Form == ReadForm::ViewAnd;
+	constexpr bool UsesReadView = Form == ReadForm::View || Form == ReadForm::NotView || Form == ReadForm::ViewAnd
+	                              || Form == ReadForm::ViewNested;
 
 	inline bool ReadPatternBit(const ReadPattern pattern,
 	                           const std::size_t i,
@@ -121,9 +125,10 @@ namespace
 			{
 				const bool value = ReadPatternBit(pattern, i, N, rng);
 				expected[i] = value;
-				a[i] = Form == ReadForm::Not || Form == ReadForm::NotNested ? !value
-				                                                            : Form == ReadForm::ViewAnd || value;
-				b[i] = true;
+				a[i] = Form == ReadForm::Not || Form == ReadForm::NotNested
+				               ? !value
+				               : Form == ReadForm::ViewAnd || Form == ReadForm::ViewNested || value;
+				b[i] = Form != ReadForm::ViewNested;
 				c[i] = false;
 				if constexpr (UsesReadView<Form>)
 				{
@@ -138,11 +143,12 @@ namespace
 			{
 				benchmark::DoNotOptimize(backing);
 			}
-			if constexpr (!UsesReadView<Form> || Form == ReadForm::ViewAnd)
+			if constexpr (!UsesReadView<Form> || Form == ReadForm::ViewAnd || Form == ReadForm::ViewNested)
 			{
 				benchmark::DoNotOptimize(a);
 			}
-			if constexpr (Form == ReadForm::And || Form == ReadForm::Nested || Form == ReadForm::NotNested)
+			if constexpr (Form == ReadForm::And || Form == ReadForm::Nested || Form == ReadForm::NotNested
+			              || Form == ReadForm::ViewNested)
 			{
 				benchmark::DoNotOptimize(b);
 			}
@@ -185,7 +191,14 @@ namespace
 			}
 			else
 			{
-				return function(backing.Segment(64 + head, N) & a);
+				if constexpr (Form == ReadForm::ViewNested)
+				{
+					return function((backing.Segment(64 + head, N) & a) | b);
+				}
+				else
+				{
+					return function(backing.Segment(64 + head, N) & a);
+				}
 			}
 		}
 	};

@@ -224,6 +224,7 @@ namespace
 			RegisterScanForm<T, N, ReadForm::View>(type, head);
 			RegisterScanForm<T, N, ReadForm::NotView>(type, head);
 			RegisterScanForm<T, N, ReadForm::ViewAnd>(type, head);
+			RegisterScanForm<T, N, ReadForm::ViewNested>(type, head);
 		}
 	}
 

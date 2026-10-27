@@ -9,7 +9,8 @@
 
 namespace SecUtility
 {
-	// Reads logical words without realignment. UnpaddedBlock(i) supplies a valid
+	// Reads logical words supplied by UnpaddedBlock(i), including expressions
+	// whose view leaves need realignment. Each read supplies a valid
 	// logical word; readers ignore unused bits in the last word. This guarantees
 	// neither contiguous storage nor cleared tail padding, and says nothing about
 	// the physical alignment used by Block() or AlignedTo_Impl().

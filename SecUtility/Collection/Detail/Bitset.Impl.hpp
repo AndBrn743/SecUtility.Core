@@ -324,6 +324,20 @@ namespace SecUtility
 			return static_cast<const BaseOfNested&>(m_Nested).Block(index + m_BlockIndexOffset);
 		}
 
+		// Logical-word callers provide an index within BlocksFor(m_Size).
+		// Only the carry word can be beyond the segment's physical extent.
+		constexpr std::uint64_t UnpaddedBlock_Impl(const std::size_t index) const SEC_NOEXCEPT
+		{
+			if (m_HeadPadding == 0)
+			{
+				return Block(index);
+			}
+			const std::uint64_t low = Block(index) >> m_HeadPadding;
+			const std::size_t count = Detail::Bitset::BlocksFor(m_HeadPadding + m_Size);
+			const std::uint64_t carry = index + 1 < count ? Block(index + 1) << (BitsPerBlock - m_HeadPadding) : 0;
+			return low | carry;
+		}
+
 		/* CRTP VIRTUAL */ constexpr std::size_t HeadPaddingBitCount() const noexcept  // corresponds to trailing
 		{
 			return m_HeadPadding;
@@ -489,10 +503,9 @@ namespace SecUtility
 
 
 	template <typename Op, typename Lhs, typename Rhs>
-	class Detail::Bitset::BitsetBinaryExpr
-	    : public BitsetExpressionBase<BitsetBinaryExpr<Op, Lhs, Rhs>, Lhs, Rhs>
+	class Detail::Bitset::BitsetBinaryExpr : public WordAlignedBitsetBase<BitsetBinaryExpr<Op, Lhs, Rhs>>
 	{
-		using Base = BitsetExpressionBase<BitsetBinaryExpr, Lhs, Rhs>;
+		using Base = WordAlignedBitsetBase<BitsetBinaryExpr>;
 		friend BitsetBase<BitsetBinaryExpr>;
 		friend Base;
 
