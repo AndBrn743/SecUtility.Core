@@ -43,4 +43,18 @@ namespace SecUtility
 
 		return result;
 	}
+
+	template <std::size_t N, typename Scalar>
+	constexpr std::array<Scalar, N> MakeGeometricSequenceArray(const Scalar delta) noexcept(
+	        noexcept(MakeGeometricSequenceArray<N, Scalar>(Scalar{1}, delta)))
+	{
+		return MakeGeometricSequenceArray<N, Scalar>(Scalar{1}, delta);
+	}
+
+	template <std::size_t N, typename Scalar>
+	constexpr std::array<Scalar, N> MakeArithmeticSequenceArray(const Scalar delta) noexcept(
+	        noexcept(MakeArithmeticSequenceArray<N, Scalar>(Scalar{0}, delta)))
+	{
+		return MakeArithmeticSequenceArray<N, Scalar>(Scalar{0}, delta);
+	}
 }

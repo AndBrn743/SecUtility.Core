@@ -13,7 +13,7 @@ using namespace SecUtility;
 namespace
 {
 	// Select one potentially throwing operation independently of the others.
-	enum class Failure { None, Default, Copy, Move, Assignment, Addition, Multiplication };
+	enum class Failure { None, Default, Copy, Move, Assignment, Addition, Multiplication, IntegerConstruction };
 
 	template <Failure F>
 	struct Scalar
@@ -30,7 +30,7 @@ namespace
 		}
 
 		Scalar() noexcept(F != Failure::Default) { MaybeThrow<Failure::Default>(); }
-		explicit Scalar(int) noexcept {}
+		explicit Scalar(int) noexcept(F != Failure::IntegerConstruction) { MaybeThrow<Failure::IntegerConstruction>(); }
 		Scalar(const Scalar&) noexcept(F != Failure::Copy) { MaybeThrow<Failure::Copy>(); }
 		Scalar(Scalar&&) noexcept(F != Failure::Move) { MaybeThrow<Failure::Move>(); }
 		Scalar& operator=(Scalar&&) noexcept(F != Failure::Assignment)
@@ -155,5 +155,87 @@ TEST_CASE("Sequence scalar exceptions reach the caller", "[Sequence]")
 	Scalar<Failure::Multiplication>::Throw = true;
 	CHECK_THROWS_AS(MakeGeometricSequenceArray<3>(Scalar<Failure::Multiplication>{}, Scalar<Failure::Multiplication>{}),
 	                std::runtime_error);
+	Scalar<Failure::Multiplication>::Throw = false;
+}
+
+TEST_CASE("Arithmetic sequence helper starts at zero", "[Sequence]")
+{
+	constexpr auto ascending = MakeArithmeticSequenceArray<4>(3);
+	STATIC_REQUIRE(ascending[0] == 0 && ascending[1] == 3 && ascending[2] == 6 && ascending[3] == 9);
+	STATIC_REQUIRE(std::is_same_v<std::remove_cv_t<decltype(ascending)>, std::array<int, 4>>);
+	CHECK(ascending == MakeArithmeticSequenceArray<4>(0, 3));
+	CHECK(MakeArithmeticSequenceArray<4>(-2) == std::array<int, 4>{0, -2, -4, -6});
+	CHECK(MakeArithmeticSequenceArray<3>(0) == std::array<int, 3>{0, 0, 0});
+	constexpr auto fractional = MakeArithmeticSequenceArray<3>(0.25);
+	STATIC_REQUIRE(fractional[0] == 0.0 && fractional[1] == 0.25 && fractional[2] == 0.5);
+	STATIC_REQUIRE(std::is_same_v<std::remove_cv_t<decltype(fractional)>, std::array<double, 3>>);
+	constexpr auto single = MakeArithmeticSequenceArray<1>(7);
+	STATIC_REQUIRE(single.size() == 1 && single[0] == 0);
+}
+
+TEST_CASE("Geometric sequence helper starts at one", "[Sequence]")
+{
+	constexpr auto positive = MakeGeometricSequenceArray<4>(3);
+	STATIC_REQUIRE(positive[0] == 1 && positive[1] == 3 && positive[2] == 9 && positive[3] == 27);
+	STATIC_REQUIRE(std::is_same_v<std::remove_cv_t<decltype(positive)>, std::array<int, 4>>);
+	CHECK(positive == MakeGeometricSequenceArray<4>(1, 3));
+	CHECK(MakeGeometricSequenceArray<4>(-2) == std::array<int, 4>{1, -2, 4, -8});
+	CHECK(MakeGeometricSequenceArray<3>(0) == std::array<int, 3>{1, 0, 0});
+	CHECK(MakeGeometricSequenceArray<3>(1) == std::array<int, 3>{1, 1, 1});
+	constexpr auto fractional = MakeGeometricSequenceArray<4>(0.5);
+	STATIC_REQUIRE(fractional[0] == 1.0 && fractional[1] == 0.5 && fractional[2] == 0.25 && fractional[3] == 0.125);
+	STATIC_REQUIRE(std::is_same_v<std::remove_cv_t<decltype(fractional)>, std::array<double, 4>>);
+	constexpr auto single = MakeGeometricSequenceArray<1>(7);
+	STATIC_REQUIRE(single.size() == 1 && single[0] == 1);
+}
+
+TEST_CASE("Sequence helpers support complex scalars", "[Sequence]")
+{
+	using Complex = std::complex<double>;
+	CHECK(MakeArithmeticSequenceArray<3>(Complex{2, -1})
+	      == std::array<Complex, 3>{Complex{0, 0}, Complex{2, -1}, Complex{4, -2}});
+	CHECK(MakeGeometricSequenceArray<4>(Complex{0, 1})
+	      == std::array<Complex, 4>{Complex{1, 0}, Complex{0, 1}, Complex{-1, 0}, Complex{0, -1}});
+}
+
+TEST_CASE("Sequence helpers preserve conditional noexcept", "[Sequence]")
+{
+	STATIC_REQUIRE(noexcept(MakeArithmeticSequenceArray<3>(2)));
+	STATIC_REQUIRE(noexcept(MakeGeometricSequenceArray<3>(0.5)));
+	STATIC_REQUIRE(noexcept(MakeArithmeticSequenceArray<3>(Scalar<Failure::None>{})));
+	STATIC_REQUIRE(noexcept(MakeGeometricSequenceArray<3>(Scalar<Failure::None>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeArithmeticSequenceArray<3>(Scalar<Failure::Copy>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeGeometricSequenceArray<3>(Scalar<Failure::Copy>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeArithmeticSequenceArray<3>(Scalar<Failure::Move>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeGeometricSequenceArray<3>(Scalar<Failure::Move>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeArithmeticSequenceArray<3>(Scalar<Failure::Assignment>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeGeometricSequenceArray<3>(Scalar<Failure::Assignment>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeArithmeticSequenceArray<3>(Scalar<Failure::Addition>{})));
+	STATIC_REQUIRE(noexcept(MakeGeometricSequenceArray<3>(Scalar<Failure::Addition>{})));
+	STATIC_REQUIRE(noexcept(MakeArithmeticSequenceArray<3>(Scalar<Failure::Multiplication>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeGeometricSequenceArray<3>(Scalar<Failure::Multiplication>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeArithmeticSequenceArray<1>(Scalar<Failure::IntegerConstruction>{})));
+	STATIC_REQUIRE_FALSE(noexcept(MakeGeometricSequenceArray<1>(Scalar<Failure::IntegerConstruction>{})));
+	STATIC_REQUIRE(noexcept(MakeArithmeticSequenceArray<1>(Scalar<Failure::Addition>{})));
+	STATIC_REQUIRE(noexcept(MakeGeometricSequenceArray<1>(Scalar<Failure::Multiplication>{})));
+	STATIC_REQUIRE(noexcept(MakeArithmeticSequenceArray<1>(Scalar<Failure::Assignment>{})));
+	STATIC_REQUIRE(noexcept(MakeGeometricSequenceArray<1>(Scalar<Failure::Assignment>{})));
+}
+
+TEST_CASE("Sequence helpers propagate scalar exceptions", "[Sequence]")
+{
+	Scalar<Failure::IntegerConstruction>::Throw = true;
+	CHECK_THROWS_AS(MakeArithmeticSequenceArray<1>(Scalar<Failure::IntegerConstruction>{}), std::runtime_error);
+	CHECK_THROWS_AS(MakeGeometricSequenceArray<1>(Scalar<Failure::IntegerConstruction>{}), std::runtime_error);
+	Scalar<Failure::IntegerConstruction>::Throw = false;
+
+	Scalar<Failure::Addition>::Throw = true;
+	CHECK_THROWS_AS(MakeArithmeticSequenceArray<3>(Scalar<Failure::Addition>{}), std::runtime_error);
+	CHECK_NOTHROW(MakeArithmeticSequenceArray<1>(Scalar<Failure::Addition>{}));
+	Scalar<Failure::Addition>::Throw = false;
+
+	Scalar<Failure::Multiplication>::Throw = true;
+	CHECK_THROWS_AS(MakeGeometricSequenceArray<3>(Scalar<Failure::Multiplication>{}), std::runtime_error);
+	CHECK_NOTHROW(MakeGeometricSequenceArray<1>(Scalar<Failure::Multiplication>{}));
 	Scalar<Failure::Multiplication>::Throw = false;
 }
