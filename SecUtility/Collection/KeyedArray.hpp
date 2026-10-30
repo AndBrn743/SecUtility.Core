@@ -295,9 +295,11 @@ namespace SecUtility
 		};
 	}
 
-	template <typename... KeyedArrays>
+	template <typename T>
+	concept AKeyedArray = Detail::KeyedArray::is_keyed_array<std::remove_cvref_t<T>>::value;
+
+	template <AKeyedArray... KeyedArrays>
 	constexpr auto Concat(KeyedArrays&&... arrays)
-	    requires((Detail::KeyedArray::is_keyed_array<std::remove_cvref_t<KeyedArrays>>::value && ...))
 	{
 		using Result = Detail::KeyedArray::concatenated_type<std::remove_cvref_t<KeyedArrays>...>::type;
 		Result result;
@@ -323,10 +325,8 @@ namespace SecUtility
 	}
 
 	// function that matches the following signature is reserved by SecUtility for future use
-	template <typename Op, typename Init, typename... KeyedArrays>
-	constexpr auto Merge(Op op, Init init, KeyedArrays&&... arrays)
-	    requires((Detail::KeyedArray::is_keyed_array<std::remove_cvref_t<KeyedArrays>>::value && ...))
-	= delete;
+	template <typename Op, typename Init, AKeyedArray... KeyedArrays>
+	constexpr auto Merge(Op op, Init init, KeyedArrays&&... arrays) = delete;
 }
 
 #endif
