@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 #include <SecUtility/Math/Constant.hpp>
 #include <SecUtility/Math/Core.hpp>
+#include <SecUtility/Math/OrthogonalPolynomialRecurrence.hpp>
 #include <SecUtility/Meta/TypeTrait.hpp>
 #include <SecUtility/Misc/CachedFunction.hpp>
 #include <utility>
@@ -167,9 +168,6 @@ namespace SecUtility::Math
 	private:
 		Eigen::Matrix<Scalar, SizeAtCompileTime, 2> m_Data{};
 	};
-
-	template <typename Scalar, int SizeAtCompileTime = Eigen::Dynamic>
-	struct OrthogonalPolynomialRecurrence;
 
 	/// Fixed-Order overload. Order is the first explicit template parameter; GridSize is deduced from the
 	/// grid argument. Throws OperationFailedException if Lanczos terminates before reaching Order.

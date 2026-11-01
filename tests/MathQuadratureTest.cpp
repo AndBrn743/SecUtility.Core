@@ -8,6 +8,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <type_traits>
+#include <array>
+#include <cmath>
+#include <limits>
 #include <iomanip>
 #include <iostream>
 
@@ -1159,4 +1162,28 @@ TEMPLATE_TEST_CASE("One-point quadrature of a weighted measure integrates consta
 	check(ConstructQuadratureGrid<1>(dynamicMeasure));
 	check(ConstructQuadratureGrid(fixedMeasure, 1));
 	check(ConstructQuadratureGrid(dynamicMeasure, 1));
+}
+
+TEMPLATE_TEST_CASE("One-term Christoffel function is the mass at every evaluation point",
+                   "[quadrature][christoffel]", float, double, long double)
+{
+	using namespace SecUtility::Math;
+	using Scalar = TestType;
+	const auto check = [](auto sizeTag)
+	{
+		constexpr int SizeAtCompileTime = decltype(sizeTag)::value;
+		OrthogonalPolynomialRecurrence<Scalar, SizeAtCompileTime> recurrence;
+		recurrence.Alphas.resize(1);
+		recurrence.Gammas.resize(1);
+		recurrence.Alphas[0] = Scalar{0.25};
+		recurrence.Gammas[0] = Scalar{0};
+		for (const Scalar x : {Scalar{-3}, Scalar{0.25}, Scalar{2}})
+		{
+			CAPTURE(SizeAtCompileTime, x);
+			CHECK(EvaluateChristoffelFunction(recurrence, x) == Scalar{1});
+			CHECK(EvaluateChristoffelFunction(recurrence, x, Scalar{3.5}) == Scalar{3.5});
+		}
+	};
+	check(std::integral_constant<int, 1>{});
+	check(std::integral_constant<int, Eigen::Dynamic>{});
 }

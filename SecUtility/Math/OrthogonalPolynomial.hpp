@@ -6,17 +6,11 @@
 #include <Eigen/Dense>
 #include <SecUtility/Diagnostic/Exception.hpp>
 #include <SecUtility/Math/Core.hpp>
+#include <SecUtility/Math/OrthogonalPolynomialRecurrence.hpp>
 #include <SecUtility/Math/QuadratureGrid.hpp>
 
 namespace SecUtility::Math
 {
-	template <typename Scalar, int SizeAtCompileTime>
-	struct OrthogonalPolynomialRecurrence
-	{
-		Eigen::Vector<Scalar, SizeAtCompileTime> Alphas;  // diagonal of Jacobi matrix
-		Eigen::Vector<Scalar, SizeAtCompileTime> Gammas;  // off-diagonal of Jacobi matrix, gamma[0] = 0
-	};
-
 	namespace Detail
 	{
 		template <typename Scalar, int OrderAtCompileTime, int GridSizeAtCompileTime>
