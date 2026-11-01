@@ -180,8 +180,9 @@ namespace SecUtility::Math
 	OrthogonalPolynomialRecurrence<Scalar> ConstructOrthogonalPolynomialRecurrence(
 	        const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid, Eigen::Index order);
 
+	/// Constructs nodes from the Jacobi matrix and weights from its eigenvectors.
 	template <typename Scalar, int SizeAtCompileTime>
-	QuadratureGrid<Scalar, SizeAtCompileTime> ConstructQuadratureGrid(
+	QuadratureGrid<Scalar, SizeAtCompileTime> ConstructQuadratureGridWithEigenvectorWeights(
 	        const OrthogonalPolynomialRecurrence<Scalar, SizeAtCompileTime>& rule, const Scalar zerothMoment = 1)
 	{
 		eigen_assert(rule.Alphas.size() == rule.Gammas.size());
@@ -206,29 +207,82 @@ namespace SecUtility::Math
 
 		Eigen::SelfAdjointEigenSolver<Jacobian> es(jacobian);
 
-		return {std::move(es.eigenvalues()), zerothMoment * es.eigenvectors().row(0).cwiseAbs2()};
+		return {es.eigenvalues(), zerothMoment * es.eigenvectors().row(0).cwiseAbs2()};
 	}
 
-	/// This is not a copy construction! This is not a grid truncation operation neither!
-	template <typename Scalar, int GridSizeAtCompileTime>
-	QuadratureGrid<Scalar> ConstructQuadratureGrid(const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid,
-	                                               const Eigen::Index order)
+	/// Constructs Jacobi eigenvalues and evaluates Christoffel weights at those nodes.
+	/// Requires an unreduced recurrence and sufficiently resolved computed nodes.
+	/// Uses no eigenvector weights and performs no fallback; accuracy near unresolved
+	/// spectral clusters is outside this constructor's contract.
+	template <typename Scalar, int SizeAtCompileTime>
+	QuadratureGrid<Scalar, SizeAtCompileTime> ConstructQuadratureGridWithChristoffelWeights(
+	        const OrthogonalPolynomialRecurrence<Scalar, SizeAtCompileTime>& rule, const Scalar zerothMoment = 1)
 	{
-		const auto opr = ConstructOrthogonalPolynomialRecurrence(weightedGrid, order);
-		const auto zerothMoment = weightedGrid.Weights().sum();
-		return ConstructQuadratureGrid(opr, zerothMoment);
+		eigen_assert(rule.Alphas.size() == rule.Gammas.size());
+		eigen_assert(rule.Alphas.size() >= 1);
+
+		const auto n = rule.Alphas.size();
+		eigen_assert((rule.Gammas.tail(n - 1).array() != Scalar{0}).all());
+
+		if constexpr (SizeAtCompileTime == Eigen::Dynamic || SizeAtCompileTime == 1)
+		{
+			if (n == 1)
+			{
+				// The 1x1 Jacobi matrix has its sole eigenvalue at alpha_0 = mu_1 / mu_0.
+				return {Eigen::Vector<Scalar, 1>{rule.Alphas[0]}, Eigen::Vector<Scalar, 1>{zerothMoment}};
+			}
+		}
+
+		using Jacobian = Eigen::MatrixX<Scalar>;  // we don't want to have a huge object on stack
+		Jacobian jacobian = Jacobian::Zero(n, n);
+		jacobian.diagonal() = rule.Alphas;
+		jacobian.diagonal(1) = rule.Gammas.tail(n - 1);
+		jacobian.diagonal(-1) = rule.Gammas.tail(n - 1);
+
+		Eigen::SelfAdjointEigenSolver<Jacobian> es(jacobian, Eigen::EigenvaluesOnly);
+		// Strict ordering is necessary, but does not certify that all nodes are well resolved.
+		eigen_assert((es.eigenvalues().tail(n - 1).array() > es.eigenvalues().head(n - 1).array()).all());
+
+		// Tiny first eigenvector components can have poor relative accuracy.
+		// Instead use w_i = mu_0 / sum_{j=0}^{n-1} p_j(x_i)^2, with p_0=1.
+		Eigen::Vector<Scalar, SizeAtCompileTime> weights(n);
+		for (Eigen::Index i = 0; i < n; ++i)
+		{
+			weights[i] = EvaluateChristoffelFunction(rule, es.eigenvalues()[i], zerothMoment);
+		}
+		return {es.eigenvalues(), weights};
 	}
 
-	/// This is not a copy construction! This is not a grid truncation operation neither!
-	template <int Order, typename Scalar, int GridSizeAtCompileTime>
-	QuadratureGrid<Scalar, Order> ConstructQuadratureGrid(
-	        const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid)
+	/// Default construction uses eigenvector-derived weights.
+	template <typename Scalar, int SizeAtCompileTime>
+	QuadratureGrid<Scalar, SizeAtCompileTime> ConstructQuadratureGrid(
+	        const OrthogonalPolynomialRecurrence<Scalar, SizeAtCompileTime>& rule, const Scalar zerothMoment = 1)
 	{
-		static_assert(Order > 0);
-		const auto opr = ConstructOrthogonalPolynomialRecurrence<Order>(weightedGrid);
-		const auto zerothMoment = weightedGrid.Weights().sum();
-		return ConstructQuadratureGrid(opr, zerothMoment);
+		return ConstructQuadratureGridWithEigenvectorWeights(rule, zerothMoment);
 	}
+
+	// Construct a new Gaussian rule for the measure; these adapters do not truncate the input grid.
+#define SEC_MATH_QUADRATURE_GRID_DEFINE_CONSTRUCTION_ADAPTERS(Constructor)                                             \
+	template <typename Scalar, int GridSizeAtCompileTime>                                                              \
+	QuadratureGrid<Scalar> Constructor(const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid,              \
+	                                   const Eigen::Index order)                                                       \
+	{                                                                                                                  \
+		const auto recurrence = ConstructOrthogonalPolynomialRecurrence(weightedGrid, order);                          \
+		return Constructor(recurrence, weightedGrid.Weights().sum());                                                  \
+	}                                                                                                                  \
+	template <int Order, typename Scalar, int GridSizeAtCompileTime>                                                   \
+	QuadratureGrid<Scalar, Order> Constructor(const QuadratureGrid<Scalar, GridSizeAtCompileTime>& weightedGrid)       \
+	{                                                                                                                  \
+		static_assert(Order > 0);                                                                                      \
+		const auto recurrence = ConstructOrthogonalPolynomialRecurrence<Order>(weightedGrid);                          \
+		return Constructor(recurrence, weightedGrid.Weights().sum());                                                  \
+	}
+
+	SEC_MATH_QUADRATURE_GRID_DEFINE_CONSTRUCTION_ADAPTERS(ConstructQuadratureGridWithEigenvectorWeights)
+	SEC_MATH_QUADRATURE_GRID_DEFINE_CONSTRUCTION_ADAPTERS(ConstructQuadratureGridWithChristoffelWeights)
+	SEC_MATH_QUADRATURE_GRID_DEFINE_CONSTRUCTION_ADAPTERS(ConstructQuadratureGrid)
+
+#undef SEC_MATH_QUADRATURE_GRID_DEFINE_CONSTRUCTION_ADAPTERS
 
 	// works on [-1, 1]
 	template <typename Scalar>

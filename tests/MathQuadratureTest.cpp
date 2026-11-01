@@ -1132,6 +1132,12 @@ TEMPLATE_TEST_CASE("One-point quadrature preserves the supplied recurrence diago
 				REQUIRE(grid.Size() == 1);
 				CHECK(grid.Node(0) == node);
 				CHECK(grid.Weight(0) == mass);
+				const auto eigenvectorGrid = ConstructQuadratureGridWithEigenvectorWeights(rule, mass);
+				const auto christoffelGrid = ConstructQuadratureGridWithChristoffelWeights(rule, mass);
+				CHECK(eigenvectorGrid.Node(0) == node);
+				CHECK(eigenvectorGrid.Weight(0) == mass);
+				CHECK(christoffelGrid.Node(0) == node);
+				CHECK(christoffelGrid.Weight(0) == mass);
 				const auto normalized = ConstructQuadratureGrid(rule);
 				CHECK(normalized.Node(0) == node);
 				CHECK(normalized.Weight(0) == Scalar{1});
@@ -1164,6 +1170,196 @@ TEMPLATE_TEST_CASE("One-point quadrature of a weighted measure integrates consta
 	check(ConstructQuadratureGrid(dynamicMeasure, 1));
 }
 
+
+TEMPLATE_TEST_CASE("Christoffel quadrature tail weights retain relative moment accuracy for the Laguerre measure",
+                   "[quadrature][regression]", float, double, long double)
+{
+	using namespace SecUtility::Math;
+	using Scalar = TestType;
+	const auto checkOrder = [](auto orderTag)
+	{
+		constexpr int N = decltype(orderTag)::value;
+		const auto checkStorage = [N](auto sizeTag)
+		{
+			constexpr int Size = decltype(sizeTag)::value;
+			// Exact recurrence for exp(-x) dx on [0,infinity); mu_k=k!.
+			OrthogonalPolynomialRecurrence<Scalar, Size> rule;
+			rule.Alphas.resize(N);
+			rule.Gammas.resize(N);
+			for (int j = 0; j < N; ++j)
+			{
+				rule.Alphas[j] = static_cast<Scalar>(2 * j + 1);
+				rule.Gammas[j] = static_cast<Scalar>(j);
+			}
+			const auto grid = ConstructQuadratureGridWithChristoffelWeights(rule, Scalar{1});
+			std::array<long double, N> powers;
+			powers.fill(1);
+			long double expected = 1;
+			const long double tolerance = std::is_same_v<Scalar, float> ? 1e-3L : 5e-11L;
+			for (int i = 0; i < N; ++i)
+			{
+				CAPTURE(N, Size, i);
+				REQUIRE(std::isfinite(grid.Weight(i)));
+				REQUIRE(grid.Weight(i) > 0);
+				REQUIRE(grid.Node(i) > 0);
+				if (i > 0) REQUIRE(grid.Node(i) > grid.Node(i - 1));
+			}
+			for (int k = 0; k < 2 * N; ++k)
+			{
+				long double actual = 0;
+				for (int i = 0; i < N; ++i)
+				{
+					actual += static_cast<long double>(grid.Weight(i)) * powers[i];
+					powers[i] *= static_cast<long double>(grid.Node(i));
+				}
+				CAPTURE(N, Size, k, actual, expected);
+				CHECK(std::abs(actual / expected - 1) <= tolerance);
+				expected *= k + 1;
+			}
+		};
+		checkStorage(std::integral_constant<int, N>{});
+		checkStorage(std::integral_constant<int, Eigen::Dynamic>{});
+	};
+	checkOrder(std::integral_constant<int, 16>{});
+	checkOrder(std::integral_constant<int, 21>{});
+}
+
+TEMPLATE_TEST_CASE("Christoffel quadrature weights avoid overflowing polynomial norms or underflowing squared scale factors",
+                   "[quadrature][regression]", float, double, long double)
+{
+	using namespace SecUtility::Math;
+	using Scalar = TestType;
+	// At x=1, p_1 is too large to square in Scalar, but the final weight
+	// remains representable. Squaring the scaling ratio first would underflow.
+	constexpr int SmallExponent = std::numeric_limits<Scalar>::max_exponent / 2 + 8;
+	constexpr int MassExponent = std::numeric_limits<Scalar>::max_exponent - 8;
+	const Scalar gamma = std::ldexp(Scalar{1}, -SmallExponent);
+	const Scalar mass = std::ldexp(Scalar{1}, MassExponent);
+	OrthogonalPolynomialRecurrence<Scalar, 2> rule;
+	rule.Alphas << Scalar{0}, Scalar{1};
+	rule.Gammas << Scalar{0}, gamma;
+	const auto grid = ConstructQuadratureGridWithChristoffelWeights(rule, mass);
+	REQUIRE(grid.Size() == 2);
+	REQUIRE(std::isfinite(grid.Weight(0)));
+	REQUIRE(std::isfinite(grid.Weight(1)));
+	REQUIRE(grid.Weight(1) > 0);
+	CHECK(grid.Weight(0) == mass);
+	const Scalar expectedTailWeight = std::ldexp(Scalar{1}, MassExponent - 2 * SmallExponent);
+	CHECK(grid.Weight(1) / expectedTailWeight == Catch::Approx(1).epsilon(1e-5));
+	CHECK(EvaluateChristoffelFunction(rule, Scalar{1}, mass) / expectedTailWeight == Catch::Approx(1).epsilon(1e-5));
+}
+
+TEST_CASE("Reducible quadrature recurrences retain zero weights on disconnected blocks", "[quadrature][regression]")
+{
+	using namespace SecUtility::Math;
+	const auto check = [](auto sizeTag)
+	{
+		constexpr int Size = decltype(sizeTag)::value;
+		OrthogonalPolynomialRecurrence<double, Size> rule;
+		rule.Alphas.resize(3);
+		rule.Gammas.resize(3);
+		rule.Alphas << -2.0, 0.5, 3.0;
+		rule.Gammas.setZero();
+		const auto grid = ConstructQuadratureGrid(rule, 2.5);
+		REQUIRE(grid.Size() == 3);
+		CHECK(grid.Node(0) == -2.0);
+		CHECK(grid.Node(1) == 0.5);
+		CHECK(grid.Node(2) == 3.0);
+		CHECK(grid.Weight(0) == 2.5);
+		CHECK(grid.Weight(1) == 0.0);
+		CHECK(grid.Weight(2) == 0.0);
+	};
+	check(std::integral_constant<int, 3>{});
+	check(std::integral_constant<int, Eigen::Dynamic>{});
+}
+
+TEST_CASE("High-order Christoffel quadrature for a squared-coordinate exponential measure preserves small moments",
+          "[quadrature][regression]")
+{
+	using namespace SecUtility::Math;
+	const auto checkOrder = [](auto orderTag)
+	{
+		constexpr int N = decltype(orderTag)::value;
+		for (const double argument : {100.0, 1000.0})
+		{
+			auto measure = FejerQuadratureGrid01<double>(512);
+			for (Eigen::Index i = 0; i < measure.Size(); ++i)
+			{
+				measure.Node(i) *= measure.Node(i);
+				measure.Weight(i) *= std::exp(-argument * measure.Node(i));
+			}
+			const auto grid = ConstructQuadratureGridWithChristoffelWeights<N>(measure);
+			std::array<long double, N> powers;
+			powers.fill(1);
+			const auto t = static_cast<long double>(argument);
+			long double expected = std::sqrt(Constant::Pi<long double> / t) * std::erf(std::sqrt(t)) / 2;
+			// T is larger than every order tested, so upward moment recurrence is stable.
+			for (int k = 0; k < 2 * N; ++k)
+			{
+				long double actual = 0;
+				for (int i = 0; i < N; ++i)
+				{
+					actual += static_cast<long double>(grid.Weight(i)) * powers[i];
+					powers[i] *= static_cast<long double>(grid.Node(i));
+				}
+				CAPTURE(N, argument, k, actual, expected);
+				CHECK(std::abs(actual / expected - 1) <= 5e-11L);
+				expected = ((2 * k + 1) * expected - std::exp(-t)) / (2 * t);
+			}
+		}
+	};
+	checkOrder(std::integral_constant<int, 16>{});
+	checkOrder(std::integral_constant<int, 21>{});
+}
+
+
+TEMPLATE_TEST_CASE("Christoffel function matches analytic Legendre kernels away from quadrature nodes",
+                   "[quadrature][christoffel]", float, double, long double)
+{
+	using namespace SecUtility::Math;
+	using Scalar = TestType;
+	const auto checkOrder = [](auto orderTag)
+	{
+		constexpr int N = decltype(orderTag)::value;
+		const auto checkStorage = [N](auto sizeTag)
+		{
+			constexpr int SizeAtCompileTime = decltype(sizeTag)::value;
+			OrthogonalPolynomialRecurrence<Scalar, SizeAtCompileTime> recurrence;
+			recurrence.Alphas.resize(N);
+			recurrence.Alphas.setZero();
+			recurrence.Gammas.resize(N);
+			recurrence.Gammas[0] = 0;
+			for (int j = 1; j < N; ++j)
+				recurrence.Gammas[j] = static_cast<Scalar>(j) / Sqrt(static_cast<Scalar>(4 * j * j - 1));
+			for (const Scalar x : {Scalar{-2}, Scalar{-1}, Scalar{-0.25}, Scalar{0}, Scalar{0.5}, Scalar{1}, Scalar{3}})
+			{
+				// p_0=1, p_1=sqrt(3)*x, p_2=sqrt(5)/2*(3*x^2-1).
+				const auto point = static_cast<long double>(x);
+				long double denominator = 1 + 3 * point * point;
+				if constexpr (N == 3)
+					denominator += 1.25L * (3 * point * point - 1) * (3 * point * point - 1);
+				const auto expected = 2 / denominator;
+				const long double tolerance = 64 * std::numeric_limits<Scalar>::epsilon();
+				CAPTURE(N, SizeAtCompileTime, x);
+				CHECK(std::abs(static_cast<long double>(EvaluateChristoffelFunction(recurrence, x, Scalar{2}))
+				               / expected - 1) <= tolerance);
+				CHECK(std::abs(static_cast<long double>(EvaluateChristoffelFunction(recurrence, x))
+				               / (expected / 2) - 1) <= tolerance);
+				CHECK(EvaluateChristoffelFunction(recurrence, x, Scalar{0}) == Scalar{0});
+				// Changing an off-diagonal's sign changes polynomial signs, not the sum of squares.
+				recurrence.Gammas[1] = -recurrence.Gammas[1];
+				CHECK(std::abs(static_cast<long double>(EvaluateChristoffelFunction(recurrence, x, Scalar{2}))
+				               / expected - 1) <= tolerance);
+				recurrence.Gammas[1] = -recurrence.Gammas[1];
+			}
+		};
+		checkStorage(std::integral_constant<int, N>{});
+		checkStorage(std::integral_constant<int, Eigen::Dynamic>{});
+	};
+	checkOrder(std::integral_constant<int, 2>{});
+	checkOrder(std::integral_constant<int, 3>{});
+}
+
 TEMPLATE_TEST_CASE("One-term Christoffel function is the mass at every evaluation point",
                    "[quadrature][christoffel]", float, double, long double)
 {
@@ -1186,4 +1382,95 @@ TEMPLATE_TEST_CASE("One-term Christoffel function is the mass at every evaluatio
 	};
 	check(std::integral_constant<int, 1>{});
 	check(std::integral_constant<int, Eigen::Dynamic>{});
+}
+
+TEMPLATE_TEST_CASE("Quadrature constructor families support recurrence and sampled-measure adapters",
+                   "[quadrature][constructors]",
+                   float,
+                   double,
+                   long double)
+{
+	using namespace SecUtility::Math;
+	using Scalar = TestType;
+	const QuadratureGrid<Scalar, 3> fixedMeasure{Eigen::Vector<Scalar, 3>{Scalar{-1}, Scalar{0.5}, Scalar{2}},
+	                                             Eigen::Vector<Scalar, 3>{Scalar{2}, Scalar{1}, Scalar{3}}};
+	const QuadratureGrid<Scalar> dynamicMeasure{fixedMeasure};
+	const auto fixedRecurrence = ConstructOrthogonalPolynomialRecurrence<2>(fixedMeasure);
+	const auto dynamicRecurrence = ConstructOrthogonalPolynomialRecurrence(fixedMeasure, 2);
+	const auto check = [](const auto& grid)
+	{
+		REQUIRE(grid.Size() == 2);
+		// Exact moments of the discrete input measure, through degree 2*N-1.
+		constexpr std::array<long double, 4> expected{6, 4.5L, 14.25L, 22.125L};
+		std::array<long double, 2> powers{1, 1};
+		for (int k = 0; k < 4; ++k)
+		{
+			long double actual = 0;
+			for (int i = 0; i < 2; ++i)
+			{
+				actual += static_cast<long double>(grid.Weight(i)) * powers[i];
+				powers[i] *= static_cast<long double>(grid.Node(i));
+			}
+			CAPTURE(k, actual);
+			CHECK(std::abs(actual / expected[k] - 1) <= 128 * std::numeric_limits<Scalar>::epsilon());
+		}
+	};
+	const auto checkFixed = [&](const auto& grid)
+	{
+		STATIC_REQUIRE(std::is_same_v<std::remove_cvref_t<decltype(grid)>, QuadratureGrid<Scalar, 2>>);
+		check(grid);
+	};
+	const auto checkDynamic = [&](const auto& grid)
+	{
+		STATIC_REQUIRE(std::is_same_v<std::remove_cvref_t<decltype(grid)>, QuadratureGrid<Scalar>>);
+		check(grid);
+	};
+	SECTION("Default family")
+	{
+		checkFixed(ConstructQuadratureGrid(fixedRecurrence, Scalar{6}));
+		checkDynamic(ConstructQuadratureGrid(dynamicRecurrence, Scalar{6}));
+		checkFixed(ConstructQuadratureGrid<2>(fixedMeasure));
+		checkFixed(ConstructQuadratureGrid<2>(dynamicMeasure));
+		checkDynamic(ConstructQuadratureGrid(fixedMeasure, 2));
+		checkDynamic(ConstructQuadratureGrid(dynamicMeasure, 2));
+	}
+	SECTION("Explicit eigenvector family")
+	{
+		checkFixed(ConstructQuadratureGridWithEigenvectorWeights(fixedRecurrence, Scalar{6}));
+		checkDynamic(ConstructQuadratureGridWithEigenvectorWeights(dynamicRecurrence, Scalar{6}));
+		checkFixed(ConstructQuadratureGridWithEigenvectorWeights<2>(fixedMeasure));
+		checkFixed(ConstructQuadratureGridWithEigenvectorWeights<2>(dynamicMeasure));
+		checkDynamic(ConstructQuadratureGridWithEigenvectorWeights(fixedMeasure, 2));
+		checkDynamic(ConstructQuadratureGridWithEigenvectorWeights(dynamicMeasure, 2));
+	}
+	SECTION("Explicit Christoffel family")
+	{
+		checkFixed(ConstructQuadratureGridWithChristoffelWeights(fixedRecurrence, Scalar{6}));
+		checkDynamic(ConstructQuadratureGridWithChristoffelWeights(dynamicRecurrence, Scalar{6}));
+		checkFixed(ConstructQuadratureGridWithChristoffelWeights<2>(fixedMeasure));
+		checkFixed(ConstructQuadratureGridWithChristoffelWeights<2>(dynamicMeasure));
+		checkDynamic(ConstructQuadratureGridWithChristoffelWeights(fixedMeasure, 2));
+		checkDynamic(ConstructQuadratureGridWithChristoffelWeights(dynamicMeasure, 2));
+	}
+}
+
+TEMPLATE_TEST_CASE("Default quadrature preserves mass when a nearly reducible spectrum is unresolved",
+                   "[quadrature][constructors]",
+                   float,
+                   double,
+                   long double)
+{
+	using namespace SecUtility::Math;
+	using Scalar = TestType;
+	OrthogonalPolynomialRecurrence<Scalar, 2> recurrence;
+	recurrence.Alphas << Scalar{1}, Scalar{1};
+	recurrence.Gammas << Scalar{0}, std::numeric_limits<Scalar>::epsilon() / Scalar{16};
+	const auto grid = ConstructQuadratureGrid(recurrence, Scalar{3});
+	const auto explicitGrid = ConstructQuadratureGridWithEigenvectorWeights(recurrence, Scalar{3});
+	REQUIRE(grid.Size() == 2);
+	CHECK(grid.Nodes().isApprox(explicitGrid.Nodes()));
+	CHECK(grid.Weights().isApprox(explicitGrid.Weights()));
+	CHECK(grid.Weights().sum() == Catch::Approx(3));
+	CHECK(grid.Nodes().dot(grid.Weights()) == Catch::Approx(3));
+	// The Christoffel constructor requires resolved nodes and is not called here.
 }
