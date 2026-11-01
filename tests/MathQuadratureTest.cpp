@@ -6,6 +6,8 @@
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_template_test_macros.hpp>
+#include <type_traits>
 #include <iomanip>
 #include <iostream>
 
@@ -862,7 +864,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		using Scalar = long double;
 
 		// Directly construct a size-1 recurrence to exercise the early-return branch
-		// at QuadratureGrid.hpp:166 without depending on Lanczos.
+		// without depending on Lanczos.
 		OrthogonalPolynomialRecurrence<Scalar> rule{};
 		rule.Alphas.resize(1);
 		rule.Gammas.resize(1);
@@ -873,7 +875,7 @@ TEST_CASE("Orthogonal polynomial roots and weights")
 		const auto grid = ConstructQuadratureGrid(rule, zerothMoment);
 
 		REQUIRE(grid.Size() == 1);
-		CHECK(grid.Node(0) == 1.0L);
+		CHECK(grid.Node(0) == rule.Alphas[0]);
 		CHECK(grid.Weight(0) == zerothMoment);
 	}
 }
@@ -1075,8 +1077,8 @@ TEST_CASE("Fixed-size quadrature grid and recurrence")
 		STATIC_REQUIRE(std::is_same_v<decltype(qGrid), const QuadratureGrid<Scalar, 1>>);
 		REQUIRE(qGrid.Size() == 1);
 
-		// The early-return at QuadratureGrid.hpp:198 produces node=1, weight=zerothMoment
-		CHECK(qGrid.Node(0) == 1.0L);
+		// A one-point rule for the uniform measure on [0,1] is centered at 1/2.
+		CHECK(qGrid.Node(0) == Catch::Approx(0.5L).margin(1e-14));
 		const auto expectedWeight = auxGrid.Weights().sum();
 		CHECK(qGrid.Weight(0) == Catch::Approx(expectedWeight).margin(1e-30));
 	}
@@ -1096,8 +1098,65 @@ TEST_CASE("Fixed-size quadrature grid and recurrence")
 		// Sanity: Order=1 still succeeds
 		const auto q1 = ConstructQuadratureGrid<1>(grid);
 		REQUIRE(q1.Size() == 1);
+		CHECK(q1.Node(0) == Catch::Approx(0.5L).margin(1e-14));
+		CHECK(q1.Weight(0) == Catch::Approx(static_cast<Scalar>(N)).margin(1e-14));
 
 		// Order=2 throws — Lanczos inside ConstructOrthogonalPolynomialRecurrence terminates at k=0
 		REQUIRE_THROWS_AS(ConstructQuadratureGrid<2>(grid), SecUtility::OperationFailedException);
 	}
+}
+
+
+TEMPLATE_TEST_CASE("One-point quadrature preserves the supplied recurrence diagonal and mass",
+                   "[quadrature][regression]", float, double, long double)
+{
+	using namespace SecUtility::Math;
+	using Scalar = TestType;
+	const auto check = [](auto size)
+	{
+		constexpr int Size = decltype(size)::value;
+		for (const Scalar node : {Scalar{-2}, Scalar{0}, Scalar{0.25}, Scalar{2.5}})
+			for (const Scalar mass : {Scalar{1}, Scalar{3.5}})
+			{
+				CAPTURE(Size, node, mass);
+				OrthogonalPolynomialRecurrence<Scalar, Size> rule{};
+				rule.Alphas.resize(1);
+				rule.Gammas.resize(1);
+				rule.Alphas[0] = node;
+				rule.Gammas[0] = Scalar{0};
+				const auto grid = ConstructQuadratureGrid(rule, mass);
+				STATIC_REQUIRE(std::is_same_v<std::remove_cvref_t<decltype(grid)>, QuadratureGrid<Scalar, Size>>);
+				REQUIRE(grid.Size() == 1);
+				CHECK(grid.Node(0) == node);
+				CHECK(grid.Weight(0) == mass);
+				const auto normalized = ConstructQuadratureGrid(rule);
+				CHECK(normalized.Node(0) == node);
+				CHECK(normalized.Weight(0) == Scalar{1});
+			}
+	};
+	check(std::integral_constant<int, 1>{});
+	check(std::integral_constant<int, Eigen::Dynamic>{});
+}
+
+TEMPLATE_TEST_CASE("One-point quadrature of a weighted measure integrates constant and linear polynomials",
+                   "[quadrature][regression]", float, double, long double)
+{
+	using namespace SecUtility::Math;
+	using Scalar = TestType;
+	const QuadratureGrid<Scalar, 3> fixedMeasure{
+	        Eigen::Vector<Scalar, 3>{Scalar{-1}, Scalar{0.5}, Scalar{2}},
+	        Eigen::Vector<Scalar, 3>{Scalar{2}, Scalar{1}, Scalar{3}}};
+	const QuadratureGrid<Scalar> dynamicMeasure{fixedMeasure};
+	// Independent exact moments: mu_0=2+1+3=6 and mu_1=-2+1/2+6=9/2.
+	const auto check = [](const auto& grid)
+	{
+		REQUIRE(grid.Size() == 1);
+		CHECK(grid.Weight(0) == Catch::Approx(6));
+		CHECK(grid.Node(0) == Catch::Approx(0.75));
+		CHECK(grid.Node(0) * grid.Weight(0) == Catch::Approx(4.5));
+	};
+	check(ConstructQuadratureGrid<1>(fixedMeasure));
+	check(ConstructQuadratureGrid<1>(dynamicMeasure));
+	check(ConstructQuadratureGrid(fixedMeasure, 1));
+	check(ConstructQuadratureGrid(dynamicMeasure, 1));
 }

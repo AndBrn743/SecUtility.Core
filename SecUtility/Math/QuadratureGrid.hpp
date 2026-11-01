@@ -195,7 +195,8 @@ namespace SecUtility::Math
 		{
 			if (n == 1)
 			{
-				return {Eigen::Vector<Scalar, 1>{1}, Eigen::Vector<Scalar, 1>{zerothMoment}};
+				// The 1x1 Jacobi matrix has its sole eigenvalue at alpha_0 = mu_1 / mu_0.
+				return {Eigen::Vector<Scalar, 1>{rule.Alphas[0]}, Eigen::Vector<Scalar, 1>{zerothMoment}};
 			}
 		}
 
