@@ -30,21 +30,19 @@ namespace SecUtility::Math
 		}
 
 		template <typename NodeVector, typename WeightVector>
-		QuadratureGrid(const NodeVector& nodes, const WeightVector& weights)
+		QuadratureGrid(const Eigen::EigenBase<NodeVector>& nodes, const Eigen::EigenBase<WeightVector>& weights)
 		{
-			static_assert(std::is_base_of_v<Eigen::EigenBase<NodeVector>, NodeVector>);
-			static_assert(std::is_base_of_v<Eigen::EigenBase<WeightVector>, WeightVector>);
-			eigen_assert(nodes.size() == weights.size());
-			eigen_assert(nodes.rows() == 1 || nodes.cols() == 1);
-			eigen_assert(weights.rows() == 1 || weights.cols() == 1);
+			eigen_assert(nodes.derived().size() == weights.derived().size());
+			eigen_assert(nodes.derived().rows() == 1 || nodes.derived().cols() == 1);
+			eigen_assert(weights.derived().rows() == 1 || weights.derived().cols() == 1);
 
 			if constexpr (SizeAtCompileTime == Eigen::Dynamic)
 			{
-				m_Data.resize(nodes.size(), Eigen::NoChange);
+				m_Data.resize(nodes.derived().size(), Eigen::NoChange);
 			}
 			else
 			{
-				eigen_assert(nodes.size() == SizeAtCompileTime);
+				eigen_assert(nodes.derived().size() == SizeAtCompileTime);
 			}
 
 			m_Data.col(0) = nodes;
