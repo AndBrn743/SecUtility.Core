@@ -528,6 +528,27 @@ namespace SecUtility::Math
 		return a + (b - a) / 2;
 	}
 
+	// Computes the linear interpolation between a and b, if the parameter t is inside [0, 1],
+	// the linear extrapolation otherwise. Arithmetic and conversion to T are unchecked.
+	template <typename T, typename FloatingPoint>
+	constexpr T Lerp(const T a, const T b, const FloatingPoint t) noexcept
+	{
+		return static_cast<T>(a + t * (b - a));
+	}
+
+	// Unchecked: a and b must be distinct after conversion to the result type, and all
+	// intermediate arithmetic must be representable. Integral endpoints require an explicit
+	// result type, e.g. InverseLerp<double>(0, 10, 5). An integral result type requests integer
+	// arithmetic (including truncation toward zero); operands are converted before subtraction.
+	template <typename Result = void, typename T, typename Value>
+	constexpr std::enable_if_t<!std::is_integral_v<T> || !std::is_void_v<Result>,
+	                           std::conditional_t<std::is_void_v<Result>, T, Result>>
+	InverseLerp(const T a, const T b, const Value v) noexcept
+	{
+		using Output = std::conditional_t<std::is_void_v<Result>, T, Result>;
+		return (static_cast<Output>(v) - static_cast<Output>(a)) / (static_cast<Output>(b) - static_cast<Output>(a));
+	}
+
 	template <typename T, typename FloatingPoint>
 	constexpr T LinearInterpolation(const T a, const T b, const FloatingPoint t) noexcept
 	{
