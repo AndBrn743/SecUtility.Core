@@ -552,7 +552,18 @@ namespace SecUtility::Math
 	template <typename T, typename FloatingPoint>
 	constexpr T LinearInterpolation(const T a, const T b, const FloatingPoint t) noexcept
 	{
-		return Clamp(static_cast<T>(a + t * (b - a)), Min(a, b), Max(a, b));
+		return Clamp(Lerp(a, b, t), Min(a, b), Max(a, b));
+	}
+
+	// Clamps the inverse interpolation to [0, 1]. Equal endpoints map to zero (the first
+	// endpoint). Result type selection and unchecked arithmetic follow InverseLerp.
+	template <typename Result = void, typename T, typename Value>
+	constexpr std::enable_if_t<!std::is_integral_v<T> || !std::is_void_v<Result>,
+	                           std::conditional_t<std::is_void_v<Result>, T, Result>>
+	InverseLinearInterpolation(const T a, const T b, const Value v) noexcept
+	{
+		using Output = std::conditional_t<std::is_void_v<Result>, T, Result>;
+		return a == b ? Output{0} : Clamp(InverseLerp<Output>(a, b, v), Output{0}, Output{1});
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//

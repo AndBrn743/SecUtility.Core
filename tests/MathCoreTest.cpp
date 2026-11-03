@@ -21,6 +21,10 @@ static constexpr double Pi = Constant::Pi<double>;
 #define CONSTEXPR_IF_POSSIBLE const
 #endif
 
+#define DUAL_CHECK(...)                                                                                                \
+	CHECK(__VA_ARGS__);                                                                                                \
+	STATIC_CHECK(__VA_ARGS__)
+
 // ============================================================================
 // Basic Math Functions
 // ============================================================================
@@ -658,6 +662,51 @@ TEST_CASE("LinearInterpolation")
 	{
 		CONSTEXPR_IF_POSSIBLE auto result = LinearInterpolation(0.0, 10.0, 0.5);
 		STATIC_CHECK_IF_POSSIBLE(result == 5.0);
+	}
+}
+
+TEST_CASE("Inverse interpolation")
+{
+	SECTION("Floating point result deduction and extrapolation")
+	{
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(InverseLerp(0.0, 10.0, 5.0)), double>);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp(0.0, 10.0, 5.0) == 0.5);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp(10.0, 0.0, 7.5) == 0.25);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp(0.0, 10.0, -5.0) == -0.5);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp(0.0, 10.0, 15.0) == 1.5);
+	}
+
+	SECTION("Explicit result type with integral endpoints")
+	{
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(InverseLerp<double>(0, 10, 5)), double>);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp<double>(0, 10, 5) == 0.5);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp<double>(10u, 0u, 5u) == 0.5);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp<double>(-2000000000, 2000000000, 0) == 0.5);
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation<double>(0, 10, 5) == 0.5);
+
+		CHECK(InverseLerp<double>(0, 10, 5) == 0.5);
+		CHECK(InverseLerp<double>(10u, 0u, 5u) == 0.5);
+		CHECK(InverseLerp<double>(-2000000000, 2000000000, 0) == 0.5);
+		CHECK(InverseLinearInterpolation<double>(0, 10, 5) == 0.5);
+	}
+
+	SECTION("Explicit integer arithmetic truncates toward zero")
+	{
+		STATIC_CHECK_IF_POSSIBLE(std::is_same_v<decltype(InverseLerp<int>(0, 10, 5)), int>);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp<int>(0, 10, 15) == 1);
+		STATIC_CHECK_IF_POSSIBLE(InverseLerp<int>(0, 10, -15) == -1);
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation<int>(0, 10, 5) == 0);
+	}
+
+	SECTION("Clamping and equal endpoints")
+	{
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation(0.0, 10.0, -5.0) == 0.0);
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation(0.0, 10.0, 15.0) == 1.0);
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation(10.0, 0.0, 15.0) == 0.0);
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation(10.0, 0.0, -5.0) == 1.0);
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation(2.0, 2.0, 2.0) == 0.0);
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation(2.0, 2.0, 3.0) == 0.0);
+		STATIC_CHECK_IF_POSSIBLE(InverseLinearInterpolation<int>(2, 2, 2) == 0);
 	}
 }
 
