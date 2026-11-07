@@ -55,25 +55,27 @@ namespace SecUtility
 		}
 	}
 
-	template <typename Value, auto... Keys>
+	template <typename Value, auto... KKeys>
 	class KeyedArray
 	{
-		static constexpr std::size_t KSize = sizeof...(Keys);
+		static constexpr std::size_t KSize = sizeof...(KKeys);
 
 	public:
-		using KeyType = std::common_type_t<decltype(Keys)...>;
+		using KeyType = std::common_type_t<decltype(KKeys)...>;
 		using ValueType = Value;
 
-		static constexpr std::array<KeyType, KSize> KeySet = {Keys...};
+		static constexpr std::array<KeyType, KSize> Keys = {KKeys...};
+		static_assert(Detail::KeyedArray::IsAllUnique(Keys), "KeyedArray: duplicate keys are not allowed.");
+		std::array<Value, KSize> Values{};
 
-		static_assert(Detail::KeyedArray::IsAllUnique(KeySet), "KeyedArray: duplicate keys are not allowed.");
+		static constexpr const auto& KeySet = Keys;  // for compatibility only. could be removed in future
 
 		template <KeyType K>
-		static constexpr bool Contains = Detail::KeyedArray::IndexOf(KeySet, K) < KSize;
+		static constexpr bool Contains = Detail::KeyedArray::IndexOf(Keys, K) < KSize;
 
 		constexpr KeyedArray() = default;
 
-		constexpr explicit KeyedArray(std::array<Value, KSize> values) noexcept : m_Data(std::move(values))
+		constexpr explicit KeyedArray(std::array<Value, KSize> values) noexcept : Values(std::move(values))
 		{
 			/* NO CODE */
 		}
@@ -83,7 +85,7 @@ namespace SecUtility
 		        noexcept((noexcept(static_cast<ValueType>(std::forward<ConvertableToValueType>(values))) && ...))
 		    requires(sizeof...(ConvertableToValueType) == KSize
 		             && (std::is_convertible_v<ConvertableToValueType, ValueType> && ...))
-		    : m_Data{static_cast<ValueType>(std::forward<ConvertableToValueType>(values))...}
+		    : Values{static_cast<ValueType>(std::forward<ConvertableToValueType>(values))...}
 		{
 			/* NO CODE */
 		}
@@ -91,41 +93,41 @@ namespace SecUtility
 		constexpr explicit KeyedArray(const Value& fillValue) noexcept(
 		        noexcept(std::declval<Value&>() = std::declval<const Value&>()))
 		{
-			m_Data.fill(fillValue);
+			Values.fill(fillValue);
 		}
 
 		template <KeyType K>
 		[[nodiscard]] constexpr Value& Get() noexcept
 		{
 			static_assert(Contains<K>, "KeyedArray::Get<K>(): key K is not in this KeyedArray.");
-			return m_Data[Detail::KeyedArray::IndexOf(KeySet, K)];
+			return Values[Detail::KeyedArray::IndexOf(Keys, K)];
 		}
 
 		template <KeyType K>
 		[[nodiscard]] constexpr const Value& Get() const noexcept
 		{
 			static_assert(Contains<K>, "KeyedArray::Get<K>(): key K is not in this KeyedArray.");
-			return m_Data[Detail::KeyedArray::IndexOf(KeySet, K)];
+			return Values[Detail::KeyedArray::IndexOf(Keys, K)];
 		}
 
 		[[nodiscard]] constexpr Value& operator[](const KeyType& key)
 		{
-			const std::size_t index = Detail::KeyedArray::IndexOf(KeySet, key);
+			const std::size_t index = Detail::KeyedArray::IndexOf(Keys, key);
 			if (index == KSize)
 			{
 				throw ArgumentOutOfRangeException("KeyedArray::operator[]: key not found.");
 			}
-			return m_Data[index];
+			return Values[index];
 		}
 
 		[[nodiscard]] constexpr const Value& operator[](const KeyType& key) const
 		{
-			const std::size_t index = Detail::KeyedArray::IndexOf(KeySet, key);
+			const std::size_t index = Detail::KeyedArray::IndexOf(Keys, key);
 			if (index == KSize)
 			{
 				throw ArgumentOutOfRangeException("KeyedArray::operator[]: key not found.");
 			}
-			return m_Data[index];
+			return Values[index];
 		}
 
 		template <typename Fn>
@@ -133,18 +135,22 @@ namespace SecUtility
 		{
 			if constexpr (std::invocable<Fn, const KeyType&, Value&>)
 			{
-				[&]<std::size_t... I>(std::index_sequence<I...>)
-				{ (f(KeySet[I], m_Data[I]), ...); }(std::make_index_sequence<KSize>{});
+				for (std::size_t i = 0; i < KSize; i++)
+				{
+					f(Keys[i], Values[i]);
+				}
 			}
 			else if constexpr (std::invocable<Fn, const KeyType&, Value&, std::size_t>)
 			{
-				[&]<std::size_t... I>(std::index_sequence<I...>)
-				{ (f(KeySet[I], m_Data[I], I), ...); }(std::make_index_sequence<KSize>{});
+				for (std::size_t i = 0; i < KSize; i++)
+				{
+					f(Keys[i], Values[i], i);
+				}
 			}
 			else
 			{
-				auto it = m_Data.begin();
-				((f.template operator()<Keys>(*it), ++it), ...);
+				auto it = Values.begin();
+				((f.template operator()<KKeys>(*it), ++it), ...);
 			}
 		}
 
@@ -153,25 +159,29 @@ namespace SecUtility
 		{
 			if constexpr (std::invocable<Fn, const KeyType&, const Value&>)
 			{
-				[&]<std::size_t... I>(std::index_sequence<I...>)
-				{ (f(KeySet[I], m_Data[I]), ...); }(std::make_index_sequence<KSize>{});
+				for (std::size_t i = 0; i < KSize; i++)
+				{
+					f(Keys[i], Values[i]);
+				}
 			}
 			else if constexpr (std::invocable<Fn, const KeyType&, const Value&, std::size_t>)
 			{
-				[&]<std::size_t... I>(std::index_sequence<I...>)
-				{ (f(KeySet[I], m_Data[I], I), ...); }(std::make_index_sequence<KSize>{});
+				for (std::size_t i = 0; i < KSize; i++)
+				{
+					f(Keys[i], Values[i], i);
+				}
 			}
 			else
 			{
-				auto it = m_Data.begin();
-				((f.template operator()<Keys>(*it), ++it), ...);
+				auto it = Values.begin();
+				((f.template operator()<KKeys>(*it), ++it), ...);
 			}
 		}
 
 		template <typename Fn>
 		constexpr void ForeachValue(Fn&& f) noexcept(noexcept(f(std::declval<Value&>())))
 		{
-			for (Value& value : m_Data)
+			for (Value& value : Values)
 			{
 				f(value);
 			}
@@ -180,7 +190,7 @@ namespace SecUtility
 		template <typename Fn>
 		constexpr void ForeachValue(Fn&& f) const noexcept(noexcept(f(std::declval<const Value&>())))
 		{
-			for (const Value& value : m_Data)
+			for (const Value& value : Values)
 			{
 				f(value);
 			}
@@ -194,23 +204,20 @@ namespace SecUtility
 		constexpr void Fill(const Value& value) noexcept(
 		        noexcept(std::declval<Value&>() = std::declval<const Value&>()))
 		{
-			m_Data.fill(value);
+			Values.fill(value);
 		}
 
 		[[nodiscard]] constexpr Value* data() noexcept
 		{
-			return m_Data.data();
+			return Values.data();
 		}
 
 		[[nodiscard]] constexpr const Value* data() const noexcept
 		{
-			return m_Data.data();
+			return Values.data();
 		}
 
 		[[nodiscard]] constexpr bool operator==(const KeyedArray&) const = default;
-
-	private:
-		std::array<Value, KSize> m_Data{};
 	};
 
 	namespace Detail::KeyedArray
